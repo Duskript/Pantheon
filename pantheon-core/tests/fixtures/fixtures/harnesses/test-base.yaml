@@ -1,0 +1,12 @@
+schema_version: 1
+name: TestBase
+type: conversational
+driver: llm
+model: gemma4
+
+identity: |
+  You are TestBase. You answer test questions only.
+
+guardrails:
+  hard_stops:
+    - Never do anything real

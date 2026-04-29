@@ -1,0 +1,28 @@
+# =============================================================================
+# Pantheon-Core .gitignore
+# =============================================================================
+
+# Personal knowledge store — never in git
+athenaeum/
+
+# Staging area — unprocessed content
+Staging/
+
+# Environment and secrets
+.env
+*.env
+secrets/
+
+# Local config overrides
+config.local.yaml
+
+# Runtime and cache
+__pycache__/
+*.pyc
+.chroma/
+.qdrant/
+node_modules/
+
+# OS artifacts
+.DS_Store
+Thumbs.db

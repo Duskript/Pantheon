@@ -1,0 +1,24 @@
+schema_version: 1
+name: Demeter
+type: subsystem
+driver: script
+
+routing:
+  - if: scheduled_job_ready
+    then: dispatch(job.target_god, job.payload)
+  - if: scheduled_job_failed
+    then: log(kronos, status=failed, job=job.id) → alert(zeus)
+  - if: schedule_conflict
+    then: defer_lower_priority_job → log(kronos, reason="conflict")
+
+guardrails:
+  hard_stops:
+    - Never execute jobs outside the defined schedule without Zeus authorization
+    - Never drop a failed job silently — always log to Kronos
+    - Never modify the schedule at runtime without Hera authorization
+
+failure_behavior:
+  on_ambiguity: skip_and_log
+  on_out_of_scope: skip_and_log
+  on_hard_stop: halt_and_log
+  on_mnemosyne_unavailable: proceed_without_corpus_note_limitation

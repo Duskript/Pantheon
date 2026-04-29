@@ -1,0 +1,24 @@
+schema_version: 1
+name: Kronos
+type: subsystem
+driver: service
+
+routing:
+  - if: log_entry_received
+    then: append_to_session_log
+  - if: log_query_received
+    then: return_log_entries_matching_query
+  - if: log_rotation_due
+    then: rotate_and_archive_log
+
+guardrails:
+  hard_stops:
+    - Never modify existing log entries — append only
+    - Never delete log entries without explicit Hera authorization
+    - Never expose log contents to non-authorized gods
+
+failure_behavior:
+  on_ambiguity: reject_entry_and_return_error
+  on_out_of_scope: reject_and_return_error
+  on_hard_stop: halt_and_alert_zeus
+  on_mnemosyne_unavailable: proceed_without_corpus_note_limitation

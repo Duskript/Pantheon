@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["http://localhost:8001","http://localhost:3000"]
+    restart: unless-stopped
+
+  pantheon-core:
+    build:
+      context: ../pantheon-core
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    depends_on:
+      - ollama
+      - chromadb
+    environment:
+      - PANTHEON_HARNESS_DIR=/app/harnesses
+      - PANTHEON_SANCTUARIES_DIR=/app/sanctuaries
+      - ATHENAEUM_ROOT=/app/athenaeum
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
+    volumes:
+      - ../harnesses:/app/harnesses:ro
+      - athenaeum-data:/app/athenaeum
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
+  chroma-data:
+  athenaeum-data:
