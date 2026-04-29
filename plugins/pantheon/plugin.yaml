@@ -1,0 +1,4 @@
+name: pantheon
+description: "Pantheon Athenaeum memory provider — persistent knowledge store with semantic search, vault logging, and Codex-partitioned recall"
+version: 1.0.0
+author: Hephaestus (Pantheon-Core)
