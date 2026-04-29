@@ -50,9 +50,10 @@ logger = logging.getLogger(__name__)
 _DEFAULT_ATHENAEUM_ROOT = "/home/konan/athenaeum"
 _DEFAULT_CHROMA_DIR = "/home/konan/.hermes/pantheon/chroma"
 _DEFAULT_VAULT_CODEX = "Codex-Forge"  # where Hermes sessions log by default
-_DEFAULT_EMBED_MODEL = "nomic-embed-text"
+_DEFAULT_EMBED_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
 _DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 _DEFAULT_EMBED_TIMEOUT = 30.0
+_DEFAULT_OPENROUTER_HOST = "https://openrouter.ai"
 _DEFAULT_PREFETCH_RESULTS = 5
 _DEFAULT_VAULT_SESSIONS_DIR = "sessions"
 
@@ -307,7 +308,7 @@ class PantheonMemoryProvider(MemoryProvider):
         self._config = _default_config()
         self._athenaeum_root: Optional[Path] = None
         self._chroma: Any = None  # chromadb.PersistentClient
-        self._embedder: Optional[_OllamaEmbedder] = None
+        self._embedder: Optional[_OpenRouterEmbedder] = None
         self._vault: Optional[_VaultWriter] = None
         self._hermes_home = ""
         self._session_id = ""
@@ -399,11 +400,13 @@ class PantheonMemoryProvider(MemoryProvider):
         self._athenaeum_root.mkdir(parents=True, exist_ok=True)
         chroma_dir.mkdir(parents=True, exist_ok=True)
 
-        # Set up embedder
-        self._embedder = _OllamaEmbedder(
-            host=self._config.get("ollama_host", _DEFAULT_OLLAMA_HOST),
+        # Set up embedder — tries OpenRouter first, falls back to local Ollama
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        self._embedder = _OpenRouterEmbedder(
+            host=self._config.get("openrouter_host", _DEFAULT_OPENROUTER_HOST),
             model=self._config.get("embed_model", _DEFAULT_EMBED_MODEL),
             timeout=self._config.get("embed_timeout", _DEFAULT_EMBED_TIMEOUT),
+            api_key=api_key or self._config.get("openrouter_api_key", ""),
         )
 
         # Set up ChromaDB — embedded, no Docker needed
