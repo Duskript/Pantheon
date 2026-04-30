@@ -23,6 +23,12 @@ __pycache__/
 .qdrant/
 node_modules/
 
+# Runtime messages — inter-god communication, never committed
+gods/messages/
+
+# Installed god packages — managed by God SDK
+.pantheon/
+
 # OS artifacts
 .DS_Store
 Thumbs.db
