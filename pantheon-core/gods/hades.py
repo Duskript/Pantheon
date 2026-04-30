@@ -27,6 +27,11 @@ ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 GRAPH_DB = Path(f"{_REAL_HOME}/.hermes/pantheon/graph.db")
 SUGGEST_FILE = Path(f"{_REAL_HOME}/.hermes/pantheon/suggested-codexes.json")
+HERMES_INBOX = Path(f"{_REAL_HOME}/pantheon/gods/messages/hermes")
+INDEX_DESCRIPTION = (
+    "Content in `{path}` is managed by Demeter and Mnemosyne.\n"
+    "Files are auto-detected and embedded into the vector store on change."
+)
 
 # Files older than this (in days) are archive candidates if not linked in the graph
 STALE_THRESHOLD_DAYS = 90
@@ -119,6 +124,13 @@ class HadesReport:
             lines.append(f"\n### Missing INDEX.md ({len(missing)})")
             for m in missing:
                 lines.append(f"- {m}")
+
+        # INDEX auto-creation report
+        created = self.health.get("indexes_created", [])
+        if created:
+            lines.append(f"\n### ✅ INDEX.md Auto-Created ({len(created)})")
+            for c in created:
+                lines.append(f"- `{c}/INDEX.md` created")
 
         # Stale candidates
         stale = self.health.get("stale_candidates", [])
@@ -224,14 +236,49 @@ def _walk_codex_files(codex_root: Path) -> Dict[str, List[Path]]:
     return result
 
 
-def check_index_coverage(codex_root: Path) -> List[str]:
-    """Check which subdirectories are missing an INDEX.md."""
-    missing = []
-    for child in codex_root.iterdir():
-        if child.is_dir() and not child.name.startswith("."):
-            if not (child / "INDEX.md").exists():
-                missing.append(f"{codex_root.name}/{child.name}")
-    return missing
+def ensure_index_files(codex_root: Path) -> List[str]:
+    """Auto-create INDEX.md for any subdirectory that's missing one.
+
+    Returns a list of paths where INDEX.md was created.
+    Also checks for file counts and content changes.
+    """
+    created = []
+    parent_name = codex_root.name
+    parent_rel = f"../INDEX.md"
+
+    for child in sorted(codex_root.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+
+        index_path = child / "INDEX.md"
+        if index_path.exists():
+            continue
+
+        # Count files in this subdirectory
+        file_count = sum(1 for f in child.rglob("*") if f.is_file() and not f.name.startswith("."))
+
+        # Generate description
+        if child.name == "sessions":
+            desc = "Session logs for this Codex."
+        elif child.name == "distilled":
+            desc = "Distilled knowledge extracted from session logs."
+        elif child.name == "archive":
+            desc = "Superseded and archived content."
+        elif file_count == 0:
+            desc = INDEX_DESCRIPTION.format(path=f"`{parent_name}/{child.name}`")
+        else:
+            desc = INDEX_DESCRIPTION.format(path=f"`{parent_name}/{child.name}`")
+
+        content = (
+            f"# {child.name.capitalize()} — Index\n"
+            f"Parent: [{parent_name}]({parent_rel})\n\n"
+            f"{desc}\n"
+        )
+        index_path.write_text(content, encoding="utf-8")
+        created.append(f"{parent_name}/{child.name}")
+        logger.info("  → Created INDEX.md for %s/%s", parent_name, child.name)
+
+    return created
 
 
 def find_stale_files(
@@ -279,6 +326,7 @@ def run_health_checks() -> Dict[str, Any]:
         "chroma_vs_fs": {},
         "orphans": {"chroma_only": [], "fs_unembedded": []},
         "missing_indexes": [],
+        "indexes_created": [],
         "stale_candidates": [],
         "chroma_count": None,
     }
@@ -317,9 +365,19 @@ def run_health_checks() -> Dict[str, Any]:
             "subdirs": len(info["subdirs"]),
         }
 
-        # Check INDEX coverage
-        missing = check_index_coverage(codex_dir)
-        health["missing_indexes"].extend(missing)
+        # Auto-create INDEX.md for missing subdirectories
+        created = ensure_index_files(codex_dir)
+        health["indexes_created"].extend(created)
+
+        # Check for persistent gaps (subdirs without INDEX.md despite creation attempt)
+        # This catches edge cases like empty dirs or permission issues
+        still_missing = []
+        for child in codex_dir.iterdir():
+            if child.is_dir() and not child.name.startswith("."):
+                if not (child / "INDEX.md").exists():
+                    still_missing.append(f"{codex_dir.name}/{child.name}")
+        if still_missing:
+            health["missing_indexes"].extend(still_missing)
 
         # Chroma vs FS comparison
         embeddable_count = len(info["embeddable"])
@@ -599,7 +657,79 @@ def load_suggestions() -> List[Dict]:
 
 
 # ---------------------------------------------------------------------------
-# 5. Full Hades run
+# 5. Mailbox delivery — send report to Hermes
+# ---------------------------------------------------------------------------
+
+
+def _seq_id() -> str:
+    """Generate a unique message ID based on timestamp."""
+    return datetime.now(timezone.utc).strftime("msg_%Y%m%d_%H%M%S_%f")[:26]
+
+
+def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
+    """Send the Hades report as a JSON message to Hermes' inbox.
+
+    Returns the message file path if delivered, None on failure.
+    """
+    try:
+        HERMES_INBOX.mkdir(parents=True, exist_ok=True)
+
+        msg_id = _seq_id()
+        markdown = report.to_markdown()
+        health = report.health or {}
+        dist = report.distillation or {}
+        arch = report.archive or {}
+
+        # Build a concise summary for the body
+        summary_parts = []
+        if health.get("indexes_created"):
+            summary_parts.append(f"📄 Auto-created {len(health['indexes_created'])} INDEX.md files")
+        orphans_fs = health.get("orphans", {}).get("fs_unembedded", [])
+        if orphans_fs:
+            summary_parts.append(f"⚠️ {len(orphans_fs)} files not embedded in ChromaDB")
+        if dist.get("distilled_files_written", 0) > 0:
+            summary_parts.append(f"🔄 Distilled {dist['distilled_files_written']} files")
+        if arch.get("candidates"):
+            summary_parts.append(f"🗄️ {len(arch['candidates'])} archive candidates found")
+        if report.errors:
+            summary_parts.append(f"❌ {len(report.errors)} errors during run")
+
+        summary = " • ".join(summary_parts) if summary_parts else "No issues detected."
+
+        message = {
+            "id": msg_id,
+            "from": "hephaestus",
+            "to": "hermes",
+            "type": "report",
+            "subject": f"Hades Nightly Report — {report.timestamp[:10]}",
+            "body": f"Hades consolidation pipeline ran at {report.timestamp[:19]}.\n\n{summary}\n\n---\n\nFull report:\n{markdown}",
+            "priority": "normal",
+            "timestamp": report.timestamp,
+            "read": False,
+            "payload": {
+                "report_type": "hades_nightly",
+                "date": report.timestamp[:10],
+                "indexes_created": len(health.get("indexes_created", [])),
+                "files_unembedded": len(orphans_fs),
+                "distilled_written": dist.get("distilled_files_written", 0),
+                "archive_candidates": len(arch.get("candidates", [])),
+                "errors": len(report.errors),
+            },
+            "thread_id": None,
+        }
+
+        msg_path = HERMES_INBOX / f"{msg_id}.json"
+        msg_path.write_text(json.dumps(message, indent=2, default=str), encoding="utf-8")
+        logger.info("  → Report delivered to Hermes mailbox: %s", msg_path.name)
+        return str(msg_path)
+
+    except Exception as exc:
+        logger.exception("Failed to deliver report to Hermes mailbox: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# 6. Full Hades run
 # ---------------------------------------------------------------------------
 
 
@@ -653,6 +783,16 @@ def run_hades() -> HadesReport:
                 logger.info("  → %d pending Codex suggestions", len(suggestions))
         except Exception as exc:
             report.errors.append(f"Suggestions load failed: {exc}")
+
+        # Phase 5: Deliver report to Hermes mailbox
+        logger.info("Hades: Delivering report to Hermes mailbox...")
+        try:
+            msg_path = deliver_to_mailbox(report)
+            if msg_path:
+                logger.info("  → Delivered: %s", msg_path)
+        except Exception as exc:
+            report.errors.append(f"Mailbox delivery failed: {exc}")
+            logger.exception("Hades mailbox delivery error")
 
         elapsed = time.time() - start
         logger.info("Hades complete in %.2fs", elapsed)
