@@ -1,0 +1,16 @@
+schema_version: 1
+id: god-template
+name: Template
+version: 1.0.0
+type: conversational
+author: Pantheon Core
+private: true
+description: Template for creating new Pantheon gods
+model: gemma4
+sanctuary: The Forge
+studios:
+  - example-studio
+athenaeum_codex: false
+dependencies: []
+tags:
+  - template

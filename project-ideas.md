@@ -162,6 +162,22 @@ These aren't installable gods — they're the architecture OF Pantheon itself, n
 | **Demeter** | Growth, Seeding, Learning | Training pipelines, model seeding, data cultivation |
 | **Athena** | Wisdom, Strategy, System Architecture | High-level system design, strategic decisions, architecture planning |
 
+### Multi-User Pantheon Architecture
+- **Status:** idea
+- **Tags:** #pantheon-core #architecture #multi-user #infrastructure
+- **Added:** 2026-04-29
+- **Notes:** ⚡ Needs careful planning — Pantheon is currently single-user. When it goes public, multiple users means:
+  - **God isolation** — Each user gets their own gods? Or shared gods with per-user context?
+  - **Per-user profiles** — Every user needs their own config, memories, sessions, skills
+  - **Multi-tenant Hermes** — Does each user get their own gateway/bot, or one gateway routing by identity?
+  - **The Apollo problem** — How does a proprietary god live on a shared system without leaking?
+  - **God marketplace** — If User A installs a god, should User B see it too?
+  - **Shared vs private knowledge** — Some gods share a knowledge base (Hephaestus docs), others are private
+  - **Resource quotas** — Ollama context windows, terminal sessions, disk usage per user
+  - **The Pantheon filesystem** — Currently `~/pantheon/` is single-user. Multi-user needs a new home.
+  - **God permissions** — Can user A's Hephaestus send messages to user B's Thoth?
+  - Worth sketching this out as a dedicated architecture doc early, even if Phase 1 is single-user only.
+
 ### The Underworld — Data Flow
 
 ```

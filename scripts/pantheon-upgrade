@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""
+pantheon-upgrade — Upgrade an installed god to a new version.
+
+Usage:
+    pantheon-upgrade <god-id> <new-package-path>
+
+This replaces the installed package, updates the harness, updates the
+registry version field, and notifies Hermes. The old version is preserved
+in the vault log for history tracking.
+"""
+import os
+import sys
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(script_dir, "lib")
+sys.path.insert(0, lib_dir)
+
+from pantheon_sdk import (
+    get_registry,
+    registry_find,
+    get_installed_path,
+    is_installed,
+    validate_manifest,
+    copy_package,
+    install_harness,
+    registry_update,
+    register_in_graph,
+    remove_from_graph,
+    notify_hermes,
+    log_vault_entry,
+    print_header,
+    print_summary,
+)
+
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: pantheon-upgrade <god-id> <new-package-path>")
+        sys.exit(1)
+
+    god_id = sys.argv[1].lower()
+    new_package_path = os.path.abspath(sys.argv[2])
+
+    if not os.path.isdir(new_package_path):
+        print(f"Error: package directory not found: {new_package_path}")
+        sys.exit(1)
+
+    # ── Step 1: Validate new manifest ─────────────────────────────────
+    try:
+        new_manifest = validate_manifest(new_package_path)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    new_god_id = new_manifest["id"]
+    if new_god_id != god_id:
+        print(f"Error: Package ID '{new_god_id}' doesn't match requested '{god_id}'.")
+        sys.exit(1)
+
+    name = new_manifest["name"]
+    new_version = new_manifest["version"]
+
+    # ── Step 2: Check current state ───────────────────────────────────
+    entries = get_registry()
+    idx, existing_entry = registry_find(entries, god_id)
+    if idx is None:
+        print(f"Error: god '{god_id}' not found in registry.")
+        print(f"  Use 'pantheon-install {new_package_path}' instead.")
+        sys.exit(1)
+
+    old_version = existing_entry.get("version", "unknown")
+
+    if not is_installed(god_id):
+        print(f"Warning: {god_id} package not found at {get_installed_path(god_id)}")
+        print(f"  Will re-install from package.")
+        # Continue anyway — we'll re-copy
+
+    print_header(f"Upgrading {name}: {old_version} → {new_version}")
+
+    # ── Step 3: Copy new package ──────────────────────────────────────
+    installed_path = get_installed_path(god_id)
+    os.makedirs(os.path.dirname(installed_path), exist_ok=True)
+    copy_package(new_package_path, installed_path)
+
+    # ── Step 4: Update harness ────────────────────────────────────────
+    try:
+        install_harness(god_id, new_package_path)
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    # ── Step 5: Update registry ───────────────────────────────────────
+    registry_update(god_id, new_manifest)
+
+    # ── Step 6: Update graph ──────────────────────────────────────────
+    # Remove old node and re-create with new version
+    remove_from_graph(god_id)
+    register_in_graph(god_id, name, new_version, new_manifest["type"])
+
+    # ── Step 7: Log to vault ──────────────────────────────────────────
+    log_vault_entry(
+        "upgrade",
+        god_id,
+        f"Upgraded {name}: {old_version} → {new_version}",
+        version=new_version,
+    )
+
+    # ── Step 8: Notify Hermes ─────────────────────────────────────────
+    notify_hermes(
+        f"God upgraded: {name} {old_version} → {new_version}",
+        f"A god has been upgraded in the Pantheon.\n\n"
+        f"**Name:** {name}\n"
+        f"**ID:** {god_id}\n"
+        f"**Old Version:** {old_version}\n"
+        f"**New Version:** {new_version}\n"
+        f"**Type:** {new_manifest['type']}\n"
+        f"**Description:** {new_manifest['description']}\n",
+    )
+
+    print_summary(god_id, name, f"{old_version} → {new_version}", "upgraded")
+    print()
+
+
+if __name__ == "__main__":
+    main()

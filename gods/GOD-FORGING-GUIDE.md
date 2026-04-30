@@ -2,7 +2,7 @@
 
 Hephaestus' reference for creating new gods in the Pantheon.
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Last Updated:** 2026-04-30
 **Maintainer:** Hephaestus — I update this document whenever the Pantheon skeleton changes or a new pattern emerges from forging.
 
@@ -13,6 +13,7 @@ Hephaestus' reference for creating new gods in the Pantheon.
 | Date | Version | What Changed | Why |
 |------|---------|-------------|-----|
 | 2026-04-30 | 1.0.0 | Initial creation | Foundation document for god creation process |
+| 2026-04-30 | 1.1.0 | Added God SDK section + CLI tool reference | Phase 1 of God SDK complete — install, uninstall, list, upgrade |
 
 ---
 
@@ -275,6 +276,59 @@ gods/messages/{god-name}/msg_{timestamp}.json
 
 ---
 
+## God SDK — Package Management CLI
+
+Phase 1 of the God SDK is complete. Four CLI tools handle the full god lifecycle:
+
+### `pantheon-install <package-path>`
+
+Installs a god package from a local directory. The package must contain a valid
+`god.yaml` and `harness.yaml`.
+
+**What it does automatically:**
+1. Validates the manifest against the schema
+2. Copies the package to `~/.pantheon/gods/{id}/`
+3. Installs the harness to `harnesses/{id}-base.yaml`
+4. Creates inbox at `gods/messages/{id}/`
+5. Creates Codex in Athenaeum (if `athenaeum_codex: true`)
+6. Registers in `pantheon-registry.yaml` with version
+7. Creates node in the entity graph
+8. Notifies Hermes
+9. Logs to vault
+
+### `pantheon-uninstall <god-id> [--remove-codex]`
+
+Removes a god from the Pantheon. Reverses every step of install.
+
+**Flags:**
+- `--remove-codex` — also deletes the Codex directory (default: skip — data safety)
+
+### `pantheon-upgrade <god-id> <new-package-path>`
+
+Upgrades a god to a new version. The old version is preserved in vault logs.
+
+**What it does:**
+1. Validates the new manifest
+2. Replaces the installed package
+3. Updates the harness
+4. Updates the version in `pantheon-registry.yaml`
+5. Replaces the graph node (new version metadata)
+6. Notifies Hermes of the version change
+7. Logs to vault (both old and new versions recorded)
+
+### `pantheon-list-gods`
+
+Shows all registered gods in a formatted table — name, type, version, status,
+description.
+
+**Status values:**
+- `installed` — package is present at `~/.pantheon/gods/{id}/`
+- `active` — marked active in `gods.yaml`
+- `registered` — in the registry but no package
+- `planned` — in `gods.yaml` but not yet registered
+
+---
+
 ## Fresh Install Manifest
 
 For a new Pantheon installation, these are the minimum required components:
@@ -294,7 +348,9 @@ For a new Pantheon installation, these are the minimum required components:
 │   ├── gods/                # System god implementations
 │   └── tests/               # Core system tests
 ├── plugins/                 # Hermes plugin implementations
-├── scripts/                 # CLI tools
+├── scripts/                 # CLI tools (pantheon-install, etc.)
+├── god-packages/            # God SDK package templates
+│   └── god-template/        # Reference template for new gods
 └── athenaeum/               # Knowledge store (shared mount or symlink)
     └── Codex-*/             # Codices per domain
 ```

@@ -200,8 +200,7 @@ class GraphClient:
         if not self._conn:
             raise RuntimeError("GraphClient not connected")
 
-        # Edges are cascade-deleted by FK
-        self._conn.execute("DELETE FROM nodes_fts WHERE node_id = ?", (node_id,))
+        # Edges are cascade-deleted by FK; FTS5 content-sync handles the FTS cleanup
         self._conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
         self._conn.commit()
         return self._conn.total_changes > 0

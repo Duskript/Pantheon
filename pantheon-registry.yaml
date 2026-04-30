@@ -1,50 +1,42 @@
 gods:
-  - name: Zeus
-    harness: zeus-base.yaml
-    type: orchestrator
-    studios: none
-
-  - name: Hecate
-    harness: hecate-base.yaml
-    type: service
-    studios: none
-
-  - name: Apollo
-    harness: apollo-base.yaml
-    type: conversational
-    studios:
-      - lyric-writing
-      - poetry
-
-  - name: Hephaestus
-    harness: hephaestus-base.yaml
-    type: conversational
-    studios:
-      - project-scoping
-      - program-design
-      - infrastructure-planning
-
-  - name: Athena
-    harness: athena-base.yaml
-    type: conversational
-    studios: none
-
-  - name: Hermes
-    harness: hermes-base.yaml
-    type: service
-    studios: none
-
-  - name: Hestia
-    harness: hestia-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Demeter
-    harness: demeter-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Kronos
-    harness: kronos-base.yaml
-    type: subsystem
-    studios: none
+- name: Zeus
+  harness: zeus-base.yaml
+  type: orchestrator
+  studios: none
+- name: Hecate
+  harness: hecate-base.yaml
+  type: service
+  studios: none
+- name: Apollo
+  harness: apollo-base.yaml
+  type: conversational
+  studios:
+  - lyric-writing
+  - poetry
+- name: Hephaestus
+  harness: hephaestus-base.yaml
+  type: conversational
+  studios:
+  - project-scoping
+  - program-design
+  - infrastructure-planning
+- name: Athena
+  harness: athena-base.yaml
+  type: conversational
+  studios: none
+- name: Hermes
+  harness: hermes-base.yaml
+  type: service
+  studios: none
+- name: Hestia
+  harness: hestia-base.yaml
+  type: subsystem
+  studios: none
+- name: Demeter
+  harness: demeter-base.yaml
+  type: subsystem
+  studios: none
+- name: Kronos
+  harness: kronos-base.yaml
+  type: subsystem
+  studios: none
