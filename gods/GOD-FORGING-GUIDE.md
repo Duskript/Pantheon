@@ -2,7 +2,7 @@
 
 Hephaestus' reference for creating new gods in the Pantheon.
 
-**Version:** 1.2.0
+**Version:** 1.3.0
 **Last Updated:** 2026-04-30
 **Maintainer:** Hephaestus — I update this document whenever the Pantheon skeleton changes or a new pattern emerges from forging.
 
@@ -15,6 +15,7 @@ Hephaestus' reference for creating new gods in the Pantheon.
 | 2026-04-30 | 1.0.0 | Initial creation | Foundation document for god creation process |
 | 2026-04-30 | 1.1.0 | Added God SDK section + CLI tool reference | Phase 1 of God SDK complete — install, uninstall, list, upgrade |
 | 2026-04-30 | 1.2.0 | Added pantheon-export | God export for transfer between systems |
+| 2026-04-30 | 1.3.0 | Added Claude import pipeline + 4 new Codices | Claude.ai export ingestion, Apollo/User/Work/Claude Codices |
 
 ---
 
