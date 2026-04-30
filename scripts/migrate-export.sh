@@ -19,12 +19,22 @@
 
 set -euo pipefail
 
+# Use REAL home path — Hermes overrides $HOME to the profile directory
+_USERNAME=$(whoami)
+if [ -d "/home/$_USERNAME" ]; then
+    REAL_HOME="/home/$_USERNAME"
+elif [ -d "/root" ]; then
+    REAL_HOME="/root"
+else
+    REAL_HOME="$HOME"
+fi
+export HOME="$REAL_HOME"
+
 TIMESTAMP=$(date +%Y-%m-%d)
-TARBALL="$HOME/pantheon-migration-$TIMESTAMP.tar"
-USERNAME=$(whoami)
+TARBALL="$REAL_HOME/pantheon-migration-$TIMESTAMP.tar"
 
 echo "═══ Pantheon Migration Export ═══"
-echo "Source: $USERNAME@$(hostname)"
+echo "Source: $_USERNAME@$(hostname)"
 echo "Date:   $TIMESTAMP"
 echo ""
 
@@ -32,11 +42,11 @@ echo ""
 echo "→ Checking paths..."
 
 declare -A PATHS
-PATHS["Athenaeum"]="$HOME/athenaeum"
-PATHS["Hermes root"]="$HOME/.hermes"
-PATHS["Pantheon store"]="$HOME/.hermes/pantheon"
-PATHS["Profile: hephaestus"]="$HOME/.hermes/profiles/hephaestus"
-PATHS["Profile: apollo"]="$HOME/.hermes/profiles/apollo"
+PATHS["Athenaeum"]="$REAL_HOME/athenaeum"
+PATHS["Hermes root"]="$REAL_HOME/.hermes"
+PATHS["Pantheon store"]="$REAL_HOME/.hermes/pantheon"
+PATHS["Profile: hephaestus"]="$REAL_HOME/.hermes/profiles/hephaestus"
+PATHS["Profile: apollo"]="$REAL_HOME/.hermes/profiles/apollo"
 
 MISSING=""
 for label in "${!PATHS[@]}"; do
@@ -110,27 +120,27 @@ tar --create \
     --exclude="bin" \
     --exclude="plugins/pantheon/__pycache__" \
     -C / \
-    "home/$USERNAME/athenaeum" \
-    "home/$USERNAME/.hermes/pantheon" \
-    "home/$USERNAME/.hermes/config.yaml" \
-    "home/$USERNAME/.hermes/SOUL.md" \
-    "home/$USERNAME/.hermes/.env" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/config.yaml" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/.env" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/SOUL.md" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/state.db" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/memories" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/plugins" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/sessions" \
-    "home/$USERNAME/.hermes/profiles/hephaestus/cron" \
-    "home/$USERNAME/.hermes/profiles/apollo/config.yaml" \
-    "home/$USERNAME/.hermes/profiles/apollo/.env" \
-    "home/$USERNAME/.hermes/profiles/apollo/SOUL.md" \
-    "home/$USERNAME/.hermes/profiles/apollo/state.db" \
-    "home/$USERNAME/.hermes/profiles/apollo/memories" \
-    "home/$USERNAME/.hermes/profiles/apollo/plugins" \
-    "home/$USERNAME/.hermes/profiles/apollo/sessions" \
-    "home/$USERNAME/.hermes/profiles/apollo/cron" \
+    "home/$_USERNAME/athenaeum" \
+    "home/$_USERNAME/.hermes/pantheon" \
+    "home/$_USERNAME/.hermes/config.yaml" \
+    "home/$_USERNAME/.hermes/SOUL.md" \
+    "home/$_USERNAME/.hermes/.env" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/config.yaml" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/.env" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/SOUL.md" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/state.db" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/memories" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/plugins" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/sessions" \
+    "home/$_USERNAME/.hermes/profiles/hephaestus/cron" \
+    "home/$_USERNAME/.hermes/profiles/apollo/config.yaml" \
+    "home/$_USERNAME/.hermes/profiles/apollo/.env" \
+    "home/$_USERNAME/.hermes/profiles/apollo/SOUL.md" \
+    "home/$_USERNAME/.hermes/profiles/apollo/state.db" \
+    "home/$_USERNAME/.hermes/profiles/apollo/memories" \
+    "home/$_USERNAME/.hermes/profiles/apollo/plugins" \
+    "home/$_USERNAME/.hermes/profiles/apollo/sessions" \
+    "home/$_USERNAME/.hermes/profiles/apollo/cron" \
     2>&1
 
 # ── Compress ────────────────────────────────────────────────────────────────
@@ -144,17 +154,17 @@ FINAL_SIZE=$(du -h "$FINAL" | awk '{print $1}')
 cat >> "$FINAL.manifest" <<EOF
 Pantheon Migration Export
 Exported: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-Source:   $USERNAME@$(hostname)
+Source:   $_USERNAME@$(hostname)
 Hermes:   $(hermes --version 2>/dev/null || echo "unknown")
 Ollama:   $(ollama --version 2>/dev/null || echo "unknown")
 Size:     $FINAL_SIZE
 
 Contents:
-  home/$USERNAME/athenaeum/        — Knowledge store (11 Codices)
-  home/$USERNAME/.hermes/pantheon/ — ChromaDB + graph + ingest rules
-  home/$USERNAME/.hermes/config.yaml, .env, SOUL.md
-  home/$USERNAME/.hermes/profiles/hephaestus/  — Your profile
-  home/$USERNAME/.hermes/profiles/apollo/      — Apollo profile
+  home/$_USERNAME/athenaeum/        — Knowledge store (11 Codices)
+  home/$_USERNAME/.hermes/pantheon/ — ChromaDB + graph + ingest rules
+  home/$_USERNAME/.hermes/config.yaml, .env, SOUL.md
+  home/$_USERNAME/.hermes/profiles/hephaestus/  — Your profile
+  home/$_USERNAME/.hermes/profiles/apollo/      — Apollo profile
 
 Restore instructions: https://github.com/Duskript/Pantheon-Core#migration
 EOF
@@ -167,11 +177,11 @@ echo "Manifest:  $FINAL.manifest"
 echo ""
 echo "Next steps:"
 echo ""
-echo "  1. Copy $(basename "$FINAL$EXT") to the NEW Ubuntu machine"
+echo "  1. Copy $(basename "$FINAL") to the NEW Ubuntu machine"
 echo "     (USB drive, scp, rsync, whatever works)"
 echo ""
 echo "  2. On the NEW machine, extract:"
-echo "     tar -I $COMPRESSOR -xpf $(basename "$FINAL$EXT") -C /"
+echo "     tar -I $COMPRESSOR -xpf $(basename "$FINAL") -C /"
 echo ""
 echo "  3. Run the restore script:"
 echo "     cd ~/pantheon && bash scripts/migrate-restore.sh"
