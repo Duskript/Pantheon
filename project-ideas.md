@@ -16,7 +16,7 @@ A living collection of things to build — for Konan's Pantheon system, for work
   - Phase 3: Full event bus with routing, filtering, persistence
 
 ### Pantheon Plugin / God SDK
-- **Status:** planning
+- **Status:** in-progress
 - **Tags:** #pantheon-core #architecture #sdk #plugin-system #packaging
 - **Added:** 2026-04-29
 - **Notes:** ⚡ **Foundational architecture.** A standard way to package gods as pluggable extensions to Pantheon. Each god is a self-contained bundle: agent config, personality prompts, knowledge base, tools, skills, and supporting files.
@@ -48,18 +48,6 @@ A living collection of things to build — for Konan's Pantheon system, for work
 - **Tags:** #pantheon-core #ui #design #hera
 - **Added:** 2026-04-29
 - **Notes:** The settings panels and UI of Pantheon fall under **Hera** — queen of the gods, keeper of order, manager of the divine household. All configuration, preferences, user management, and system settings live in her domain.
-
-### The Underworld — Data Lifecycle System
-- **Status:** planning
-- **Tags:** #pantheon-core #data #lifecycle #hades #fates
-- **Added:** 2026-04-29
-- **Notes:** ⚡ A structured data lifecycle system with Greek underworld hierarchy:
-  - **Meadows of Asphodel** — Short-term archival. Data sits here for 6 months before moving on.
-  - **Fields of Elysium** — Permanent long-term archive. Data that earned its place.
-  - **Tartarus** — Final countdown. Data has 30 days here before permanent deletion.
-  - **Hades** — Gatekeeper and ruler of the underworld. Processes data through the lifecycle. CAN recover anything from any layer, even Tartarus, if needed.
-  - **The Fates** — Only they have the ultimate authority to permanently delete data. Data goes through Hades first, the Fates cut the thread.
-  - Total lifecycle from Asphodel to deletion: ~7 months (6mo Asphodel + 30d Tartarus), with Elysium as the permanent escape hatch.
 
 ### Claude.ai Conversation Ingestion System
 - **Status:** idea
@@ -142,14 +130,6 @@ A living collection of things to build — for Konan's Pantheon system, for work
 - **Personality:** Wise, patient, solution-oriented — the mentor who helps you see the path forward.
 - **Notes:** When you're stuck — code bug, blocked workflow, can't figure out a config — Ganesha clears the path. Also the god to call when STARTING something new: "Ganesha, scaffold me a new Python project with FastAPI, SQLAlchemy, and tests." Project initialization, boilerplate generation, and creative problem-solving all in one.
 
-### Anubis — Data Archival & Embalming (Hades' Right Hand)
-- **Status:** idea
-- **Tags:** #god #data #archival #egyptian #underworld
-- **Added:** 2026-04-29
-- **Mythology:** Egyptian — God of embalming, mummification, and ushering souls to the afterlife.
-- **Personality:** Solemn, precise, methodical — the archivist who does his job perfectly and quietly.
-- **Notes:** Works alongside Hades in the Underworld data lifecycle. Anubis handles the embalming (compression, packaging, indexing) of data before it moves through the Underworld stages. Prepares data for its journey through Asphodel, Elysium, or Tartarus. The meticulous craftsman of data death and preservation.
-
 ## 🏛️ Greek System Gods (Built into Pantheon Core)
 
 These aren't installable gods — they're the architecture OF Pantheon itself, named after Greek entities that rule the divine order:
@@ -157,8 +137,6 @@ These aren't installable gods — they're the architecture OF Pantheon itself, n
 | Entity | Domain | Role |
 |--------|--------|------|
 | **Hera** | UI & Settings | Queen of the gods — all settings panels, configuration UI, user management |
-| **Hades** | Data Lifecycle Gatekeeper | Ruler of the Underworld — processes data through archival/compression/burial pipeline |
-| **The Fates** | Ultimate Deletion Authority | Only they can permanently delete data — Hades processes, the Fates decide |
 | **Demeter** | Growth, Seeding, Learning | Training pipelines, model seeding, data cultivation |
 | **Athena** | Wisdom, Strategy, System Architecture | High-level system design, strategic decisions, architecture planning |
 
@@ -177,44 +155,6 @@ These aren't installable gods — they're the architecture OF Pantheon itself, n
   - **The Pantheon filesystem** — Currently `~/pantheon/` is single-user. Multi-user needs a new home.
   - **God permissions** — Can user A's Hephaestus send messages to user B's Thoth?
   - Worth sketching this out as a dedicated architecture doc early, even if Phase 1 is single-user only.
-
-### The Underworld — Data Flow
-
-```
-Data enters Hades' domain
-        │
-        ▼
-  ┌─────────────┐
-  │   Anubis    │  ← Embalming (compression, packaging, indexing)
-  └──────┬──────┘
-         │
-         ▼
-  ┌──────────────────────────────┐
-  │  Meadows of Asphodel         │  6 months — short-term archival
-  │  (warm, accessible storage)  │
-  └──────┬───────────────────────┘
-         │
-         ├──────────────────────────────┐
-         ▼                              ▼
-  ┌──────────────┐            ┌─────────────────┐
-  │ Fields of    │            │    Tartarus     │
-  │  Elysium     │            │  30-day countdown│
-  │ (permanent)  │            │ (final warning)  │
-  └──────────────┘            └────────┬────────┘
-                                       │
-                                       ▼
-                               ┌────────────────┐
-                               │   The Fates    │
-                               │ (final verdict)│
-                               │  ✂️  ✂️  ✂️   │
-                               └────────────────┘
-                                       │
-                                       ▼
-                                  PERMANENT
-                                  DELETION
-
-       👑 Hades can recover from ANY layer, even Tartarus
-```
 
 ## 💼 Work Projects
 

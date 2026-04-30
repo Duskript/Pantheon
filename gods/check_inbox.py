@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Pantheon Bridge: Check Hermes' inbox for unread messages and report them."""
+"""Pantheon Bridge: Check Hermes' inbox for unread messages and auto-ack them."""
 
 import json
 import os
 import glob
-from datetime import datetime, timezone
 
 HERMES_INBOX = os.path.expanduser("~/pantheon/gods/messages/hermes")
-INBOX_INDEX = os.path.join(HERMES_INBOX, "hermes-inbox.json")
 
-def check_inbox():
-    """Find all unread messages in Hermes' inbox."""
+def check_and_ack():
+    """Find all unread messages, report them, then mark them read."""
     if not os.path.isdir(HERMES_INBOX):
-        return []
+        print("NO_INBOX")
+        return
 
     messages = []
     for msg_file in sorted(glob.glob(os.path.join(HERMES_INBOX, "msg_*.json"))):
@@ -20,41 +19,35 @@ def check_inbox():
             with open(msg_file) as f:
                 msg = json.load(f)
             if not msg.get("read", False):
-                messages.append(msg)
+                messages.append((msg_file, msg))
         except (json.JSONDecodeError, IOError):
             continue
 
-    return messages
-
-def main():
-    messages = check_inbox()
-
     if not messages:
-        print("No new messages.")
+        print("NO_NEW")
         return
 
+    # Output report AND mark each as read
     count = len(messages)
-    print(f"📬 {count} new message(s) in Hermes' inbox!")
-    print()
+    print(f"NEW:{count}")
 
-    for msg in messages:
+    for msg_file, msg in messages:
         from_god = msg.get("from", "unknown")
         subject = msg.get("subject", "No subject")
         priority = msg.get("priority", "normal")
         body = msg.get("body", "")
-        ts = msg.get("timestamp", "")
+        msg_id = msg.get("id", "unknown")
 
-        priority_icon = {"high": "🔴", "normal": "🟢", "low": "🔵"}.get(priority, "🟢")
+        preview = body[:300] + ("..." if len(body) > 300 else "")
+        print(f"MSG:{msg_id}|from:{from_god}|priority:{priority}|subject:{subject}")
+        print(f"BODY:{preview}")
 
-        print(f"{priority_icon} From: {from_god}")
-        print(f"   Subject: {subject}")
-        print(f"   Time: {ts}")
-        # Show first 200 chars of body as preview
-        preview = body[:200] + ("..." if len(body) > 200 else "")
-        print(f"   Preview: {preview}")
-        print()
+        # Mark as read
+        msg["read"] = True
+        with open(msg_file, "w") as f:
+            json.dump(msg, f, indent=2, default=str)
 
-    print(f"Check 'cat ~/pantheon/gods/messages/hermes/' to read them in full.")
+    print("ACKED:true")
 
 if __name__ == "__main__":
-    main()
+    check_and_ack()
