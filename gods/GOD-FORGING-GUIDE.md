@@ -2,7 +2,7 @@
 
 Hephaestus' reference for creating new gods in the Pantheon.
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Last Updated:** 2026-04-30
 **Maintainer:** Hephaestus — I update this document whenever the Pantheon skeleton changes or a new pattern emerges from forging.
 
@@ -14,6 +14,7 @@ Hephaestus' reference for creating new gods in the Pantheon.
 |------|---------|-------------|-----|
 | 2026-04-30 | 1.0.0 | Initial creation | Foundation document for god creation process |
 | 2026-04-30 | 1.1.0 | Added God SDK section + CLI tool reference | Phase 1 of God SDK complete — install, uninstall, list, upgrade |
+| 2026-04-30 | 1.2.0 | Added pantheon-export | God export for transfer between systems |
 
 ---
 
@@ -326,6 +327,15 @@ description.
 - `active` — marked active in `gods.yaml`
 - `registered` — in the registry but no package
 - `planned` — in `gods.yaml` but not yet registered
+
+### `pantheon-export <god-id> [--include-codex] [--output <path>]`
+
+Exports an installed god as a portable tarball for transfer to another machine.
+
+- Exports to: `~/pantheon/god-exports/god-{id}-v{version}.tar.gz`
+- `--include-codex` — bundles reference docs, distilled knowledge (excludes sessions and archive — instance-specific data stays local)
+- `--output <path>` — custom output path instead of the default exports folder
+- Recipient flow: `tar xzf → pantheon-install`
 
 ---
 
