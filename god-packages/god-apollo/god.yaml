@@ -1,0 +1,21 @@
+schema_version: 1
+id: god-apollo
+name: Apollo
+version: 1.0.0
+type: conversational
+author: Konan
+private: true
+description: Lyric-writing, poetry, and song creation god — creative work in your established voice
+model: gemma4:31b-cloud
+sanctuary: The Muses' Summit
+studios:
+  - lyric-writing
+  - poetry
+athenaeum_codex: true
+dependencies: []
+tags:
+  - music
+  - creative
+  - suno
+  - poetry
+  - songwriting

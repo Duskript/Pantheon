@@ -18,3 +18,14 @@ gods:
       - code_generation
       - project_scaffolding
     status: active
+
+  apollo:
+    display_name: Apollo
+    role: Creative God of Songcraft
+    description: Lyric-writing, poetry, and song creation god. Works in your established creative voice with Lyric Smith, Suno Formatter, and Stylish Style Maker.
+    capabilities:
+      - lyric_writing
+      - song_creation
+      - poetry
+      - suno_production
+    status: active

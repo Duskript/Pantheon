@@ -40,3 +40,16 @@ gods:
   harness: kronos-base.yaml
   type: subsystem
   studios: none
+- name: Apollo
+  id: god-apollo
+  harness: god-apollo-base.yaml
+  type: conversational
+  version: 1.0.0
+  description: "Lyric-writing, poetry, and song creation god \u2014 creative work\
+    \ in your established voice"
+  studios:
+  - lyric-writing
+  - poetry
+  sanctuary: The Muses' Summit
+  private: true
+  author: Konan
