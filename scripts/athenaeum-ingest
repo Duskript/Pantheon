@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Athenaeum Ingestion CLI — add content to the knowledge store.
+
+Usage:
+  athenaeum-ingest <path-or-url>     Ingest a local file or URL
+  athenaeum-ingest --bulk <dir>      Ingest a directory (groups companions)
+  athenaeum-ingest --watch           Start the inbox watcher (background)
+  athenaeum-ingest --scan            Scan inbox once for new files
+  athenaeum-ingest --status          Show ingestion system status
+  athenaeum-ingest --help            Show this help message
+"""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+# Ensure the Pantheon plugin package is importable
+# Use REAL home path (Hermes overrides Path.home())
+import os as _os
+_REAL_HOME = _os.path.expanduser("~konan")
+sys.path.insert(0, _REAL_HOME + "/.hermes/profiles/hephaestus")
+
+# Load profile-level .env so the CLI has access to API keys
+_ENV_FILE = _REAL_HOME + "/.hermes/profiles/hephaestus/.env"
+if _os.path.isfile(_ENV_FILE):
+    with open(_ENV_FILE) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                _os.environ.setdefault(_k.strip(), _v.strip())
+
+from plugins.pantheon.demeter.classifier import (
+    KNOWN_CODEXES,
+    ATHENAEUM_ROOT,
+    pop_suggestions,
+)
+from plugins.pantheon.demeter.ingest import (
+    ingest_file,
+    ingest_url,
+    ingest_bulk,
+    load_rules,
+)
+from plugins.pantheon.demeter.watcher import DemeterWatcher, _DEFAULT_INBOX
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s | %(message)s",
+)
+logger = logging.getLogger("athenaeum-ingest")
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    """Ingest a single file or URL."""
+    source = args.source
+
+    if source.startswith("http://") or source.startswith("https://"):
+        logger.info("Scraping URL: %s", source)
+        result = ingest_url(source)
+    else:
+        path = Path(source).expanduser().resolve()
+        if not path.exists():
+            logger.error("File not found: %s", source)
+            return 1
+        logger.info("Ingesting file: %s", path)
+        result = ingest_file(str(path))
+
+    if result.success:
+        print(f"\n✅ {result.action.upper()}: {result.source}")
+        print(f"   → {result.destination}")
+        print(f"   📁 {result.codex} ({result.rule_name})")
+        if result.suggested_codex:
+            print(f"   💡 Suggested new Codex: {result.suggested_codex}")
+        return 0
+    else:
+        print(f"\n❌ FAILED: {result.source}")
+        print(f"   Error: {result.error}")
+        return 1
+
+
+def cmd_bulk(args: argparse.Namespace) -> int:
+    """Ingest a directory of files."""
+    directory = Path(args.directory).expanduser().resolve()
+    if not directory.is_dir():
+        logger.error("Directory not found: %s", args.directory)
+        return 1
+
+    logger.info("Bulk ingesting: %s", directory)
+    results = ingest_bulk(str(directory))
+
+    successes = [r for r in results if r.success]
+    failures = [r for r in results if not r.success]
+    suggestions = [r for r in successes if r.suggested_codex]
+
+    print(f"\n📦 Bulk ingest complete: {len(results)} files")
+    print(f"   ✅ {len(successes)} succeeded")
+    if failures:
+        print(f"   ❌ {len(failures)} failed")
+        for f in failures:
+            print(f"      • {f.source}: {f.error}")
+    if suggestions:
+        print(f"   💡 {len(suggestions)} new Codex suggestions")
+        for s in suggestions:
+            print(f"      • {s.suggested_codex} (from {s.source})")
+
+    return 0 if not failures else 1
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    """Start the inbox watcher."""
+    inbox = Path(_DEFAULT_INBOX)
+    inbox.mkdir(parents=True, exist_ok=True)
+    print(f"👁️  Watching {inbox}/ for new files...")
+    print("   Press Ctrl+C to stop")
+    watcher = DemeterWatcher()
+    try:
+        watcher.start()
+        import time
+
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nStopping watcher...")
+        watcher.stop()
+    return 0
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    """Scan inbox once."""
+    watcher = DemeterWatcher()
+    results = watcher.scan_now()
+
+    if not results:
+        print("📭 Inbox is empty")
+        return 0
+
+    successes = [r for r in results if r.success]
+    failures = [r for r in results if not r.success]
+
+    print(f"\n📋 Scan complete: {len(results)} files")
+    print(f"   ✅ {len(successes)} ingested")
+    if failures:
+        print(f"   ❌ {len(failures)} failed")
+        for f in failures:
+            print(f"      • {f.source}: {f.error}")
+    return 0 if not failures else 1
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Show system status."""
+    print(f"\n📚 Pantheon Ingestion System Status")
+    print(f"{'=' * 40}")
+    print(f"   Athenaeum: {ATHENAEUM_ROOT}")
+    print(f"   Inbox:     {_DEFAULT_INBOX}")
+    print(f"   Codexes:   {len(KNOWN_CODEXES)}")
+
+    if ATHENAEUM_ROOT.is_dir():
+        for codex in sorted(KNOWN_CODEXES):
+            codex_path = ATHENAEUM_ROOT / codex
+            if codex_path.is_dir():
+                file_count = sum(1 for _ in codex_path.rglob("*") if _.is_file())
+                print(f"      {codex}: {file_count} files")
+            else:
+                print(f"      {codex}: (missing)")
+    else:
+        print("   ⚠️  Athenaeum root not found")
+
+    suggestions = pop_suggestions()
+    if suggestions:
+        print(f"\n   💡 Pending Codex suggestions: {len(suggestions)}")
+        for s in suggestions:
+            print(f"      • {s.get('suggested_codex')}: {s.get('reason', '')[:80]}")
+
+    rules_file = Path.home() / ".hermes" / "pantheon" / "ingest-rules.yaml"
+    if rules_file.exists():
+        rules = load_rules()
+        print(f"\n   Rules loaded: {len(rules)}")
+        for r in rules:
+            print(f"      • {r.name}: {r.target_codex}/{r.target_subfolder or ''}")
+    else:
+        print("\n   ⚠️  No rules file found")
+
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Athenaeum Ingestion CLI — add content to the knowledge store.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  athenaeum-ingest https://reddit.com/r/.../...
+  athenaeum-ingest ~/Downloads/note.md
+  athenaeum-ingest ~/Downloads/song.mp3
+  athenaeum-ingest --bulk ~/Songs/my-album/
+  athenaeum-ingest --watch
+  athenaeum-ingest --scan
+  athenaeum-ingest --status
+        """,
+    )
+
+    parser.add_argument("target", nargs="?", help="File path or URL to ingest")
+    parser.add_argument("--bulk", metavar="DIR", help="Bulk ingest a directory")
+    parser.add_argument("--watch", action="store_true", help="Start background inbox watcher")
+    parser.add_argument("--scan", action="store_true", help="Scan inbox once")
+    parser.add_argument("--status", action="store_true", help="Show ingestion system status")
+
+    args = parser.parse_args()
+
+    if args.status:
+        return cmd_status(args)
+    elif args.watch:
+        return cmd_watch(args)
+    elif args.scan:
+        return cmd_scan(args)
+    elif args.bulk:
+        args.directory = args.bulk
+        return cmd_bulk(args)
+    elif args.target:
+        args.source = args.target
+        return cmd_ingest(args)
+    else:
+        parser.print_help()
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

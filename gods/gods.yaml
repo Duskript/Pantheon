@@ -1,0 +1,20 @@
+gods:
+  hermes:
+    display_name: Hermes
+    role: Messenger & Interface
+    description: Your direct interface to the Pantheon. Konan talks to me, I route to the right god.
+    capabilities:
+      - chat
+      - message_relay
+      - system_interface
+    status: active
+
+  hephaestus:
+    display_name: Hephaestus
+    role: Core Builder & Tool Forger
+    description: The foundation god, bundled with Pantheon. Handles tool building, code generation, project scaffolding.
+    capabilities:
+      - tool_building
+      - code_generation
+      - project_scaffolding
+    status: active

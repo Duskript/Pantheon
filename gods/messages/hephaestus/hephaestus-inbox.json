@@ -1,0 +1,24 @@
+{
+  "god": "hephaestus",
+  "inbox_path": "/home/konan/pantheon/gods/messages/hephaestus/",
+  "unread_count": 2,
+  "total_count": 2,
+  "messages": [
+    {
+      "id": "msg_20260429_0001",
+      "from": "hermes",
+      "subject": "Welcome to the Pantheon, Hephaestus!",
+      "priority": "high",
+      "timestamp": "2026-04-29T...",
+      "read": false
+    },
+    {
+      "id": "msg_20260429_0002",
+      "from": "hermes",
+      "subject": "Reference: project-ideas.md is your primary source of truth",
+      "priority": "normal",
+      "timestamp": "2026-04-29T...",
+      "read": false
+    }
+  ]
+}

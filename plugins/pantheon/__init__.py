@@ -41,6 +41,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from agent.memory_provider import MemoryProvider
 
+# GraphClient for entity-relationship tracking
+from .graph_client import GraphClient as _GraphClient
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -164,30 +167,63 @@ def _list_codexes(athenaeum_root: Path) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
-class _OllamaEmbedder:
-    """Generate embeddings via Ollama's nomic-embed-text model."""
+class _OpenRouterEmbedder:
+    """Generate embeddings via OpenRouter's API (OpenAI-compatible).
 
-    def __init__(self, host: str, model: str, timeout: float):
+    Uses the OPENROUTER_API_KEY env var for auth. Falls back to Ollama
+    (local nomic-embed-text) if no API key is configured, for development
+    and offline use.
+    """
+
+    def __init__(self, host: str, model: str, timeout: float, api_key: str = ""):
         self._host = host.rstrip("/")
         self._model = model
         self._timeout = timeout
-        self._chunk_size = 512  # chars per chunk for long documents
+        self._api_key = api_key
+        self._chunk_size = 512
+
+    @property
+    def _effective_key(self) -> str:
+        return self._api_key or os.environ.get("OPENROUTER_API_KEY", "")
+
+    @property
+    def _use_openrouter(self) -> bool:
+        return bool(self._effective_key)
 
     def embed(self, text: str) -> List[float]:
-        """Return embedding vector for *text*."""
-        import httpx  # noqa: PLC0415
+        if self._use_openrouter:
+            return self._embed_openrouter(text)
+        return self._embed_ollama(text)
 
-        url = f"{self._host}/api/embeddings"
+    def _embed_openrouter(self, text: str) -> List[float]:
+        import httpx
+
+        url = f"{self._host}/api/v1/embeddings"
         response = httpx.post(
             url,
-            json={"model": self._model, "prompt": text},
+            headers={
+                "Authorization": f"Bearer {self._effective_key}",
+                "Content-Type": "application/json",
+            },
+            json={"model": self._model, "input": text},
+            timeout=self._timeout,
+        )
+        response.raise_for_status()
+        return response.json()["data"][0]["embedding"]
+
+    def _embed_ollama(self, text: str) -> List[float]:
+        import httpx
+
+        url = "http://localhost:11434/api/embeddings"
+        response = httpx.post(
+            url,
+            json={"model": "nomic-embed-text", "prompt": text},
             timeout=self._timeout,
         )
         response.raise_for_status()
         return response.json()["embedding"]
 
     def embed_chunks(self, text: str) -> List[Tuple[List[float], int]]:
-        """Embed *text* in chunks. Returns [(embedding, char_offset), ...]."""
         chunks = []
         for i in range(0, len(text), self._chunk_size):
             chunk = text[i : i + self._chunk_size]
@@ -195,11 +231,11 @@ class _OllamaEmbedder:
         return chunks
 
     def is_available(self) -> bool:
-        """Quick reachability check."""
-        import httpx  # noqa: PLC0415
-
+        if self._effective_key:
+            return True
+        import httpx
         try:
-            resp = httpx.get(f"{self._host}/api/tags", timeout=5.0)
+            resp = httpx.get("http://localhost:11434/api/tags", timeout=5.0)
             return resp.status_code == 200
         except Exception:
             return False
@@ -317,6 +353,7 @@ class PantheonMemoryProvider(MemoryProvider):
         self._prefetch_thread: Optional[threading.Thread] = None
         self._initialized = False
         self._chroma_available = False
+        self._graph: Optional[_GraphClient] = None
 
     # -- Provider identity ------------------------------------------------
 
@@ -430,14 +467,37 @@ class PantheonMemoryProvider(MemoryProvider):
         if self._chroma_available:
             self._ensure_codex_collections()
 
+        # Initialize graph database for entity-relationship tracking
+        try:
+            self._graph = _GraphClient()
+            self._graph.connect()
+            # Register the current session in the graph
+            if session_id:
+                self._graph.register_session(
+                    session_id,
+                    metadata={"hermes_home": self._hermes_home},
+                )
+            # Ensure Codex nodes exist
+            for codex_name in _list_codexes(self._athenaeum_root):
+                cid = f"codex:{codex_name}"
+                self._graph.upsert_node(
+                    cid, "codex", codex_name,
+                )
+        except Exception as exc:
+            logger.warning("GraphClient initialization failed: %s", exc)
+            self._graph = None
+
         self._initialized = True
 
     def shutdown(self) -> None:
-        """Clean shutdown — flush vault, close ChromaDB."""
+        """Clean shutdown — flush vault, close ChromaDB, close graph."""
         if self._vault:
             self._vault.close_session()
+        if self._graph:
+            self._graph.close()
         self._chroma = None
         self._embedder = None
+        self._graph = None
         self._initialized = False
 
     # -- ChromaDB management ----------------------------------------------
@@ -619,6 +679,9 @@ Navigation:
   - Use athenaeum_read to read a specific file
   - Use athenaeum_search for semantic search across all content
   - Use athenaeum_embed to manually trigger re-embedding of a file
+  - Use athenaeum_ingest to add files or URLs to the Athenaeum (auto-classified)
+  - Use athenaeum_ingest_bulk to import entire directories (groups audio + companions)
+  - Use athenaeum_graph_query to explore the entity-relationship graph (search nodes, find connections, shortest paths)
 
 Current conversations are auto-logged to {vault_codex}/sessions/ and become searchable.
 </pantheon-context>"""
@@ -791,10 +854,83 @@ Current conversations are auto-logged to {vault_codex}/sessions/ and become sear
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": "Path relative to Athenaeum root (e.g. 'Codex-Forge/sessions/session-1.md')",
+                            "description": "Path relative to Athenaeum root (e.g. 'Codex-Forge/sessions/session-1.md' or 'Codex-Forge/blueprints/api-reference.md')",
                         },
                     },
                     "required": ["path"],
+                },
+            },
+            {
+                "name": "athenaeum_ingest",
+                "description": "Ingest a file or URL into the Athenaeum. Automatically classifies by content, files to the correct Codex, and embeds into Mnemosyne. Supports: .md, .txt, .json, .yaml, .mp3, .wav, .png, .jpg, .pdf, and URLs (Reddit, articles, etc.). For bulk directories, use athenaeum_ingest_bulk.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "description": "File path (absolute or ~/) or URL (https://...) to ingest",
+                        },
+                    },
+                    "required": ["source"],
+                },
+            },
+            {
+                "name": "athenaeum_ingest_bulk",
+                "description": "Bulk ingest an entire directory. Automatically groups companion files (lyrics .txt, style .md) with audio. Each file is classified, filed to the correct Codex, and embedded.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "directory": {
+                            "type": "string",
+                            "description": "Path to directory containing files to ingest",
+                        },
+                    },
+                    "required": ["directory"],
+                },
+            },
+            {
+                "name": "athenaeum_graph_query",
+                "description": "Query the entity-relationship graph. Find nodes by type, codex, label. See what's connected to what across the Athenaeum.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "description": "Operation: 'search' (FTS search), 'find' (filter by type/codex), 'neighbors' (connected nodes), 'path' (shortest path), 'stats' (graph summary)",
+                            "enum": ["search", "find", "neighbors", "path", "stats"],
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Search query (for 'search' and 'find' actions: text search or label substring)",
+                        },
+                        "node_type": {
+                            "type": "string",
+                            "description": "Filter by node type: file, session, entity, codex, url, concept",
+                        },
+                        "codex": {
+                            "type": "string",
+                            "description": "Filter by Codex name (e.g. Codex-Forge)",
+                        },
+                        "node_id": {
+                            "type": "string",
+                            "description": "Node ID for 'neighbors' and 'path' actions (e.g. file:Codex-Forge/blueprints/plan.md)",
+                        },
+                        "target_id": {
+                            "type": "string",
+                            "description": "Target node ID for 'path' action",
+                        },
+                        "max_depth": {
+                            "type": "integer",
+                            "description": "Max traversal depth for 'neighbors' (default: 1)",
+                            "default": 1,
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max results (default: 20)",
+                            "default": 20,
+                        },
+                    },
+                    "required": ["action"],
                 },
             },
         ]
@@ -806,6 +942,9 @@ Current conversations are auto-logged to {vault_codex}/sessions/ and become sear
             "athenaeum_read": self._tool_read,
             "athenaeum_walk": self._tool_walk,
             "athenaeum_embed": self._tool_embed,
+            "athenaeum_ingest": self._tool_ingest,
+            "athenaeum_ingest_bulk": self._tool_ingest_bulk,
+            "athenaeum_graph_query": self._tool_graph_query,
         }
         handler = handlers.get(tool_name)
         if not handler:
@@ -898,6 +1037,160 @@ Current conversations are auto-logged to {vault_codex}/sessions/ and become sear
             "path": rel_path,
             "codex": codex,
         }
+
+    def _tool_ingest(self, args: dict) -> dict:
+        """Handle athenaeum_ingest tool call."""
+        source = args.get("source", "")
+        if not source:
+            return {"error": "source is required"}
+
+        try:
+            from .demeter.ingest import ingest_file, ingest_url  # noqa: PLC0415
+        except ImportError:
+            return {"error": "Ingestion module not available — run `uv pip install mutagen watchdog readability-lxml`"}
+
+        try:
+            if source.startswith("http://") or source.startswith("https://"):
+                result = ingest_url(source)
+            else:
+                result = ingest_file(source)
+
+            return {
+                "success": result.success,
+                "source": result.source,
+                "destination": result.destination,
+                "codex": result.codex,
+                "rule": result.rule_name,
+                "suggested_codex": result.suggested_codex,
+                "action": result.action,
+                "error": result.error,
+            }
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def _tool_ingest_bulk(self, args: dict) -> dict:
+        """Handle athenaeum_ingest_bulk tool call."""
+        directory = args.get("directory", "")
+        if not directory:
+            return {"error": "directory is required"}
+
+        try:
+            from .demeter.ingest import ingest_bulk  # noqa: PLC0415
+        except ImportError:
+            return {"error": "Ingestion module not available"}
+
+        try:
+            results = ingest_bulk(directory)
+            successes = [r for r in results if r.success]
+            failures = [r for r in results if not r.success]
+            suggestions = [r for r in successes if r.suggested_codex]
+            return {
+                "total": len(results),
+                "succeeded": len(successes),
+                "failed": len(failures),
+                "suggestions": len(suggestions),
+                "results": [
+                    {
+                        "success": r.success,
+                        "source": r.source,
+                        "destination": r.destination,
+                        "codex": r.codex,
+                        "action": r.action,
+                    }
+                    for r in results
+                ],
+            }
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def _tool_graph_query(self, args: dict) -> dict:
+        """Handle athenaeum_graph_query tool call."""
+        if not self._graph:
+            return {"error": "Graph database not available — check initialization logs"}
+
+        action = args.get("action", "")
+        if not action:
+            return {"error": "action is required"}
+
+        try:
+            if action == "search":
+                query = args.get("query", "")
+                if not query:
+                    return {"error": "query is required for search action"}
+                limit = min(int(args.get("limit", 20)), 50)
+                results = self._graph.search_nodes(query, limit=limit)
+                return {
+                    "action": "search",
+                    "query": query,
+                    "count": len(results),
+                    "results": results,
+                }
+
+            elif action == "find":
+                query = args.get("query", "")
+                node_type = args.get("node_type", "")
+                codex = args.get("codex", "")
+                limit = min(int(args.get("limit", 20)), 50)
+
+                kwargs = {"limit": limit}
+                if node_type:
+                    kwargs["type_"] = node_type
+                if codex:
+                    kwargs["codex"] = codex
+                if query:
+                    kwargs["label_contains"] = query
+
+                results = self._graph.find_nodes(**kwargs)
+                return {
+                    "action": "find",
+                    "count": len(results),
+                    "results": results,
+                }
+
+            elif action == "neighbors":
+                node_id = args.get("node_id", "")
+                if not node_id:
+                    return {"error": "node_id is required for neighbors action"}
+                max_depth = int(args.get("max_depth", 1))
+                neighbors = self._graph.get_neighbors(node_id, max_depth=max_depth)
+                node_info = self._graph.get_node(node_id)
+                return {
+                    "action": "neighbors",
+                    "node_id": node_id,
+                    "node_label": node_info["label"] if node_info else "",
+                    "max_depth": max_depth,
+                    "count": len(neighbors),
+                    "results": neighbors,
+                }
+
+            elif action == "path":
+                node_id = args.get("node_id", "")
+                target_id = args.get("target_id", "")
+                if not node_id or not target_id:
+                    return {"error": "node_id and target_id are required for path action"}
+                path = self._graph.shortest_path(node_id, target_id)
+                return {
+                    "action": "path",
+                    "from": node_id,
+                    "to": target_id,
+                    "found": path is not None,
+                    "path_length": len(path) if path else 0,
+                    "edges": path or [],
+                }
+
+            elif action == "stats":
+                stats = self._graph.stats()
+                return {
+                    "action": "stats",
+                    **stats,
+                }
+
+            else:
+                return {"error": f"Unknown action: {action}"}
+
+        except Exception as exc:
+            logger.exception("Graph query failed")
+            return {"error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
