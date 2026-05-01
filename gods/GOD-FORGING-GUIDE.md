@@ -111,7 +111,7 @@ I build:
 1. **God package** — copy from template, fill in god.yaml and harness.yaml
 2. **Run `pantheon-install`** — validates, installs harness, creates inbox, registers in registry, optionally creates Codex, registers in graph, notifies Hermes
 3. **Register in `gods.yaml`** — add to the active roster (SDK does not do this automatically)
-4. **MCP server config** — append to `~/.hermes/profiles/{god-id}/config.yaml`:
+4. **Add MCP server config** — append to `~/.hermes/profiles/{god-id}/config.yaml`:
    ```yaml
    mcp_servers:
      pantheon:
@@ -120,6 +120,16 @@ I build:
    ```
    This gives the god access to all Pantheon MCP tools (athenaeum_search, messaging_send, etc.).
    Without this, the god is isolated from the MCP inter-god bus.
+5. **Register heartbeat** — if the god runs on a schedule (cron, timer, event-driven),
+   register it with the heartbeat system so The Fates can monitor its uptime:
+   ```bash
+   cd ~/pantheon && python3 scripts/heartbeat.py register <god-id> \
+     --label "God Name — Description" \
+     --interval <expected_interval_min>
+   ```
+   Then add `beat("<god-id>")` at the end of the god's run function. See
+   `scripts/heartbeat.py` and `scripts/the-fates.py` for reference.
+   Without this, the Fates can't detect if the god has stopped running.
 
 ### Step 5: Walkthrough
 I present:

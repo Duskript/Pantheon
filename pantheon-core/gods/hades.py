@@ -797,6 +797,18 @@ def run_hades() -> HadesReport:
         elapsed = time.time() - start
         logger.info("Hades complete in %.2fs", elapsed)
 
+        # Phase 6: Write heartbeat for the Fates
+        import sys
+        _hades_scripts = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+        if _hades_scripts not in sys.path:
+            sys.path.insert(0, _hades_scripts)
+        try:
+            from heartbeat import beat  # noqa: F811
+            beat("hades")
+            logger.info("  → Heartbeat written")
+        except Exception as exc:
+            logger.warning("  → Heartbeat write failed (non-fatal): %s", exc)
+
     except Exception as exc:
         report.errors.append(f"Hades run failed: {exc}")
         logger.exception("Hades run failed")
@@ -837,6 +849,16 @@ def main():
         report.archive = run_archive()
     else:
         report = run_hades()
+
+    # Record heartbeat after any mode runs
+    try:
+        _hades_scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        if _hades_scripts not in sys.path:
+            sys.path.insert(0, _hades_scripts)
+        from heartbeat import beat  # noqa: F811
+        beat("hades")
+    except Exception:
+        pass
 
     if args.json:
         output = json.dumps(report.to_dict(), indent=2)

@@ -31,6 +31,15 @@ mcp_servers:
 
 This gives the god access to `mcp_pantheon_*` tools: athenaeum_search, messaging_send, god_list, system_health, etc. See the MCP Inter-God Bus section in the pantheon-god-architecture skill for full details.
 
+8. **Register heartbeat** (if scheduled/cron-driven) — run:
+   ```bash
+   cd ~/pantheon && python3 scripts/heartbeat.py register <god-id> \
+     --label "God Name — Description" \
+     --interval <expected_interval_min>
+   ```
+   Then add `beat("<god-id>")` at the end of the god's run function.
+   This lets The Fates monitor uptime and alert if the god stops running.
+
 ## About MCP Tools
 
 Every new god automatically gets these MCP tools once the server config is added:
