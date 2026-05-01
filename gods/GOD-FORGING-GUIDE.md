@@ -2,8 +2,8 @@
 
 Hephaestus' reference for creating new gods in the Pantheon.
 
-**Version:** 1.3.0
-**Last Updated:** 2026-04-30
+**Version:** 1.4.0
+**Last Updated:** 2026-05-01
 **Maintainer:** Hephaestus — I update this document whenever the Pantheon skeleton changes or a new pattern emerges from forging.
 
 ---
@@ -16,6 +16,7 @@ Hephaestus' reference for creating new gods in the Pantheon.
 | 2026-04-30 | 1.1.0 | Added God SDK section + CLI tool reference | Phase 1 of God SDK complete — install, uninstall, list, upgrade |
 | 2026-04-30 | 1.2.0 | Added pantheon-export | God export for transfer between systems |
 | 2026-04-30 | 1.3.0 | Added Claude import pipeline + 4 new Codices | Claude.ai export ingestion, Apollo/User/Work/Claude Codices |
+| 2026-05-01 | 1.4.0 | Added MCP Inter-God Bus — MCP server config, harness MCP tool awareness, step 4 forge update | Pantheon MCP server built — any MCP client (Hermes, AionUi, Claude Code) connects |
 
 ---
 
@@ -30,7 +31,8 @@ For the Pantheon to function, these systems must be present:
 | **Demeter** | Ingestion pipeline + file watcher | Keeping the Athenaeum populated |
 | **GraphClient** | SQLite entity relationship graph | Cross-god context linking |
 | **Hades** | Nightly consolidation, health checks, distillation | System integrity over time |
-| **God Bridge** | Shared filesystem inbox/outbox under `gods/messages/` | Inter-god communication |
+| **God Bridge** | Shared filesystem inbox/outbox under `gods/messages/` | Inter-god communication — file-based |
+| **Pantheon MCP Server** | Shared MCP protocol server on port 8010 — exposes Athenaeum, messaging, and systems as MCP tools | Inter-god communication — real-time, any MCP client connects |
 | **Hermes** | Messenger god — routes reports, relays between gods | User-facing communication hub |
 
 **Bundled with Pantheon by default:**
@@ -106,12 +108,18 @@ You review and say yes / adjust / rethink.
 
 ### Step 4: Forge
 I build:
-1. **Harness YAML** — identity, routing, guardrails, failure behavior
-2. **Registry entry** — add to `pantheon-registry.yaml`
-3. **Codex directory** — create in Athenaeum with INDEX.md
-4. **Inbox** — create under `gods/messages/{name}/`
-5. **Plugin directory** (if needed) — under `harnesses/{name}/` for custom Hermes tools
-6. **Send message to Hermes** — log the new god's registration so he knows about it
+1. **God package** — copy from template, fill in god.yaml and harness.yaml
+2. **Run `pantheon-install`** — validates, installs harness, creates inbox, registers in registry, optionally creates Codex, registers in graph, notifies Hermes
+3. **Register in `gods.yaml`** — add to the active roster (SDK does not do this automatically)
+4. **MCP server config** — append to `~/.hermes/profiles/{god-id}/config.yaml`:
+   ```yaml
+   mcp_servers:
+     pantheon:
+       url: "http://127.0.0.1:8010/mcp"
+       timeout: 60
+   ```
+   This gives the god access to all Pantheon MCP tools (athenaeum_search, messaging_send, etc.).
+   Without this, the god is isolated from the MCP inter-god bus.
 
 ### Step 5: Walkthrough
 I present:
@@ -147,6 +155,22 @@ identity: |
   {Domain knowledge scope — what you know and don't know.}
   {How you interact with the user and other gods.}
   {How you use the Athenaeum — what you read, what you write.}
+
+  ## MCP Tools Available to You
+
+  You are connected to the Pantheon MCP server. These tools are available
+  with the `mcp_pantheon_` prefix:
+  - **athenaeum_search** — Semantic search across all Codexes
+  - **athenaeum_read** — Read any file from the Athenaeum
+  - **athenaeum_walk** — Browse the Athenaeum index tree
+  - **athenaeum_write** — Write new knowledge to the Athenaeum
+  - **messaging_send** — Send messages to any other god's inbox
+  - **messaging_check_inbox** — Check your inbox for messages
+  - **god_list** — List all registered gods
+
+  Use these tools to search shared knowledge, communicate with other gods,
+  and contribute to the Athenaeum. They are your primary channels for
+  inter-god coordination.
 
 output:
   format: {structured_document | natural | json}
