@@ -1,0 +1,25 @@
+[Unit]
+Description=Pantheon MCP Server — exposes Athenaeum, messaging, and god systems as MCP tools
+Documentation=https://github.com/Duskript/Pantheon-Core
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=konan
+WorkingDirectory=/home/konan/pantheon/pantheon-core
+ExecStart=/home/konan/.hermes/hermes-agent/venv/bin/python3 /home/konan/pantheon/pantheon-core/mcp_server.py --port 8010
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/konan/athenaeum /home/konan/pantheon/gods/messages
+
+[Install]
+WantedBy=multi-user.target
