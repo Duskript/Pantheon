@@ -2,7 +2,7 @@
 
 Hephaestus' reference for creating new gods in the Pantheon.
 
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Last Updated:** 2026-05-01
 **Maintainer:** Hephaestus — I update this document whenever the Pantheon skeleton changes or a new pattern emerges from forging.
 
@@ -17,6 +17,7 @@ Hephaestus' reference for creating new gods in the Pantheon.
 | 2026-04-30 | 1.2.0 | Added pantheon-export | God export for transfer between systems |
 | 2026-04-30 | 1.3.0 | Added Claude import pipeline + 4 new Codices | Claude.ai export ingestion, Apollo/User/Work/Claude Codices |
 | 2026-05-01 | 1.4.0 | Added MCP Inter-God Bus — MCP server config, harness MCP tool awareness, step 4 forge update | Pantheon MCP server built — any MCP client (Hermes, AionUi, Claude Code) connects |
+| 2026-05-01 | 1.5.0 | Added heartbeat system — The Fates monitor, Hestia health checks, mandatory heartbeat step | Every scheduled subsystem now tracked; Fates alerts Hermes if anything stops running |
 
 ---
 
