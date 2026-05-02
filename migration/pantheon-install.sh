@@ -129,9 +129,10 @@ if [ -f "$MIGRATION_DIR/ollama-models.txt" ]; then
     # done < "$MIGRATION_DIR/ollama-models.txt"
 fi
 
-# Start ollama as a user service
-systemctl --user enable ollama 2>/dev/null || true
-systemctl --user start ollama 2>/dev/null || true
+# Start ollama as system service (ollama installer creates system-level unit)
+log_info "Starting Ollama system service ..."
+sudo systemctl enable ollama 2>/dev/null || true
+sudo systemctl start ollama 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # STEP 3: Hermes Agent
@@ -370,9 +371,34 @@ systemctl --user enable pantheon-mcp.service &>/dev/null || true
 systemctl --user enable aionui.service &>/dev/null || true
 
 # ---------------------------------------------------------------------------
-# STEP 10: Enable Pantheon plugin in Hermes profiles
+# STEP 10: Install Hermes gateways
 # ---------------------------------------------------------------------------
-log_step "10/11: Enabling Pantheon plugin in Hermes profiles"
+log_step "10/12: Installing Hermes gateways"
+
+for profile in hephaestus apollo; do
+    if [ -d "$HERMES_PROFILES_DIR/$profile" ]; then
+        log_info "Installing gateway for profile: $profile"
+        # On real Ubuntu (unlike WSL), gateway install works via systemd
+        hermes -p "$profile" gateway install 2>> "$LOG_FILE" || log_warn "Gateway install failed for $profile. Use 'gateway run' in tmux/nohup manually."
+
+        # Try profile-specific service name
+        systemctl --user start "hermes-gateway${profile:+-$profile}" 2>/dev/null || \
+        systemctl --user start "hermes-gateway" 2>/dev/null || \
+        log_warn "Gateway start failed for $profile."
+
+        # Enable auto-start
+        systemctl --user enable "hermes-gateway${profile:+-$profile}" 2>/dev/null || \
+        systemctl --user enable "hermes-gateway" 2>/dev/null || true
+    fi
+done
+
+# Give Hermes gateways a moment to initialize
+sleep 3
+
+# ---------------------------------------------------------------------------
+# STEP 11: Enable Pantheon plugin in Hermes profiles
+# ---------------------------------------------------------------------------
+log_step "11/12: Enabling Pantheon plugin in Hermes profiles"
 
 for profile in hephaestus apollo; do
     if [ -d "$HERMES_PROFILES_DIR/$profile" ]; then
@@ -383,9 +409,9 @@ for profile in hephaestus apollo; do
 done
 
 # ---------------------------------------------------------------------------
-# STEP 11: Verify and report
+# STEP 12: Verify and report
 # ---------------------------------------------------------------------------
-log_step "11/11: Final verification"
+log_step "12/12: Final verification"
 
 # Restart services once more now that everything is in place
 systemctl --user restart pantheon-mcp.service &>/dev/null || true
@@ -410,7 +436,7 @@ if curl -fsS http://127.0.0.1:3000 -o /dev/null -w "%{http_code}" 2>/dev/null | 
     AIONUI_OK=true
 fi
 
-if systemctl --user is-active ollama &>/dev/null; then
+if systemctl is-active ollama >/dev/null 2>&1; then
     OLLAMA_OK=true
 fi
 
