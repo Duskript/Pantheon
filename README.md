@@ -242,22 +242,47 @@ The Athenaeum is yours. It lives on your machine. You own every byte. No one els
 ## Quick Start
 
 ```bash
+# One command. Installs everything and opens the setup wizard.
+curl -fsSL https://raw.githubusercontent.com/Duskript/Pantheon/main/scripts/install-pantheon.sh | sh
+```
+
+Or to inspect first:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Duskript/Pantheon/main/scripts/install-pantheon.sh -o /tmp/install-pantheon.sh
+bash /tmp/install-pantheon.sh
+```
+
+The installer:
+1. Installs **Hermes Agent** (the runtime engine)
+2. Clones **Pantheon** to `~/pantheon`
+3. Creates a starter `.env` for your API keys
+4. Installs core Gods (Hermes + Hephaestus)
+5. Starts the gateway
+6. Opens the **Welcome Wizard** in your browser
+
+From there, the Wizard walks you through adding API keys and forging your first God.
+
+### Manual Setup
+
+If you prefer to set things up step by step:
+
+```bash
 # 1. Install Hermes Agent (the engine Pantheon runs on)
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh
 
 # 2. Clone Pantheon
 git clone https://github.com/Duskript/Pantheon.git ~/pantheon
 
-# 3. Install your first God (Hephaestus — the builder)
+# 3. Add API keys
+nano ~/pantheon/.env
+
+# 4. Install core Gods
 cd ~/pantheon
-bash scripts/pantheon-install . --profile hephaestus
+python3 scripts/pantheon-install .
 
-# 4. Open the web UI
-# Your gateway runs at http://localhost:8787 — open it in any browser
-
-# 5. Forge more Gods
-# Use the Soul Forge in the Web UI to create Thoth, Caduceus,
-# or any God you need. Just describe who you want.
+# 5. Start gateway and open Web UI
+hermes gateway &
+open http://localhost:8787
 ```
 
 That's it. No SaaS signup. No credit card. No data leaving your machine.
@@ -268,7 +293,6 @@ That's it. No SaaS signup. No credit card. No data leaving your machine.
 
 | Feature | Status |
 |---------|--------|
-| **First-Run Install Wizard** | Walks you through setup step by step. API key recommendations included — shows you the cheapest places to run each kind of model. |
 | **Gods Marketplace** | Browse and install community-made Gods. Pick a personality, click install, start talking. |
 
 ---

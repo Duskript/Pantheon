@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Pantheon</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #020617;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border-bottom: 1px solid #1e293b;
+      padding: 2rem 2rem 1.5rem;
+      text-align: center;
+    }
+    header h1 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #22d3ee, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.025em;
+    }
+    header p {
+      color: #94a3b8;
+      margin-top: 0.5rem;
+      font-size: 1.05rem;
+    }
+
+    /* ── Container ── */
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      flex: 1;
+    }
+
+    /* ── Step Card ── */
+    .step {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      transition: border-color 0.2s;
+    }
+    .step:hover { border-color: #334155; }
+
+    .step-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .step-icon.done {
+      background: #065f46;
+      color: #6ee7b7;
+    }
+    .step-icon.pending {
+      background: #1e293b;
+      color: #64748b;
+      border: 1px dashed #334155;
+    }
+    .step-icon.current {
+      background: #0e7490;
+      color: #22d3ee;
+      box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+    }
+
+    .step-content { flex: 1; }
+    .step-title {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+    .step-title.done { color: #6ee7b7; }
+    .step-title.pending { color: #94a3b8; }
+    .step-title.current { color: #22d3ee; }
+
+    .step-desc {
+      color: #64748b;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+    .step-desc code {
+      background: #1e293b;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: #22d3ee;
+    }
+
+    /* ── Step Actions ── */
+    .step-actions {
+      margin-top: 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: #0e7490;
+      color: white;
+    }
+    .btn-primary:hover { background: #0891b2; box-shadow: 0 0 12px rgba(34, 211, 238, 0.3); }
+    .btn-secondary {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+    }
+    .btn-secondary:hover { background: #334155; color: #e2e8f0; }
+    .btn-success {
+      background: #065f46;
+      color: #6ee7b7;
+    }
+    .btn-success:hover { background: #0d9488; }
+
+    /* ── Copy field ── */
+    .copy-field {
+      display: flex;
+      background: #1e293b;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+      max-width: 500px;
+    }
+    .copy-field input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 0.6rem 0.8rem;
+      color: #22d3ee;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .copy-field button {
+      background: #0e7490;
+      border: none;
+      color: white;
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .copy-field button:hover { background: #0891b2; }
+
+    /* ── Summary ── */
+    .summary-card {
+      background: linear-gradient(135deg, rgba(6, 78, 59, 0.3), rgba(8, 51, 68, 0.3));
+      border: 1px solid #0d9488;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+      text-align: center;
+    }
+    .summary-card h2 { color: #22d3ee; font-size: 1.25rem; margin-bottom: 0.5rem; }
+    .summary-card p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 1rem; }
+
+    /* ── Links ── */
+    .action-buttons {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 2rem;
+    }
+    .action-buttons .btn { padding: 0.75rem 1.5rem; font-size: 0.95rem; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: #475569;
+      font-size: 0.8rem;
+      border-top: 1px solid #1e293b;
+    }
+    footer a { color: #22d3ee; text-decoration: none; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .container { padding: 1rem; }
+      header h1 { font-size: 1.6rem; }
+      .step { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⛩️ Welcome to Pantheon</h1>
+  <p>Your personal AI family is almost ready. Here's what's left to set up.</p>
+</header>
+
+<div class="container">
+
+  <!-- Step 1: Hermes Agent -->
+  <div class="step" id="step-hermes">
+    <div class="step-icon done">✓</div>
+    <div class="step-content">
+      <div class="step-title done">Hermes Agent</div>
+      <div class="step-desc">The runtime engine that powers Pantheon. Installed and ready.</div>
+    </div>
+  </div>
+
+  <!-- Step 2: Pantheon Clone -->
+  <div class="step" id="step-clone">
+    <div class="step-icon done">✓</div>
+    <div class="step-content">
+      <div class="step-title done">Pantheon Repository</div>
+      <div class="step-desc">Cloned and up to date.</div>
+    </div>
+  </div>
+
+  <!-- Step 3: API Keys -->
+  <div class="step" id="step-keys">
+    <div class="step-icon current">3</div>
+    <div class="step-content">
+      <div class="step-title current">API Keys</div>
+      <div class="step-desc">
+        Pantheon needs at least one LLM provider key to run. Here are the best options:
+      </div>
+
+      <table style="width:100%;margin-top:0.75rem;border-collapse:collapse;font-size:0.85rem;">
+        <tr style="border-bottom:1px solid #1e293b;">
+          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Provider</th>
+          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Price</th>
+          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Models</th>
+          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Why</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:0.5rem;font-weight:600;color:#6ee7b7;">OpenCode Go</td>
+          <td style="padding:0.5rem;color:#e2e8f0;">$10/mo flat</td>
+          <td style="padding:0.5rem;color:#94a3b8;">Open + curated</td>
+          <td style="padding:0.5rem;color:#94a3b8;">Best value for daily use</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:0.5rem;font-weight:600;color:#fbbf24;">OpenRouter</td>
+          <td style="padding:0.5rem;color:#e2e8f0;">Pay-as-you-go</td>
+          <td style="padding:0.5rem;color:#94a3b8;">200+ models</td>
+          <td style="padding:0.5rem;color:#94a3b8;">Biggest selection, all majors</td>
+        </tr>
+        <tr>
+          <td style="padding:0.5rem;font-weight:600;color:#a78bfa;">Ollama</td>
+          <td style="padding:0.5rem;color:#e2e8f0;">Free</td>
+          <td style="padding:0.5rem;color:#94a3b8;">Local models</td>
+          <td style="padding:0.5rem;color:#94a3b8;">100% offline, runs on your GPU</td>
+        </tr>
+      </table>
+
+      <div class="step-actions">
+        <a class="btn btn-primary" href="https://opencode.ai/auth" target="_blank">Get OpenCode Go Key</a>
+        <a class="btn btn-secondary" href="https://openrouter.ai/keys" target="_blank">Get OpenRouter Key</a>
+      </div>
+      <div class="copy-field">
+        <input type="text" value="nano ~/pantheon/.env" readonly id="env-cmd">
+        <button onclick="copyEnv()">Copy Command</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Core Gods -->
+  <div class="step" id="step-gods">
+    <div class="step-icon pending">4</div>
+    <div class="step-content">
+      <div class="step-title pending">Core Gods</div>
+      <div class="step-desc">
+        Hermes and Hephaestus are the foundation. Once you've added an API key, install them:
+        <div class="copy-field" style="max-width:450px;">
+          <input type="text" value="cd ~/pantheon && python3 scripts/pantheon-install ." readonly id="god-cmd">
+          <button onclick="copyGodCmd()">Copy Command</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5: Launch Web UI -->
+  <div class="step" id="step-webui">
+    <div class="step-icon pending">5</div>
+    <div class="step-content">
+      <div class="step-title pending">Launch the Web UI</div>
+      <div class="step-desc">
+        Your gateway runs on <strong>port 8787</strong>. Open it in your browser to start chatting.
+      </div>
+      <div class="step-actions">
+        <a class="btn btn-primary" href="http://localhost:8787" target="_blank">🚀 Open Web UI</a>
+        <a class="btn btn-secondary" href="http://localhost:8787/health" target="_blank">Check Health</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 6: Forge Your First God -->
+  <div class="step" id="step-forge">
+    <div class="step-icon pending">6</div>
+    <div class="step-content">
+      <div class="step-title pending">Forge Your First God</div>
+      <div class="step-desc">
+        Use the <strong>Soul Forge</strong> in the Web UI to create a custom God. Just describe who you need — a researcher, a health companion, a coding mentor. No YAML, no terminal.
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-card">
+    <h2>📖 Project Status</h2>
+    <p>Pantheon is built and maintained by a solo creator who needed this to exist. Everything flows from that: no SaaS, no data harvesting, no prompts to engineer. Just a system that adapts to you.</p>
+    <p>Built on <a href="https://hermes-agent.nousresearch.com" style="color:#22d3ee;">Hermes Agent</a> — the multi-platform AI agent framework by Nous Research.</p>
+    <div class="action-buttons">
+      <a class="btn btn-success" href="http://localhost:8787" target="_blank">🚀 Start Chatting</a>
+      <a class="btn btn-secondary" href="https://github.com/Duskript/Pantheon" target="_blank">⭐ Star on GitHub</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Pantheon — Your data runs on your machine. You own every byte. &mdash;
+  <a href="https://github.com/Duskript/Pantheon">GitHub</a>
+</footer>
+
+<script>
+function copyEnv() {
+  const input = document.getElementById('env-cmd');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    const btn = input.nextElementSibling;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy Command', 2000);
+  });
+}
+function copyGodCmd() {
+  const input = document.getElementById('god-cmd');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    const btn = input.nextElementSibling;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy Command', 2000);
+  });
+}
+</script>
+
+</body>
+</html>
