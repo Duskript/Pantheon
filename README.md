@@ -92,9 +92,9 @@ Pantheon gives you:
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-![Pantheon Architecture Diagram](pantheon-architecture.svg)
+![Pantheon Architecture Diagram](pantheon-architecture.png)
 
-> **[Open interactive version →](pantheon-architecture.html)** *(dark-themed, opens in any browser)*
+> **[Open SVG version →](pantheon-architecture.svg)** *(vector, opens in any browser)* • **[Interactive HTML →](pantheon-architecture.html)** *(dark-themed, full-page)*
 
 ---
 
