@@ -37,11 +37,17 @@ INDEX_DESCRIPTION = (
 STALE_THRESHOLD_DAYS = 90
 
 # Codex exclusion list — system codices we don't auto-archive or auto-distill
-SYSTEM_CODEXES = {"Codex-Pantheon"}
+SYSTEM_CODEXES = {"Codex-Pantheon", "Codex-Apollo"}
+
+# God memory codices (Codex-God-*) are EXCLUDED from ALL Hades processing.
+# These are active living memory — dynamically written by gods, not canonical
+# knowledge. The naming convention itself is the exclusion mechanism.
+GOD_CODEX_PREFIX = "Codex-God-"
 
 KNOWN_CODEXES = [
     "Codex-Forge", "Codex-Pantheon", "Codex-Infrastructure",
     "Codex-SKC", "Codex-Fiction", "Codex-Asclepius", "Codex-General",
+    "Codex-Claude", "Codex-User", "Codex-Work", "Codex-Apollo",
 ]
 
 EMBEDDABLE_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
@@ -77,6 +83,13 @@ class HadesReport:
             "errors": [],
         }
         self.suggestions: List[Dict] = []
+        self.extraction: Dict[str, Any] = {
+            "files_processed": 0,
+            "files_failed": 0,
+            "entities_extracted": 0,
+            "relations_extracted": 0,
+            "error": None,
+        }
         self.errors: List[str] = []
 
     def to_dict(self) -> Dict:
@@ -85,6 +98,7 @@ class HadesReport:
             "health": self.health,
             "distillation": self.distillation,
             "archive": self.archive,
+            "extraction": self.extraction,
             "suggestions": self.suggestions,
             "errors": self.errors,
         }
@@ -158,9 +172,26 @@ class HadesReport:
 
         # Archive summary
         arch = self.archive
-        if arch.get("files_archived", 0) > 0:
-            lines.append(f"\n## 📦 Archive")
+        if arch.get("files_archived", 0) > 0 or len(arch.get("candidates", [])) > 0:
+            lines.append("")
+            lines.append(f"## 📦 Archive")
             lines.append(f"- Files archived: {arch.get('files_archived', 0)}")
+            if arch.get("candidates"):
+                lines.append(f"- Candidates found: {len(arch['candidates'])}")
+
+        # Entity extraction summary
+        extr = self.extraction
+        if extr.get("entities_extracted", 0) > 0 or extr.get("error"):
+            lines.append("")
+            lines.append(f"## 🔗 Entity Extraction")
+            if extr.get("error"):
+                lines.append(f"- ❌ Error: {extr['error']}")
+            else:
+                lines.append(f"- Files processed: {extr.get('files_processed', 0)}")
+                lines.append(f"- Entities extracted: {extr.get('entities_extracted', 0)}")
+                lines.append(f"- Relations extracted: {extr.get('relations_extracted', 0)}")
+                if extr.get("files_failed", 0) > 0:
+                    lines.append(f"- ⚠️ Files failed: {extr['files_failed']}")
 
         # Errors
         if self.errors:
@@ -340,11 +371,16 @@ def run_health_checks() -> Dict[str, Any]:
             for col in client.list_collections():
                 try:
                     name = col.name  # e.g. "pantheon_codex_forge"
-                    # Parse the codex name back
+                    # Parse the codex name back and normalize to KNOWN_CODEXES casing
                     parts = name.split("_", 2)
                     if len(parts) >= 3:
-                        codex_name = "Codex-" + parts[2].replace("_", "-")
-                        chroma_counts[codex_name] = col.count()
+                        parsed = "Codex-" + parts[2].replace("_", "-")
+                        # Case-insensitive match against KNOWN_CODEXES for correct casing
+                        matched = next((c for c in KNOWN_CODEXES if c.lower() == parsed.lower()), None)
+                        if matched:
+                            chroma_counts[matched] = col.count()
+                        else:
+                            chroma_counts[parsed] = col.count()
                 except Exception:
                     pass
         health["chroma_count"] = sum(chroma_counts.values()) if chroma_counts else None
@@ -382,6 +418,7 @@ def run_health_checks() -> Dict[str, Any]:
         # Chroma vs FS comparison
         embeddable_count = len(info["embeddable"])
         chroma_count = chroma_counts.get(codex_name, 0)
+        health["codexes"][codex_name]["embedded"] = chroma_count if chroma_count else 0
         health["chroma_vs_fs"][codex_name] = {
             "chroma": chroma_count,
             "fs_embeddable": embeddable_count,
@@ -691,6 +728,11 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
             summary_parts.append(f"🔄 Distilled {dist['distilled_files_written']} files")
         if arch.get("candidates"):
             summary_parts.append(f"🗄️ {len(arch['candidates'])} archive candidates found")
+        extr = report.extraction or {}
+        if extr.get("entities_extracted", 0) > 0:
+            summary_parts.append(f"🔗 {extr['entities_extracted']} entities, {extr['relations_extracted']} relations")
+        elif extr.get("error"):
+            summary_parts.append(f"🔗 Extraction error: {extr['error'][:60]}")
         if report.errors:
             summary_parts.append(f"❌ {len(report.errors)} errors during run")
 
@@ -713,6 +755,8 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
                 "files_unembedded": len(orphans_fs),
                 "distilled_written": dist.get("distilled_files_written", 0),
                 "archive_candidates": len(arch.get("candidates", [])),
+                "entities_extracted": extr.get("entities_extracted", 0),
+                "relations_extracted": extr.get("relations_extracted", 0),
                 "errors": len(report.errors),
             },
             "thread_id": None,
@@ -774,7 +818,66 @@ def run_hades() -> HadesReport:
             report.errors.append(f"Archive scan failed: {exc}")
             logger.exception("Hades archive error")
 
-        # Phase 4: Load suggestions
+        # Phase 4: Entity extraction from Athenaeum files
+        logger.info("Hades: Running entity extraction...")
+        try:
+            _REAL_HOME = os.path.expanduser("~konan")
+            extract_script = os.path.join(_REAL_HOME, "athenaeum", "scripts", "extract-entities.py")
+            if os.path.exists(extract_script):
+                import subprocess, sys
+                env = os.environ.copy()
+                for _env_path in [Path(f"{_REAL_HOME}/.hermes/.env"), Path(f"{_REAL_HOME}/pantheon/.env")]:
+                    if _env_path.exists():
+                        for line in _env_path.read_text().split("\n"):
+                            line = line.strip()
+                            if line and "=" in line and not line.startswith("#"):
+                                k, v = line.split("=", 1)
+                                env.setdefault(k.strip(), v.strip().strip("'\""))
+                result = subprocess.run(
+                    [sys.executable, extract_script],
+                    capture_output=True, text=True, timeout=1200, env=env,
+                )
+                if result.returncode == 0:
+                    # Parse summary from output
+                    for line in result.stdout.split("\n"):
+                        if "Total entities extracted:" in line:
+                            try:
+                                report.extraction["entities_extracted"] = int(line.split(":")[-1].strip())
+                            except (ValueError, IndexError):
+                                pass
+                        elif "Total relations extracted:" in line:
+                            try:
+                                report.extraction["relations_extracted"] = int(line.split(":")[-1].strip())
+                            except (ValueError, IndexError):
+                                pass
+                        elif "Processed:" in line and "files" in line.lower():
+                            try:
+                                report.extraction["files_processed"] = int(line.split(":")[-1].strip().split()[0])
+                            except (ValueError, IndexError):
+                                pass
+                        elif "Failed:" in line and "files" in line.lower():
+                            try:
+                                report.extraction["files_failed"] = int(line.split(":")[-1].strip().split()[0])
+                            except (ValueError, IndexError):
+                                pass
+                    logger.info("  → %d entities, %d relations extracted",
+                                 report.extraction["entities_extracted"],
+                                 report.extraction["relations_extracted"])
+                else:
+                    err = result.stderr.strip()[:200] if result.stderr.strip() else "exit code != 0"
+                    report.extraction["error"] = f"extract-entities failed: {err}"
+                    logger.warning("  → Entity extraction failed: %s", err)
+            else:
+                report.extraction["error"] = f"Script not found: {extract_script}"
+                logger.warning("  → Entity extraction script not found")
+        except subprocess.TimeoutExpired:
+            report.extraction["error"] = "extract-entities timed out after 20m"
+            logger.warning("  → Entity extraction timed out")
+        except Exception as exc:
+            report.extraction["error"] = f"Entity extraction error: {exc}"
+            logger.exception("Hades entity extraction error")
+
+        # Phase 5: Load suggestions
         logger.info("Hades: Loading suggestions...")
         try:
             suggestions = load_suggestions()
@@ -799,7 +902,7 @@ def run_hades() -> HadesReport:
 
         # Phase 6: Write heartbeat for the Fates
         import sys
-        _hades_scripts = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+        _hades_scripts = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts")
         if _hades_scripts not in sys.path:
             sys.path.insert(0, _hades_scripts)
         try:

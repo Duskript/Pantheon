@@ -47,8 +47,15 @@ class MnemosyneClient:
         self.scope = scope
         self._host: str = os.environ.get("CHROMA_HOST", "localhost")
         self._port: int = int(os.environ.get("CHROMA_PORT", "8000"))
-        self._ollama_host: str = os.environ.get("OLLAMA_HOST", "localhost")
-        self._ollama_port: int = int(os.environ.get("OLLAMA_PORT", "11434"))
+        self._embed_model: str = os.environ.get(
+            "ATHENAEUM_EMBED_MODEL",
+            "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+        )
+        self._embed_url: str = os.environ.get(
+            "ATHENAEUM_EMBED_URL",
+            "https://openrouter.ai/api/v1/embeddings",
+        )
+        self._embed_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
         # Lazy — initialised on first use.
         self._client: Any = None
 
@@ -75,21 +82,24 @@ class MnemosyneClient:
             ) from exc
 
     def _get_embedding(self, text: str) -> list[float]:
-        """Obtain an embedding for *text* from Ollama nomic-embed-text."""
+        """Obtain an embedding for *text* via OpenRouter."""
         try:
             import httpx  # noqa: PLC0415
 
-            url = f"http://{self._ollama_host}:{self._ollama_port}/api/embeddings"
             response = httpx.post(
-                url,
-                json={"model": "nomic-embed-text", "prompt": text},
+                self._embed_url,
+                headers={
+                    "Authorization": f"Bearer {self._embed_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"model": self._embed_model, "input": text},
                 timeout=30.0,
             )
             response.raise_for_status()
-            return response.json()["embedding"]
+            return response.json()["data"][0]["embedding"]
         except Exception as exc:
             raise MnemosyneUnavailableError(
-                f"Ollama embedding request failed: {exc}"
+                f"OpenRouter embedding request failed: {exc}"
             ) from exc
 
     def _scoped_collections(self) -> list[str]:

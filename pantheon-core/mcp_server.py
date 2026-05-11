@@ -128,6 +128,11 @@ def _partition_for(codex: str) -> str:
     return f"pantheon_{slug}"
 
 
+def _dict_factory(cursor, row):
+    """SQLite row factory — returns dicts instead of tuples."""
+    return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+
+
 def _codex_from_partition(collection_name: str) -> str:
     parts = collection_name.split("_", 2)
     if len(parts) < 3:
@@ -169,6 +174,7 @@ mcp = FastMCP(
 Available systems:
 - **Athenaeum** — file-based knowledge store with Codex-partitioned semantic search
 - **Messaging** — inter-god message delivery via file-based inboxes
+- **Skills** — shared executable skills hub at athenaeum/skills/
 - **Hades** — nightly consolidation reports
 - **God Roster** — registered god information
 
@@ -785,6 +791,378 @@ def system_health() -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Tool: skill_list
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SKILLS_ROOT = Path(f"{_REAL_HOME}/athenaeum/skills")
+
+
+@mcp.tool(
+    description="List all shared skills available in the Pantheon skills hub. Each skill has a name, description, and script that can be executed via skill_run.",
+)
+def skill_list(
+    details: bool = False,
+) -> str:
+    """List all shared skills in the Pantheon skills hub.
+
+    Args:
+        details: If True, include full description and available args. Default: False.
+
+    Returns:
+        List of available skills with metadata.
+    """
+    if not _SKILLS_ROOT.is_dir():
+        return json.dumps({"error": "Skills hub not found"}, indent=2)
+
+    skills = []
+    for d in sorted(_SKILLS_ROOT.iterdir()):
+        if not d.is_dir() or d.name.startswith("."):
+            continue
+        skill_file = d / "skill.yaml"
+        if not skill_file.exists():
+            continue
+        try:
+            import yaml
+            skill_data = yaml.safe_load(skill_file.read_text(encoding="utf-8"))
+            entry = {
+                "name": skill_data.get("name", d.name),
+                "description": skill_data.get("description", ""),
+                "script": skill_data.get("script", ""),
+            }
+            if details and "args" in skill_data:
+                entry["args"] = skill_data["args"]
+            skills.append(entry)
+        except Exception as exc:
+            skills.append({"name": d.name, "description": f"(error: {exc})"})
+
+    return json.dumps({"skills": skills, "count": len(skills)}, indent=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tool: skill_info
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@mcp.tool(
+    description="Get detailed information about a specific skill: its name, description, arguments, and the full contents of its skill.yaml manifest.",
+)
+def skill_info(
+    name: str,
+) -> str:
+    """Get detailed info about a specific shared skill.
+
+    Args:
+        name: The skill name (matches the directory name under skills/).
+
+    Returns:
+        Full skill manifest and available metadata.
+    """
+    skill_dir = _SKILLS_ROOT / name
+    skill_file = skill_dir / "skill.yaml"
+    if not skill_file.exists():
+        return json.dumps({"error": f"Skill '{name}' not found"}, indent=2)
+
+    try:
+        import yaml
+        skill_data = yaml.safe_load(skill_file.read_text(encoding="utf-8"))
+        return json.dumps({"skill": skill_data}, indent=2)
+    except Exception as exc:
+        return json.dumps({"error": f"Failed to read skill: {exc}"}, indent=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tool: skill_run
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@mcp.tool(
+    description="Execute a shared skill by name with the given arguments. Returns the script's stdout/stderr output. Use skill_list to discover available skills and skill_info to see what arguments each requires.",
+)
+def skill_run(
+    name: str,
+    arguments: str = "[]",
+) -> str:
+    """Execute a shared skill script.
+
+    Args:
+        name: The skill name (matches the directory in athenaeum/skills/).
+        arguments: JSON array of string arguments to pass to the script
+                  (e.g. '["Title", "Description"]' or '["--section", "heph-suggestions", "Title", "Desc", "high"]').
+
+    Returns:
+        The script stdout output, or error details.
+    """
+    import subprocess
+
+    skill_dir = _SKILLS_ROOT / name
+    skill_file = skill_dir / "skill.yaml"
+    if not skill_file.exists():
+        return json.dumps({"error": f"Skill '{name}' not found"}, indent=2)
+
+    try:
+        import yaml
+        skill_data = yaml.safe_load(skill_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return json.dumps({"error": f"Failed to read skill manifest: {exc}"}, indent=2)
+
+    script_rel = skill_data.get("script", "")
+    if not script_rel:
+        return json.dumps({"error": f"Skill '{name}' has no script defined"})
+
+    script_path = skill_dir / script_rel
+    if not script_path.exists():
+        return json.dumps({"error": f"Script '{script_rel}' not found for skill '{name}'"}, indent=2)
+
+    # Parse arguments
+    try:
+        args_list = json.loads(arguments) if isinstance(arguments, str) else arguments
+    except json.JSONDecodeError:
+        return json.dumps({"error": f"Invalid arguments JSON: {arguments}"}, indent=2)
+
+    if not isinstance(args_list, list):
+        return json.dumps({"error": "arguments must be a JSON array"}, indent=2)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script_path)] + [str(a) for a in args_list],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        output_parts = []
+        if result.stdout.strip():
+            output_parts.append(result.stdout.strip())
+        if result.stderr.strip():
+            output_parts.append(f"[stderr]\n{result.stderr.strip()}")
+        return json.dumps({
+            "success": result.returncode == 0,
+            "exit_code": result.returncode,
+            "output": "\n".join(output_parts) if output_parts else "(no output)",
+        }, indent=2)
+    except subprocess.TimeoutExpired:
+        return json.dumps({"error": "Script execution timed out (30s limit)"}, indent=2)
+    except Exception as exc:
+        return json.dumps({"error": f"Script execution failed: {exc}"}, indent=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Graph search
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@mcp.tool(
+    description="Search the Athenaeum knowledge graph for entities, relationships, and paths. Finds entities by name/type, explores neighbor relationships, and discovers paths between entities. Returns structured JSON.",
+)
+def athenaeum_graph_search(
+    query: str = "",
+    entity_type: str = "",
+    entity_name: str = "",
+    neighbor_of: str = "",
+    path_between: str = "",
+    max_depth: int = 2,
+    limit: int = 20,
+) -> str:
+    """Search the knowledge graph (SQLite at ~/.hermes/pantheon/graph.db).
+
+    Supports multiple query modes — use ONE at a time:
+    1. query= — general search by entity name or description (fuzzy match on label)
+    2. entity_type= — filter by type (person, project, tool, concept, etc.)
+    3. entity_name= — exact name lookup
+    4. neighbor_of= — find entities connected to a given node ID (e.g. "person:konan")
+    5. path_between= — find shortest path between two node IDs, comma-separated (e.g. "person:konan,tool:proxmox")
+
+    Args:
+        query: Natural language or keyword search across entity labels and descriptions.
+        entity_type: Filter by entity type (person, project, concept, tool, system, etc.).
+        entity_name: Exact entity name to look up.
+        neighbor_of: Node ID to find neighbors of (e.g. "person:konan").
+        path_between: Two comma-separated node IDs to find paths between.
+        max_depth: Max relationship depth for neighbor/path queries (1-5). Default: 2.
+        limit: Max results (1-50). Default: 20.
+
+    Returns:
+        JSON string with search results.
+    """
+    sys.path.insert(0, f"{_REAL_HOME}/pantheon/pantheon-core")
+    from gods.graph_client import GraphClient
+
+    _GRAPH_DB = f"{_REAL_HOME}/.hermes/pantheon/graph.db"
+    gc = GraphClient(db_path=_GRAPH_DB)
+    gc.connect()
+    gc._conn.row_factory = _dict_factory
+
+    try:
+        results = {"mode": "", "query": query or entity_type or entity_name or neighbor_of or path_between, "results": []}
+
+        # Mode 1: Path between two nodes
+        if path_between:
+            results["mode"] = "path_between"
+            parts = [p.strip() for p in path_between.split(",")]
+            if len(parts) != 2:
+                return json.dumps({"error": "path_between requires exactly 2 node IDs separated by comma"}, indent=2)
+            node_a, node_b = parts
+
+            # BFS to find shortest path
+            visited = {node_a: None}
+            queue = [node_a]
+            found = False
+
+            for _ in range(max_depth):
+                if not queue:
+                    break
+                current = queue.pop(0)
+                if current == node_b:
+                    found = True
+                    break
+
+                neighbors = gc._conn.execute(
+                    "SELECT source_id, target_id FROM edges WHERE source_id = ? OR target_id = ?",
+                    (current, current),
+                ).fetchall()
+                for row in neighbors:
+                    nbr = row["source_id"] if row["target_id"] == current else row["target_id"]
+                    if nbr not in visited:
+                        visited[nbr] = current
+                        queue.append(nbr)
+
+            if found:
+                # Reconstruct path
+                path = []
+                node = node_b
+                while node is not None:
+                    path.append(node)
+                    node = visited[node]
+                path.reverse()
+                # Get labels for each node
+                path_labels = []
+                for nid in path:
+                    node_row = gc._conn.execute("SELECT id, label, type FROM nodes WHERE id = ?", (nid,)).fetchone()
+                    path_labels.append({
+                        "id": nid,
+                        "label": node_row["label"] if node_row else nid,
+                        "type": node_row["type"] if node_row else "unknown",
+                    })
+                results["results"].append({"path": path_labels, "length": len(path_labels) - 1})
+            else:
+                return json.dumps({"error": f"No path found between '{node_a}' and '{node_b}' within {max_depth} hops"}, indent=2)
+
+        # Mode 2: Neighbors
+        elif neighbor_of:
+            results["mode"] = "neighbors"
+            node_row = gc._conn.execute("SELECT id, label, type, metadata FROM nodes WHERE id = ?", (neighbor_of,)).fetchone()
+            if not node_row:
+                return json.dumps({"error": f"Node '{neighbor_of}' not found"}, indent=2)
+            results["center"] = {
+                "id": node_row["id"],
+                "label": node_row["label"],
+                "type": node_row["type"],
+            }
+
+            neighbors = gc._conn.execute("""
+                SELECT n.id, n.label, n.type, e.type as relation, e.weight,
+                       CASE WHEN e.source_id = ? THEN 'outgoing' ELSE 'incoming' END as direction
+                FROM edges e
+                JOIN nodes n ON n.id = CASE WHEN e.source_id = ? THEN e.target_id ELSE e.source_id END
+                WHERE e.source_id = ? OR e.target_id = ?
+                ORDER BY e.weight DESC
+                LIMIT ?
+            """, (neighbor_of, neighbor_of, neighbor_of, neighbor_of, limit)).fetchall()
+
+            for row in neighbors:
+                results["results"].append({
+                    "id": row["id"],
+                    "label": row["label"],
+                    "type": row["type"],
+                    "relation": row["relation"],
+                    "weight": row["weight"],
+                    "direction": row["direction"],
+                })
+
+        # Mode 3: Exact entity name lookup
+        elif entity_name:
+            results["mode"] = "entity_name"
+            rows = gc._conn.execute(
+                "SELECT id, label, type, codex, metadata, created_at FROM nodes WHERE label LIKE ? ORDER BY created_at DESC LIMIT ?",
+                (f"%{entity_name}%", limit),
+            ).fetchall()
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except Exception:
+                        pass
+                results["results"].append({
+                    "id": row["id"],
+                    "label": row["label"],
+                    "type": row["type"],
+                    "codex": row["codex"],
+                    "description": meta.get("description", ""),
+                    "created_at": row["created_at"],
+                })
+
+        # Mode 4: Filter by entity type
+        elif entity_type:
+            results["mode"] = "entity_type"
+            rows = gc._conn.execute(
+                "SELECT id, label, type, codex, metadata, created_at FROM nodes WHERE type = ? ORDER BY created_at DESC LIMIT ?",
+                (entity_type.lower(), limit),
+            ).fetchall()
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except Exception:
+                        pass
+                results["results"].append({
+                    "id": row["id"],
+                    "label": row["label"],
+                    "type": row["type"],
+                    "codex": row["codex"],
+                    "description": meta.get("description", ""),
+                    "created_at": row["created_at"],
+                })
+
+        # Mode 5: General text search
+        elif query:
+            results["mode"] = "query"
+            q = f"%{query}%"
+            rows = gc._conn.execute(
+                "SELECT id, label, type, codex, metadata, created_at FROM nodes "
+                "WHERE label LIKE ? OR metadata LIKE ? "
+                "ORDER BY CASE WHEN label LIKE ? THEN 0 ELSE 1 END, created_at DESC LIMIT ?",
+                (q, q, f"{query}%", limit),
+            ).fetchall()
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except Exception:
+                        pass
+                results["results"].append({
+                    "id": row["id"],
+                    "label": row["label"],
+                    "type": row["type"],
+                    "codex": row["codex"],
+                    "description": meta.get("description", ""),
+                    "created_at": row["created_at"],
+                })
+
+        else:
+            return json.dumps({"error": "Specify at least one of: query, entity_type, entity_name, neighbor_of, path_between"}, indent=2)
+
+        results["count"] = len(results["results"])
+        return json.dumps(results, indent=2)
+
+    except Exception as exc:
+        return json.dumps({"error": f"Graph search failed: {exc}"}, indent=2)
+    finally:
+        gc.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -807,8 +1185,62 @@ def main():
         mcp.run(transport="stdio")
     else:
         logger.info("Starting Pantheon MCP server on %s:%s...", args.host, args.port)
-        # Run as StreamableHTTP server using FastMCP's built-in runner
-        mcp.run(transport="streamable-http")
+
+        # Build the base Starlette app from FastMCP
+        import uvicorn
+
+        starlette_app = mcp.streamable_http_app()
+
+        # ── Middleware: handle bare GET /mcp gracefully ──────────────────
+        # FastMCP's StreamableHTTP returns 406 when a GET request arrives
+        # without Accept: text/event-stream.  The Hermes MCP client probes
+        # with a bare GET during transport negotiation, so we intercept
+        # that here and return a friendly info response instead.
+        async def graceful_mcp_app(scope, receive, send):
+            if scope["type"] == "http" and scope["method"] == "GET":
+                path = scope.get("path", "")
+                # Normalise trailing-slash
+                if path.rstrip("/") == "/mcp":
+                    # Check for Accept: text/event-stream
+                    accept_hdr = b""
+                    for k, v in scope.get("headers", []):
+                        if k.lower() == b"accept":
+                            accept_hdr = v
+                            break
+                    if b"text/event-stream" not in accept_hdr:
+                        body = json.dumps({
+                            "jsonrpc": "2.0", "id": "info",
+                            "result": {
+                                "server": "Pantheon MCP Server",
+                                "transport": "streamable-http",
+                                "message": (
+                                    "Send POST with Content-Type: application/json "
+                                    "for JSON-RPC calls, or GET with Accept: "
+                                    "text/event-stream for SSE"
+                                ),
+                            },
+                        }).encode()
+                        await send({
+                            "type": "http.response.start",
+                            "status": 200,
+                            "headers": [
+                                (b"content-type", b"application/json"),
+                                (b"content-length", str(len(body)).encode()),
+                                (b"access-control-allow-origin", b"*"),
+                            ],
+                        })
+                        await send({"type": "http.response.body", "body": body})
+                        return
+            await starlette_app(scope, receive, send)
+
+        config = uvicorn.Config(
+            graceful_mcp_app,
+            host=args.host,
+            port=args.port,
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        server.run()
 
 
 if __name__ == "__main__":

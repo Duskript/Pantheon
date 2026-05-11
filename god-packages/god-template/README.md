@@ -56,3 +56,36 @@ Every new god automatically gets these MCP tools once the server config is added
 | `mcp_pantheon_hades_get_report` | Get the latest consolidation report |
 | `mcp_pantheon_god_list` | List all registered gods |
 | `mcp_pantheon_system_health` | Check Pantheon infrastructure status |
+| `mcp_pantheon_skill_list` | List all shared skills in the Pantheon skills hub |
+| `mcp_pantheon_skill_info` | Get detailed info about a specific skill |
+| `mcp_pantheon_skill_run` | Execute a shared skill by name with arguments |
+
+## Pantheon Skills Hub
+
+The Pantheon has a **shared skills hub** at `/home/konan/athenaeum/skills/`. These are universal, reusable tasks that any god can execute via MCP.
+
+**How it works:**
+- Skills live in subdirectories under `athenaeum/skills/`, each with a `skill.yaml` manifest and a Python script
+- Any god connected to the MCP server can list, inspect, and run them
+- To add a new universal skill: create `<skill-name>/skill.yaml` + `<skill-name>/scripts/<script>.py`
+
+**Available MCP tools for skills:**
+- `mcp_pantheon_skill_list` — discover available skills
+- `mcp_pantheon_skill_info` — inspect a skill's arguments
+- `mcp_pantheon_skill_run` — execute a skill with given args
+
+**Example — capture an idea via MCP:**
+```json
+mcp_pantheon_skill_run({
+  "name": "capture-idea",
+  "arguments": "[\"My Idea\", \"Description of the idea\"]"
+})
+
+## Monitor Your Inbox
+
+Every god must check their inbox at session start. This is how Hermes, The Fates, and other gods pass you information between sessions.
+
+**Inbox location:** `~/pantheon/gods/messages/{god-id}/`
+**MCP tool:** `mcp_pantheon_messaging_check_inbox`
+
+Add this to your session-start routine — read unread messages and mark them read immediately. Without this, you'll miss alerts, directives from Hermes, and inter-god coordination.

@@ -2,7 +2,7 @@
 
 Hephaestus' reference for creating new gods in the Pantheon.
 
-**Version:** 1.5.0
+**Version:** 1.6.0
 **Last Updated:** 2026-05-01
 **Maintainer:** Hephaestus — I update this document whenever the Pantheon skeleton changes or a new pattern emerges from forging.
 
@@ -18,6 +18,7 @@ Hephaestus' reference for creating new gods in the Pantheon.
 | 2026-04-30 | 1.3.0 | Added Claude import pipeline + 4 new Codices | Claude.ai export ingestion, Apollo/User/Work/Claude Codices |
 | 2026-05-01 | 1.4.0 | Added MCP Inter-God Bus — MCP server config, harness MCP tool awareness, step 4 forge update | Pantheon MCP server built — any MCP client (Hermes, AionUi, Claude Code) connects |
 | 2026-05-01 | 1.5.0 | Added heartbeat system — The Fates monitor, Hestia health checks, mandatory heartbeat step | Every scheduled subsystem now tracked; Fates alerts Hermes if anything stops running |
+| 2026-05-01 | 1.6.0 | Added MCP skills hub (skill_list/info/run tools), shared skills directory, Template Synchronization Protocol | Every new god now has shared skills access; template drift eliminated |
 
 ---
 
@@ -33,7 +34,7 @@ For the Pantheon to function, these systems must be present:
 | **GraphClient** | SQLite entity relationship graph | Cross-god context linking |
 | **Hades** | Nightly consolidation, health checks, distillation | System integrity over time |
 | **God Bridge** | Shared filesystem inbox/outbox under `gods/messages/` | Inter-god communication — file-based |
-| **Pantheon MCP Server** | Shared MCP protocol server on port 8010 — exposes Athenaeum, messaging, and systems as MCP tools | Inter-god communication — real-time, any MCP client connects |
+| **Pantheon MCP Server** | Shared MCP protocol server on port 8010 — exposes Athenaeum, messaging, skills hub, and systems as MCP tools | Inter-god communication — real-time, any MCP client connects |
 | **Hermes** | Messenger god — routes reports, relays between gods | User-facing communication hub |
 
 **Bundled with Pantheon by default:**
@@ -139,7 +140,19 @@ I present:
 - How other gods communicate with it
 - Any open questions or gaps
 
-### Step 6: Iterate
+### Step 6: Post-Forge Checklist
+
+Before a new god is operational, verify:
+
+| # | Item | Why |
+|---|------|-----|
+| 1 | **MCP config in profile** — `mcp_servers.pantheon` added to `~/.hermes/profiles/{god-id}/config.yaml` | Without this, the god can't use Pantheon MCP tools |
+| 2 | **Heartbeat registered** — `python3 scripts/heartbeat.py register {god-id}` + `beat()` added (if scheduled) | The Fates can't monitor uptime without it |
+| 3 | **Inbox created** — `~/pantheon/gods/messages/{god-id}/` exists | Other gods can't send messages to it |
+| 4 | **Inbox monitoring documented** — harness identity block includes instruction to check inbox on session start | God won't see inter-god messages otherwise |
+| 5 | **God roster updated** — entry in `gods.yaml` | Other gods can discover it |
+
+### Step 7: Iterate
 You use it, find rough edges, I smooth them.
 
 ---
@@ -412,20 +425,67 @@ For a new Pantheon installation, these are the minimum required components:
 
 ---
 
-## Maintenance Protocol
+## Pantheon Skills Hub
 
-This guide must stay in sync with the actual Pantheon skeleton. Here's when I update it:
+The Pantheon has a **shared skills hub** at `/home/konan/athenaeum/skills/`. These are universal, reusable tasks that any god can execute via MCP.
 
-### When to Update
+### How It Works
+
+- Each skill is a directory under `athenaeum/skills/<name>/` containing a `skill.yaml` manifest and a Python script
+- Any god connected to the MCP server can call `mcp_pantheon_skill_list`, `mcp_pantheon_skill_info`, and `mcp_pantheon_skill_run`
+- Skills are the standard way to share reusable logic across all gods
+
+### Adding a New Skill
+
+```yaml
+# athenaeum/skills/<name>/skill.yaml
+name: <skill-name>
+description: What this skill does
+script: scripts/<script>.py
+args:
+  arg1: "Description of arg1"
+  arg2: "Description of arg2"
+```
+
+Then create the script at `athenaeum/skills/<name>/scripts/<script>.py`.
+
+### Currently Available Skills
+
+| Skill | Description | MCP Command |
+|-------|-------------|-------------|
+| capture-idea | Add an idea to Codex-Pantheon/projects.md | `mcp_pantheon_skill_run({"name": "capture-idea", "arguments": "[\"Title\", \"Desc\"]"})` |
+
+---
+
+## Template Synchronization Protocol
+
+**Critical rule:** Every time a god architecture, communication protocol, or system integration changes, the god template **must be updated immediately** — before the next god is forged.
+
+This prevents the pattern we just fixed: a feature exists (MCP skills hub, inbox monitoring) but a new god gets spun up without it.
+
+### The Protocol
+
+1. **Change happens** — MCP tool added, new protocol, new system
+2. **Template updated** — update `god-packages/god-template/README.md` with the new section
+3. **Guide updated** — update `GOD-FORGING-GUIDE.md` with the change
+4. **Changelog entry** — add to the forging guide's Changelog table
+5. **Memory noted** — I log the change in my memory so I don't forget for the next forge
+
+### When to Trigger
 
 | Trigger | Action |
 |---------|--------|
-| A new **harness pattern** emerges (new field, new guardrail type) | Add to the relevant harness template section |
-| A **new core system** is added to the Pantheon | Add to "Core Systems" table and Fresh Install Manifest |
-| A **new protocol** emerges (new message type, new routing pattern) | Add a new section or update Message Protocol |
-| An **existing pattern changes** (file moved, format changed, schema bumped) | Update the relevant section + bump version |
-| A **forging step** proves unnecessary or a new step is discovered | Update "The Forging Process" section |
-| **Version 1 of the guide** is 3+ major changes old or the skeleton has evolved significantly | Bump minor version (1.0.0 → 1.1.0 → 1.2.0) |
+| New MCP tool added | Add to template's MCP tools table |
+| New shared skill created | Add to skills hub section in guide |
+| Communication protocol changes | Update Message Protocol section in guide |
+| New core system added | Update Core Systems table and Fresh Install Manifest |
+| Post-forge checklist changes | Update Step 6 in forging process |
+
+This ensures any god forged today has every capability a god forged a month ago has. No drift.
+
+## Maintenance Protocol
+
+This guide must stay in sync with the actual Pantheon skeleton. Here's how I keep it current:
 
 ### How I Update
 

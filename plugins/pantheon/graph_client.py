@@ -27,17 +27,35 @@ logger = logging.getLogger(__name__)
 _REAL_HOME = os.path.expanduser("~konan")
 _DEFAULT_DB_PATH = f"{_REAL_HOME}/.hermes/pantheon/graph.db"
 
-# Node types
+# Node types — extended with Thoth-style entity types
 NODE_TYPE_FILE = "file"
 NODE_TYPE_SESSION = "session"
 NODE_TYPE_ENTITY = "entity"
 NODE_TYPE_CODEX = "codex"
 NODE_TYPE_URL = "url"
 NODE_TYPE_CONCEPT = "concept"
-VALID_NODE_TYPES = {NODE_TYPE_FILE, NODE_TYPE_SESSION, NODE_TYPE_ENTITY,
-                     NODE_TYPE_CODEX, NODE_TYPE_URL, NODE_TYPE_CONCEPT}
+NODE_TYPE_PERSON = "person"
+NODE_TYPE_PROJECT = "project"
+NODE_TYPE_TOOL = "tool"
+NODE_TYPE_SYSTEM = "system"
+NODE_TYPE_ORGANIZATION = "organization"
+NODE_TYPE_PLACE = "place"
+NODE_TYPE_EVENT = "event"
+NODE_TYPE_DECISION = "decision"
+NODE_TYPE_PREFERENCE = "preference"
+NODE_TYPE_MEDIA = "media"
+NODE_TYPE_SKILL = "skill"
+NODE_TYPE_FACT = "fact"
+VALID_NODE_TYPES = {
+    NODE_TYPE_FILE, NODE_TYPE_SESSION, NODE_TYPE_ENTITY,
+    NODE_TYPE_CODEX, NODE_TYPE_URL, NODE_TYPE_CONCEPT,
+    NODE_TYPE_PERSON, NODE_TYPE_PROJECT, NODE_TYPE_TOOL,
+    NODE_TYPE_SYSTEM, NODE_TYPE_ORGANIZATION, NODE_TYPE_PLACE,
+    NODE_TYPE_EVENT, NODE_TYPE_DECISION, NODE_TYPE_PREFERENCE,
+    NODE_TYPE_MEDIA, NODE_TYPE_SKILL, NODE_TYPE_FACT,
+}
 
-# Edge types
+# Edge types — extended with full Thoth-style directional relations
 EDGE_REFERENCES = "references"
 EDGE_CONTAINS = "contains"
 EDGE_MENTIONED_IN = "mentioned_in"
@@ -46,9 +64,99 @@ EDGE_ARCHIVED_TO = "archived_to"
 EDGE_INGESTED_FROM = "ingested_from"
 EDGE_RELATED_TO = "related_to"
 EDGE_LINKS_TO = "links_to"
-VALID_EDGE_TYPES = {EDGE_REFERENCES, EDGE_CONTAINS, EDGE_MENTIONED_IN,
-                    EDGE_DERIVED_FROM, EDGE_ARCHIVED_TO, EDGE_INGESTED_FROM,
-                    EDGE_RELATED_TO, EDGE_LINKS_TO}
+# Dependency
+EDGE_DEPENDS_ON = "depends_on"
+EDGE_REQUIRES = "requires"
+EDGE_IMPLEMENTS = "implements"
+EDGE_ENABLES = "enables"
+EDGE_BLOCKS = "blocks"
+# Ownership
+EDGE_BUILT_BY = "built_by"
+EDGE_CREATED_BY = "created_by"
+EDGE_MANAGED_BY = "managed_by"
+EDGE_MAINTAINED_BY = "maintained_by"
+EDGE_OWNED_BY = "owned_by"
+# Deployment
+EDGE_DEPLOYED_ON = "deployed_on"
+EDGE_RUNS_ON = "runs_on"
+EDGE_HOSTED_AT = "hosted_at"
+EDGE_CONFIGURED_IN = "configured_in"
+# Heirarchy / composition
+EDGE_PARENT_OF = "parent_of"
+EDGE_CHILD_OF = "child_of"
+EDGE_PART_OF = "part_of"
+# Provenance
+EDGE_INSPIRED_BY = "inspired_by"
+EDGE_BASED_ON = "based_on"
+EDGE_FORKED_FROM = "forked_from"
+# Temporal
+EDGE_PRECEDES = "precedes"
+EDGE_FOLLOWS = "follows"
+EDGE_SUPERSEDES = "supersedes"
+EDGE_REPLACES = "replaces"
+EDGE_TRIGGERS = "triggers"
+# Knowledge
+EDGE_CITES = "cites"
+EDGE_EXTRACTED_FROM = "extracted_from"
+EDGE_BUILDS_ON = "builds_on"
+EDGE_EXTENDS = "extends"
+EDGE_CONTRADICTS = "contradicts"
+# Usage
+EDGE_USES = "uses"
+EDGE_CONSUMES = "consumes"
+EDGE_GENERATES = "generates"
+EDGE_PRODUCES = "produces"
+EDGE_CONFIGURES = "configures"
+# Evaluation
+EDGE_PREFERRED_OVER = "preferred_over"
+EDGE_ALTERNATE_TO = "alternate_to"
+EDGE_RECOMMENDS = "recommends"
+EDGE_CRITIQUES = "critiques"
+# Spatial
+EDGE_LOCATED_IN = "located_in"
+EDGE_CONNECTS_TO = "connects_to"
+EDGE_COMMUNICATES_WITH = "communicates_with"
+# Generic impact
+EDGE_IMPACTS = "impacts"
+EDGE_INFLUENCES = "influences"
+EDGE_SUPPORTS = "supports"
+EDGE_ALIGNS_WITH = "aligns_with"
+
+VALID_EDGE_TYPES = {
+    # Original
+    EDGE_REFERENCES, EDGE_CONTAINS, EDGE_MENTIONED_IN,
+    EDGE_DERIVED_FROM, EDGE_ARCHIVED_TO, EDGE_INGESTED_FROM,
+    EDGE_RELATED_TO, EDGE_LINKS_TO,
+    # Dependency
+    EDGE_DEPENDS_ON, EDGE_REQUIRES, EDGE_IMPLEMENTS, EDGE_ENABLES, EDGE_BLOCKS,
+    # Ownership
+    EDGE_BUILT_BY, EDGE_CREATED_BY, EDGE_MANAGED_BY, EDGE_MAINTAINED_BY, EDGE_OWNED_BY,
+    # Deployment
+    EDGE_DEPLOYED_ON, EDGE_RUNS_ON, EDGE_HOSTED_AT, EDGE_CONFIGURED_IN,
+    # Heirarchy
+    EDGE_PARENT_OF, EDGE_CHILD_OF, EDGE_PART_OF,
+    # Provenance
+    EDGE_INSPIRED_BY, EDGE_BASED_ON, EDGE_FORKED_FROM,
+    # Temporal
+    EDGE_PRECEDES, EDGE_FOLLOWS, EDGE_SUPERSEDES, EDGE_REPLACES, EDGE_TRIGGERS,
+    # Knowledge
+    EDGE_CITES, EDGE_EXTRACTED_FROM, EDGE_BUILDS_ON, EDGE_EXTENDS, EDGE_CONTRADICTS,
+    # Usage
+    EDGE_USES, EDGE_CONSUMES, EDGE_GENERATES, EDGE_PRODUCES, EDGE_CONFIGURES,
+    # Evaluation
+    EDGE_PREFERRED_OVER, EDGE_ALTERNATE_TO, EDGE_RECOMMENDS, EDGE_CRITIQUES,
+    # Spatial
+    EDGE_LOCATED_IN, EDGE_CONNECTS_TO, EDGE_COMMUNICATES_WITH,
+    # Generic impact
+    EDGE_IMPACTS, EDGE_INFLUENCES, EDGE_SUPPORTS, EDGE_ALIGNS_WITH,
+}
+
+# Vague / non-specific relations that are rejected before save (Thoth pattern)
+BANNED_EDGE_TYPES = {
+    "related_to", "associated_with", "connected_to",
+    "linked_to", "has_relation", "involves", "correlates_with",
+    "tied_to", "coupled_with", "bound_to",
+}
 
 
 class GraphClient:
@@ -88,7 +196,7 @@ class GraphClient:
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS nodes (
                 id TEXT PRIMARY KEY,
-                type TEXT NOT NULL CHECK(type IN ('file','session','entity','codex','url','concept')),
+                type TEXT NOT NULL,
                 codex TEXT,
                 label TEXT NOT NULL,
                 metadata TEXT DEFAULT '{}',
@@ -296,6 +404,10 @@ class GraphClient:
         """Create an edge between two nodes. Returns edge ID."""
         if type_ not in VALID_EDGE_TYPES:
             raise ValueError(f"Invalid edge type: {type_}. Valid: {', '.join(sorted(VALID_EDGE_TYPES))}")
+
+        # Reject vague / non-specific relations (Thoth pattern)
+        if type_ in BANNED_EDGE_TYPES:
+            raise ValueError(f"Banned vague relation type: '{type_}' — use a specific typed relation instead")
 
         if not self._conn:
             raise RuntimeError("GraphClient not connected")

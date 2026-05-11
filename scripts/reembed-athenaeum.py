@@ -22,6 +22,14 @@ logger = logging.getLogger("reembed")
 _REAL_HOME = os.path.expanduser("~konan")
 ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
+EMBED_MODEL = os.environ.get(
+    "ATHENAEUM_EMBED_MODEL",
+    "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+)
+EMBED_API_URL = os.environ.get(
+    "ATHENAEUM_EMBED_URL",
+    "https://openrouter.ai/api/v1/embeddings",
+)
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 EMBEDDABLE_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
 
@@ -63,31 +71,28 @@ def main():
     import chromadb
     import requests
 
-    # ── Verify API key ───────────────────────────────────────────────────
+    # ── Test embedder connection ─────────────────────────────────────────
     if not OPENROUTER_API_KEY:
-        logger.error("OPENROUTER_API_KEY not set. Set it in environment or .env")
+        logger.error("OPENROUTER_API_KEY is not set")
         sys.exit(1)
 
-    # Test the API key first
-    logger.info("Testing OpenRouter connection...")
+    logger.info("Testing OpenRouter embedding with %s...", EMBED_MODEL)
     try:
         test_resp = requests.post(
-            "https://openrouter.ai/api/v1/embeddings",
+            EMBED_API_URL,
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": "nvidia/llama-nemotron-embed-vl-1b-v2:free",
-                "input": "test",
-            },
-            timeout=15,
+            json={"model": EMBED_MODEL, "input": "test"},
+            timeout=30,
         )
         test_resp.raise_for_status()
-        test_dim = len(test_resp.json()["data"][0]["embedding"])
-        logger.info("  ✓ API key valid, embedding dimension: %d", test_dim)
+        test_data = test_resp.json()
+        test_dim = len(test_data["data"][0]["embedding"])
+        logger.info("  ✓ OpenRouter available, embedding dimension: %d", test_dim)
     except Exception as exc:
-        logger.error("OpenRouter connection failed: %s", exc)
+        logger.error("OpenRouter embedding failed: %s", exc)
         sys.exit(1)
 
     # ── Wipe existing collections ────────────────────────────────────────
@@ -118,20 +123,42 @@ def main():
     logger.info("Files to embed: %d", len(all_files))
 
     def openrouter_embed(text: str) -> List[float]:
-        resp = requests.post(
-            "https://openrouter.ai/api/v1/embeddings",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "nvidia/llama-nemotron-embed-vl-1b-v2:free",
-                "input": text,
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json()["data"][0]["embedding"]
+        """Embed text via OpenRouter API."""
+        chunk_size = 2000  # characters, ~500 tokens
+        text_str = text[:64000]  # Truncate to 64K chars max
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        if len(text_str) <= chunk_size:
+            resp = requests.post(
+                EMBED_API_URL,
+                headers=headers,
+                json={"model": EMBED_MODEL, "input": text_str},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            return resp.json()["data"][0]["embedding"]
+
+        # Chunk and average for long texts
+        chunks = [text_str[i:i+chunk_size] for i in range(0, len(text_str), chunk_size)]
+        if len(chunks) > 20:
+            chunks = chunks[:20]  # Cap at 20 chunks
+        embeddings = []
+        for chunk in chunks:
+            resp = requests.post(
+                EMBED_API_URL,
+                headers=headers,
+                json={"model": EMBED_MODEL, "input": chunk},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            embeddings.append(resp.json()["data"][0]["embedding"])
+        # Average
+        dim = len(embeddings[0])
+        avg = [sum(vals[i] for vals in embeddings) / len(embeddings) for i in range(dim)]
+        return avg
 
     # ── Embed all files ──────────────────────────────────────────────────
     success = 0

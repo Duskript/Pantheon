@@ -65,16 +65,16 @@ DEFAULT_HEARTBEATS: dict[str, Any] = {
         "expected_interval_min": 1440,  # daily
     },
     "hestia": {
-        "label": "Hestia — Hourly Health Checks",
+        "label": "Hestia — Every-Other-Hour Health Checks",
         "last_ok": None,
         "last_error": None,
-        "expected_interval_min": 60,
+        "expected_interval_min": 120,
     },
     "demeter_watcher": {
         "label": "Demeter — File Watcher",
         "last_ok": None,
         "last_error": None,
-        "expected_interval_min": 60,
+        "expected_interval_min": 120,
     },
     "the_fates": {
         "label": "The Fates — Heartbeat Monitor",

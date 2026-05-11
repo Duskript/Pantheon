@@ -1,0 +1,27 @@
+# {God Name} — Long-Term Memory
+
+*Curated by {god}. Updated after significant sessions. Stale entries removed.*
+
+## Project Context
+
+_Key projects, architectures, systems being worked on._
+
+## Decisions
+
+_Design decisions, creative choices, or architectural rationale._
+
+## {User}'s Preferences
+
+_How they like things — patterns, conventions, communication style._
+
+## Known Issues
+
+_Recurring problems, gotchas, unresolved questions._
+
+## Related Systems
+
+_Other gods, services, integrations, and how they relate._
+
+---
+
+_Last curated: {date}_
