@@ -77,10 +77,10 @@ Pantheon gives you:
              │
              ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                    LiteLLM (Model Proxy Layer)                       │
+│                    Model Providers (Direct Routing)                   │
 │                                                                     │
 │  OpenAI · Anthropic · Ollama · OpenRouter · DeepSeek · +20 more    │
-│  Swap models and providers any time — per-God or mid-session       │
+│  Google Gemini · OpenCode Go — direct connections, no proxy        │
 └────────────────────────────────────────────────────────────────────┘
              │
              ▼
@@ -159,7 +159,7 @@ It's not a better model — it's a system that remembers how you work and improv
 
 ### 🔄 Run Any Model You Want
 
-Pantheon comes with a built-in **LiteLLM proxy** that routes requests to any model provider. Use OpenAI, Anthropic, Ollama (local models), OpenRouter, DeepSeek, Google Gemini, or any of 20+ supported providers. Swap models per-God or mid-session. No config changes, no API key reshuffling.
+Pantheon connects directly to any OpenAI-compatible provider — OpenAI, Anthropic, Ollama (local models), OpenRouter, DeepSeek, Google Gemini, OpenCode Go, or any of 20+ supported endpoints. No proxy layer, no extra moving parts. Swap models per-God or mid-session. No config changes, no API key reshuffling.
 
 Running local models? Ollama integrates out of the box. Your Gods use them the same way they use GPT-4 or Claude.
 
