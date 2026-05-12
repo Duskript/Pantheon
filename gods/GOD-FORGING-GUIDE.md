@@ -427,7 +427,7 @@ For a new Pantheon installation, these are the minimum required components:
 
 ## Pantheon Skills Hub
 
-The Pantheon has a **shared skills hub** at `/home/konan/athenaeum/skills/`. These are universal, reusable tasks that any god can execute via MCP.
+The Pantheon has a **shared skills hub** at `~/athenaeum/skills/`. These are universal, reusable tasks that any god can execute via MCP.
 
 ### How It Works
 

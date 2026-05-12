@@ -23,7 +23,7 @@ _REAL_HOME = os.environ.get("HERMES_REAL_HOME", HOME)
 if _REAL_HOME != HOME and _REAL_HOME != os.path.join(HOME, ".."):
     # We're in a sandbox — use the real home
     HOME = _REAL_HOME
-# Fallback: check if HOME resolves to /home/konan/.hermes/profiles/... and fix it
+# Fallback: check if HOME resolves to the user's Hermes profiles and fix it
 if ".hermes/profiles" in HOME:
     # Walk up to find the actual home
     parts = HOME.split("/.hermes/profiles/")

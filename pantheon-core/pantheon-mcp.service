@@ -4,10 +4,14 @@ Documentation=https://github.com/Duskript/Pantheon-Core
 After=network-online.target ollama.service
 Wants=network-online.target
 
+# TEMPLATE: Update paths below to match your installation.
+# WorkingDirectory -> ~/pantheon/pantheon-core
+# ExecStart -> edit venv path and repo path for your system
+
 [Service]
 Type=simple
-WorkingDirectory=/home/konan/pantheon/pantheon-core
-ExecStart=/home/konan/.hermes/hermes-agent/venv/bin/python3 /home/konan/pantheon/pantheon-core/mcp_server.py --port 8010
+WorkingDirectory=%h/pantheon/pantheon-core
+ExecStart=%h/.hermes/hermes-agent/venv/bin/python3 %h/pantheon/pantheon-core/mcp_server.py --port 8010
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

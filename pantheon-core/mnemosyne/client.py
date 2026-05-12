@@ -55,7 +55,11 @@ class MnemosyneClient:
             "ATHENAEUM_EMBED_URL",
             "https://openrouter.ai/api/v1/embeddings",
         )
-        self._embed_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
+        self._embed_api_key: str = (
+            os.environ.get("ATHENAEUM_EMBED_API_KEY")
+            or os.environ.get("OPENROUTER_API_KEY")
+            or ""
+        )
         # Lazy — initialised on first use.
         self._client: Any = None
 
@@ -82,24 +86,38 @@ class MnemosyneClient:
             ) from exc
 
     def _get_embedding(self, text: str) -> list[float]:
-        """Obtain an embedding for *text* via OpenRouter."""
+        """Obtain an embedding for *text* via the configured embedder."""
         try:
             import httpx  # noqa: PLC0415
 
-            response = httpx.post(
-                self._embed_url,
-                headers={
-                    "Authorization": f"Bearer {self._embed_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={"model": self._embed_model, "input": text},
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            return response.json()["data"][0]["embedding"]
+            provider = os.environ.get("ATHENAEUM_EMBED_PROVIDER", "").lower()
+
+            if provider == "ollama":
+                # Ollama uses /api/embeddings with {model, prompt} format
+                response = httpx.post(
+                    self._embed_url,
+                    json={"model": self._embed_model, "prompt": text},
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                return response.json()["embedding"]
+            else:
+                # OpenAI-compatible format (OpenRouter, Jina, Voyage, etc.)
+                response = httpx.post(
+                    self._embed_url,
+                    headers={
+                        "Authorization": f"Bearer {self._embed_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"model": self._embed_model, "input": text},
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                return response.json()["data"][0]["embedding"]
+
         except Exception as exc:
             raise MnemosyneUnavailableError(
-                f"OpenRouter embedding request failed: {exc}"
+                f"Embedding request failed: {exc}"
             ) from exc
 
     def _scoped_collections(self) -> list[str]:

@@ -11,12 +11,22 @@ Started automatically by install-pantheon.sh on port 9876.
 """
 import json
 import os
+import subprocess
 import sys
+import threading
+import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse
 
 PANTHEON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(PANTHEON_DIR, ".env")
+
+# ── Launch state (thread-safe) ──────────────────────────────────────────────
+_launch_step: str = "idle"  # idle | installing_gods | starting_gateway | waiting | done | error
+_launch_msg: str = ""
+_launch_error: str | None = None
+_launch_lock = threading.Lock()
+_launch_thread: threading.Thread | None = None
 
 
 class SetupHandler(SimpleHTTPRequestHandler):
@@ -32,6 +42,10 @@ class SetupHandler(SimpleHTTPRequestHandler):
             self._handle_check_env()
         elif path == "/api/env/models/recommend":
             self._handle_model_recommendations()
+        elif path == "/api/env/ollama-status":
+            self._handle_ollama_status()
+        elif path == "/api/launch/status":
+            self._handle_launch_status()
         else:
             # Serve static files (default behaviour)
             super().do_GET()
@@ -43,6 +57,10 @@ class SetupHandler(SimpleHTTPRequestHandler):
             self._handle_set_key()
         elif path == "/api/env/models/save":
             self._handle_save_models()
+        elif path == "/api/env/embed-key":
+            self._handle_set_embed_key()
+        elif path == "/api/launch":
+            self._handle_launch()
         else:
             self.send_response(404)
             self.end_headers()
@@ -123,7 +141,7 @@ class SetupHandler(SimpleHTTPRequestHandler):
             self._json(500, {"error": str(e)})
 
     def _handle_check_env(self):
-        """Return which providers have keys configured."""
+        """Return which providers have keys configured, including embedding."""
         configured = {}
         if os.path.isfile(ENV_PATH):
             with open(ENV_PATH) as f:
@@ -134,11 +152,143 @@ class SetupHandler(SimpleHTTPRequestHandler):
                         if value and not value.startswith("$") and not value.startswith("your_"):
                             configured[key] = "set" if len(value) > 4 else "empty"
 
+        # Detect embedding provider status
+        embed_provider = configured.get("ATHENAEUM_EMBED_PROVIDER", "")
+        has_embed_key = bool(
+            configured.get("ATHENAEUM_EMBED_API_KEY")
+            or configured.get("OPENROUTER_API_KEY")
+        )
+        embed_configured = bool(embed_provider and has_embed_key)
+
         self._json(200, {
             "status": "ok",
             "env_exists": os.path.isfile(ENV_PATH),
             "configured": configured,
+            "embedding": {
+                "configured": embed_configured,
+                "provider": embed_provider or None,
+                "has_key": has_embed_key,
+            },
         })
+
+    EMBED_PROVIDER_MAP = {
+        "openrouter": {
+            "env_var": "OPENROUTER_API_KEY",
+            "model": "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+            "url": "https://openrouter.ai/api/v1/embeddings",
+            "label": "OpenRouter",
+            "note": "Free model, no extra cost — uses your OpenRouter key",
+        },
+        "jina": {
+            "env_var": "JINA_API_KEY",
+            "model": "jina-embeddings-v3",
+            "url": "https://api.jina.ai/v1/embeddings",
+            "label": "Jina AI",
+            "note": "$0.01/1M tokens — first 1M free, 1024-dim",
+        },
+        "voyage": {
+            "env_var": "VOYAGE_API_KEY",
+            "model": "voyage-lite-02-instruct",
+            "url": "https://api.voyageai.com/v1/embeddings",
+            "label": "Voyage AI",
+            "note": "$0.01/1M tokens — 1024-dim, instruct-tuned",
+        },
+        "ollama": {
+            "env_var": "OLLAMA_API_KEY",
+            "model": "nomic-embed-text",
+            "url": "http://localhost:11434/api/embeddings",
+            "label": "Ollama (local)",
+            "note": "Free, offline — requires Ollama installed + model pulled",
+        },
+    }
+
+    def _handle_ollama_status(self):
+        """Check if Ollama is installed and/or running."""
+        result = {"installed": False, "running": False, "version": None}
+        try:
+            import subprocess
+            r = subprocess.run(["ollama", "--version"], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                result["installed"] = True
+                result["version"] = r.stdout.strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        if result["installed"]:
+            try:
+                import httpx
+                resp = httpx.get("http://localhost:11434/api/tags", timeout=3)
+                if resp.status_code == 200:
+                    result["running"] = True
+                    models = resp.json().get("models", [])
+                    embed_models = [m["name"] for m in models if "embed" in m["name"].lower() or "nomic" in m["name"].lower() or "bge" in m["name"].lower()]
+                    result["embed_models"] = embed_models
+            except Exception:
+                pass
+
+        self._json(200, {"status": "ok", "ollama": result})
+
+    def _handle_set_embed_key(self):
+        """Save an embedding provider configuration to .env."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            data = json.loads(body)
+
+            provider = data.get("provider", "").strip().lower()
+            api_key = data.get("api_key", "").strip()
+            model_override = data.get("model", "").strip()
+
+            if not provider or provider not in self.EMBED_PROVIDER_MAP:
+                self._json(400, {"error": f"unknown or missing embedding provider: {provider}"})
+                return
+
+            cfg = self.EMBED_PROVIDER_MAP[provider]
+            env_lines = []
+            if os.path.isfile(ENV_PATH):
+                with open(ENV_PATH) as f:
+                    env_lines = f.readlines()
+
+            def _upsert(key_name, value, ensure_newline=True):
+                nonlocal env_lines
+                found = False
+                for i, line in enumerate(env_lines):
+                    stripped = line.strip()
+                    if stripped.startswith(f"{key_name}=") or stripped.startswith(f"# {key_name}=") or stripped.startswith(f"#{key_name}="):
+                        env_lines[i] = f"{key_name}={value}\n"
+                        found = True
+                        break
+                if not found:
+                    nl = "\n" if ensure_newline and env_lines and not env_lines[-1].endswith("\n") else ""
+                    env_lines.append(f"{nl}{key_name}={value}\n")
+
+            # Save embedding provider identity
+            _upsert("ATHENAEUM_EMBED_PROVIDER", provider)
+
+            # Save the API key (general + provider-specific)
+            if api_key:
+                _upsert("ATHENAEUM_EMBED_API_KEY", api_key)
+                _upsert(cfg["env_var"], api_key)
+
+            # Save the model (allow override, else use default)
+            model = model_override or cfg["model"]
+            _upsert("ATHENAEUM_EMBED_MODEL", model)
+
+            # Save the URL
+            _upsert("ATHENAEUM_EMBED_URL", cfg["url"])
+
+            with open(ENV_PATH, "w") as f:
+                f.writelines(env_lines)
+
+            self._json(200, {
+                "status": "ok",
+                "message": f"{cfg['label']} configured for embeddings",
+                "provider": provider,
+                "model": model,
+            })
+
+        except (json.JSONDecodeError, OSError) as e:
+            self._json(500, {"error": str(e)})
 
     MODEL_RECOMMENDATIONS = {
         "opencode-go": {
@@ -253,11 +403,6 @@ class SetupHandler(SimpleHTTPRequestHandler):
     }
 
     COMMON_RECOMMENDATIONS = {
-        "embedding": {
-            "default": "nvidia/llama-nemotron-embed-vl-1b-v2:free",
-            "provider": "openrouter",
-            "note": "Embeddings always route through OpenRouter — free model, no key needed if you have any OpenRouter-compatible key",
-        },
         "summary": {
             "default": "google/gemini-3-flash-preview",
             "provider": "openrouter",
@@ -304,13 +449,43 @@ class SetupHandler(SimpleHTTPRequestHandler):
         if primary_provider and primary_provider in self.MODEL_RECOMMENDATIONS:
             recommendations = self.MODEL_RECOMMENDATIONS[primary_provider]
 
-        # Always include common recommendations (embedding + summary)
+        # Detect current embedding provider
+        embed_provider_name = configured.get("ATHENAEUM_EMBED_PROVIDER", "")
+        embed_provider_info = None
+        if embed_provider_name and embed_provider_name in self.EMBED_PROVIDER_MAP:
+            cfg = self.EMBED_PROVIDER_MAP[embed_provider_name]
+            embed_provider_info = {
+                "label": cfg["label"],
+                "model": configured.get("ATHENAEUM_EMBED_MODEL", cfg["model"]),
+                "note": cfg["note"],
+            }
+        elif configured.get("OPENROUTER_API_KEY"):
+            # OpenRouter key exists but no explicit embed provider — auto-detect
+            embed_provider_info = {
+                "label": "OpenRouter (auto)",
+                "model": configured.get("ATHENAEUM_EMBED_MODEL", "nvidia/llama-nemotron-embed-vl-1b-v2:free"),
+                "note": "Free embedding model via OpenRouter key",
+            }
+
+        # Always include common recommendations
         recommendations["common"] = self.COMMON_RECOMMENDATIONS
+        recommendations["embedding_providers"] = {
+            name: {
+                "label": cfg["label"],
+                "model": cfg["model"],
+                "note": cfg["note"],
+            }
+            for name, cfg in self.EMBED_PROVIDER_MAP.items()
+        }
 
         self._json(200, {
             "status": "ok",
             "primary_provider": primary_provider,
             "recommendations": recommendations,
+            "embedding": {
+                "configured": embed_provider_info is not None,
+                "current": embed_provider_info,
+            },
         })
 
     def _handle_save_models(self):
@@ -362,6 +537,34 @@ class SetupHandler(SimpleHTTPRequestHandler):
         except (json.JSONDecodeError, OSError) as e:
             self._json(500, {"error": str(e)})
 
+    # ── Launch handlers ─────────────────────────────────────────────────────
+
+    def _handle_launch(self):
+        """Start Pantheon launch in background thread."""
+        global _launch_step, _launch_msg, _launch_thread
+
+        with _launch_lock:
+            if _launch_step in ("installing_gods", "starting_gateway", "waiting"):
+                self._json(200, {"status": "already_launching", "step": _launch_step})
+                return
+            _launch_step = "installing_gods"
+            _launch_msg = "Installing core gods..."
+            _launch_error = None
+
+        _launch_thread = threading.Thread(target=_launch_worker, daemon=True)
+        _launch_thread.start()
+        self._json(200, {"status": "launching", "step": "installing_gods"})
+
+    def _handle_launch_status(self):
+        """Return current launch progress."""
+        with _launch_lock:
+            self._json(200, {
+                "status": "ok",
+                "step": _launch_step,
+                "message": _launch_msg,
+                "error": _launch_error,
+            })
+
     def _json(self, status, data):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -378,6 +581,115 @@ class SetupHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         sys.stderr.write(f"[setup-server] {args[0]} {args[1]} {args[2]}\n")
+
+
+# ── Background launch worker ────────────────────────────────────────────────
+
+def _launch_worker():
+    """Run launch steps in background, updating global state."""
+    global _launch_step, _launch_msg, _launch_error
+    import httpx  # noqa: PLC0415
+    try:
+        # Step 1: Install core gods
+        with _launch_lock:
+            _launch_step = "installing_gods"
+            _launch_msg = "Installing Hermes + Hephaestus..."
+        subprocess.run(
+            [sys.executable, "scripts/pantheon-install", "."],
+            cwd=PANTHEON_DIR,
+            capture_output=True, text=True, timeout=60,
+        )
+
+        # Step 2: Initialize Athenaeum (create Codex directories)
+        with _launch_lock:
+            _launch_step = "initializing_athenaeum"
+            _launch_msg = "Creating Athenaeum knowledge store..."
+        subprocess.run(
+            ["bash", "scripts/init-athenaeum.sh"],
+            cwd=PANTHEON_DIR,
+            capture_output=True, text=True, timeout=30,
+        )
+
+        # Step 3: Start Pantheon MCP server (port 8010)
+        with _launch_lock:
+            _launch_step = "starting_mcp"
+            _launch_msg = "Starting Pantheon MCP server..."
+        # Kill any previous MCP server
+        subprocess.run(["pkill", "-f", "mcp_server.py"], capture_output=True, timeout=5)
+        time.sleep(0.5)
+        mcp_log = "/tmp/pantheon-mcp.log"
+        with open(mcp_log, "w") as f:
+            subprocess.Popen(
+                [sys.executable, "pantheon-core/mcp_server.py", "--port", "8010"],
+                cwd=PANTHEON_DIR,
+                stdout=f, stderr=subprocess.STDOUT,
+            )
+
+        # Step 4: Start Hermes gateway
+        with _launch_lock:
+            _launch_step = "starting_gateway"
+            _launch_msg = "Starting Pantheon gateway..."
+        subprocess.run(["pkill", "-f", "hermes.*gateway"], capture_output=True, timeout=5)
+        time.sleep(0.5)
+        gateway_log = "/tmp/pantheon-gateway.log"
+        with open(gateway_log, "w") as f:
+            subprocess.Popen(
+                ["hermes", "gateway"],
+                stdout=f, stderr=subprocess.STDOUT,
+            )
+
+        # Step 5: Wait for both MCP (8010) and Web UI (8787)
+        with _launch_lock:
+            _launch_step = "waiting"
+            _launch_msg = "Waiting for services to become ready..."
+
+        mcp_ready = False
+        web_ready = False
+        for _ in range(30):  # up to ~60s
+            time.sleep(2)
+            if not mcp_ready:
+                try:
+                    resp = httpx.get("http://localhost:8010/health", timeout=2)
+                    if resp.status_code < 500:
+                        mcp_ready = True
+                except Exception:
+                    # Also try the MCP endpoint directly
+                    try:
+                        resp = httpx.get("http://localhost:8010/mcp", timeout=2)
+                        mcp_ready = True
+                    except Exception:
+                        pass
+            if not web_ready:
+                try:
+                    resp = httpx.get("http://localhost:8787", timeout=2)
+                    if resp.status_code < 500:
+                        web_ready = True
+                except Exception:
+                    pass
+            if mcp_ready and web_ready:
+                with _launch_lock:
+                    _launch_step = "done"
+                    _launch_msg = "Pantheon is running!"
+                return
+
+        # Partial success — at least one service is up
+        if mcp_ready or web_ready:
+            with _launch_lock:
+                _launch_step = "done"
+                parts = []
+                if web_ready: parts.append("Web UI")
+                if mcp_ready: parts.append("MCP")
+                _launch_msg = f"{' + '.join(parts)} running — finishing startup"
+        else:
+            with _launch_lock:
+                _launch_step = "done"
+                _launch_msg = "Services started — may take a moment to be ready"
+
+    except Exception as exc:
+        with _launch_lock:
+            _launch_step = "error"
+            _launch_msg = f"Launch failed: {exc}"
+            _launch_error = str(exc)
 
 
 def main():

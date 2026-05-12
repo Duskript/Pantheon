@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 logger = logging.getLogger("reembed")
 
-_REAL_HOME = os.path.expanduser("~konan")
+_REAL_HOME = os.path.expanduser("~")
 ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 EMBED_MODEL = os.environ.get(
@@ -30,7 +30,7 @@ EMBED_API_URL = os.environ.get(
     "ATHENAEUM_EMBED_URL",
     "https://openrouter.ai/api/v1/embeddings",
 )
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("ATHENAEUM_EMBED_API_KEY", "") or os.environ.get("OPENROUTER_API_KEY", "")
 EMBEDDABLE_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
 
 
@@ -123,23 +123,27 @@ def main():
     logger.info("Files to embed: %d", len(all_files))
 
     def openrouter_embed(text: str) -> List[float]:
-        """Embed text via OpenRouter API."""
+        """Embed text via the configured embedding provider."""
         chunk_size = 2000  # characters, ~500 tokens
         text_str = text[:64000]  # Truncate to 64K chars max
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        }
+
+        provider = os.environ.get("ATHENAEUM_EMBED_PROVIDER", "").lower()
+
+        def _call_api(payload: dict) -> List[float]:
+            nonlocal provider
+            headers = {"Content-Type": "application/json"}
+            if provider != "ollama":
+                headers["Authorization"] = f"Bearer {OPENROUTER_API_KEY}"
+            resp = requests.post(EMBED_API_URL, headers=headers, json=payload, timeout=60)
+            resp.raise_for_status()
+            if provider == "ollama":
+                return resp.json()["embedding"]
+            return resp.json()["data"][0]["embedding"]
 
         if len(text_str) <= chunk_size:
-            resp = requests.post(
-                EMBED_API_URL,
-                headers=headers,
-                json={"model": EMBED_MODEL, "input": text_str},
-                timeout=60,
-            )
-            resp.raise_for_status()
-            return resp.json()["data"][0]["embedding"]
+            if provider == "ollama":
+                return _call_api({"model": EMBED_MODEL, "prompt": text_str})
+            return _call_api({"model": EMBED_MODEL, "input": text_str})
 
         # Chunk and average for long texts
         chunks = [text_str[i:i+chunk_size] for i in range(0, len(text_str), chunk_size)]
@@ -147,14 +151,12 @@ def main():
             chunks = chunks[:20]  # Cap at 20 chunks
         embeddings = []
         for chunk in chunks:
-            resp = requests.post(
-                EMBED_API_URL,
-                headers=headers,
-                json={"model": EMBED_MODEL, "input": chunk},
-                timeout=60,
-            )
-            resp.raise_for_status()
-            embeddings.append(resp.json()["data"][0]["embedding"])
+            if provider == "ollama":
+                emb = _call_api({"model": EMBED_MODEL, "prompt": chunk})
+            else:
+                emb = _call_api({"model": EMBED_MODEL, "input": chunk})
+            if emb:
+                embeddings.append(emb)
         # Average
         dim = len(embeddings[0])
         avg = [sum(vals[i] for vals in embeddings) / len(embeddings) for i in range(dim)]

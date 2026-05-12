@@ -16,7 +16,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 # Use REAL home (Hermes overrides Path.home())
-_REAL_HOME = os.path.expanduser("~konan")
+_REAL_HOME = os.path.expanduser("~")
 
 # Path to the rules file (overridable via env var so the plugin can point to it)
 _DEFAULT_RULES_PATH = os.environ.get(

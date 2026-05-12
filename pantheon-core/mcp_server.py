@@ -25,7 +25,7 @@ from mcp.server.fastmcp import FastMCP
 # Constants
 # ---------------------------------------------------------------------------
 
-_REAL_HOME = "/home/konan"
+_REAL_HOME = os.path.expanduser("~")
 _ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 _CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 _MESSAGES_DIR = Path(f"{_REAL_HOME}/pantheon/gods/messages")

@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Use REAL home path (Hermes overrides Path.home())
-_REAL_HOME = os.path.expanduser("~konan")
+_REAL_HOME = os.path.expanduser("~")
 sys.path.insert(0, _REAL_HOME + "/pantheon/pantheon-core/gods")
 
 # Load profile-level .env for API keys

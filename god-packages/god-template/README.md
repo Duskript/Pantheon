@@ -62,7 +62,7 @@ Every new god automatically gets these MCP tools once the server config is added
 
 ## Pantheon Skills Hub
 
-The Pantheon has a **shared skills hub** at `/home/konan/athenaeum/skills/`. These are universal, reusable tasks that any god can execute via MCP.
+The Pantheon has a **shared skills hub** at `~/athenaeum/skills/`. These are universal, reusable tasks that any god can execute via MCP.
 
 **How it works:**
 - Skills live in subdirectories under `athenaeum/skills/`, each with a `skill.yaml` manifest and a Python script

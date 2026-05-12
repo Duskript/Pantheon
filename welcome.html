@@ -242,6 +242,15 @@
     details.provider-detail[open] summary {
       padding-bottom: 0.25rem;
     }
+    .launch-step {
+      padding: 0.4rem 0;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      transition: opacity 0.3s;
+    }
+    .launch-step.done { color: #6ee7b7; }
+    .launch-step.active { color: #22d3ee; }
+    .launch-spinner { display: inline-block; width: 1.2rem; }
   </style>
 </head>
 <body>
@@ -369,6 +378,80 @@
         <a class="btn btn-secondary" href="https://openrouter.ai/keys" target="_blank">🔑 Get OpenRouter Key</a>
       </div>
 
+      <!-- ── Embedding Provider ── -->
+      <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid #1e293b;">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
+          <span style="color:#22d3ee;font-weight:600;">🧠 Embedding Provider</span>
+          <span style="background:#1e293b;color:#fbbf24;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.7rem;font-weight:600;" id="embed-required-badge">REQUIRED</span>
+        </div>
+        <div style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem;">
+          Used for semantic search, knowledge retrieval, and Athenaeum ingestion.
+          OpenCode Go doesn't support embeddings — you need a separate provider below.
+        </div>
+
+        <!-- Embedding Provider Selector -->
+        <div style="margin-bottom:0.6rem;">
+          <select id="embed-provider-select" style="width:100%;max-width:450px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.9rem;outline:none;cursor:pointer;">
+            <option value="">— Select an embedding provider —</option>
+            <option value="openrouter">🟡 OpenRouter — free model, no extra cost</option>
+            <option value="ollama">🟣 Ollama — local, offline, free</option>
+            <option value="jina">🔵 Jina AI — $0.01/1M tokens</option>
+            <option value="voyage">🟢 Voyage AI — $0.01/1M tokens</option>
+          </select>
+        </div>
+
+        <!-- Embedding Key Input -->
+        <div id="embed-key-group" style="display:none;margin-bottom:0.5rem;">
+          <label id="embed-key-label" style="display:block;color:#94a3b8;font-size:0.85rem;font-weight:600;margin-bottom:0.4rem;">API Key</label>
+          <div style="display:flex;gap:0.5rem;max-width:550px;">
+            <input type="text" id="embed-key-input" placeholder="Paste your API key here..." style="flex:1;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:0.6rem 0.8rem;font-family:'Courier New',monospace;font-size:0.85rem;outline:none;">
+            <button class="btn btn-primary" onclick="saveEmbedKey()" style="white-space:nowrap;">💾 Save</button>
+          </div>
+          <div id="embed-key-hint" style="margin-top:0.4rem;font-size:0.8rem;color:#64748b;"></div>
+
+          <div id="embed-helper-openrouter" class="key-helpers" style="display:none;margin-top:0.5rem;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.8rem;color:#94a3b8;">
+            <strong style="color:#fbbf24;">Already using OpenRouter?</strong> Same key works — paste it above.<br>
+            <strong style="color:#6ee7b7;">New to OpenRouter?</strong>
+            <ol style="margin:0.4rem 0 0 1.2rem;padding:0;line-height:1.6;">
+              <li>Go to <a href="https://openrouter.ai/keys" target="_blank" style="color:#22d3ee;">openrouter.ai/keys</a></li>
+              <li>Sign in → <strong>Create Key</strong> → name it "Pantheon"</li>
+              <li>Paste the <code style="background:#1e293b;padding:1px 6px;border-radius:4px;color:#22d3ee;">sk-or-v1-</code> key above</li>
+            </ol>
+            <p style="margin-top:0.3rem;color:#64748b;">💰 New accounts get <strong>$1 free credit</strong> — the embedding model is free, so this lasts forever.</p>
+          </div>
+          <div id="embed-helper-ollama" class="key-helpers" style="display:none;margin-top:0.5rem;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.8rem;color:#94a3b8;">
+            <strong style="color:#a78bfa;">Using Ollama for local embeddings:</strong>
+            <div id="ollama-status" style="margin-top:0.4rem;font-size:0.85rem;"></div>
+            <ol style="margin:0.4rem 0 0 1.2rem;padding:0;line-height:1.6;">
+              <li>Install <a href="https://ollama.com/download" target="_blank" style="color:#22d3ee;">Ollama</a> if not already installed</li>
+              <li>Run: <code style="background:#1e293b;padding:1px 6px;border-radius:4px;color:#22d3ee;">ollama pull nomic-embed-text</code></li>
+              <li>Type anything in the key field (Ollama doesn't use keys) and Save</li>
+            </ol>
+          </div>
+          <div id="embed-helper-jina" class="key-helpers" style="display:none;margin-top:0.5rem;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.8rem;color:#94a3b8;">
+            <strong style="color:#60a5fa;">Jina AI — cheap, fast embeddings:</strong>
+            <ol style="margin:0.4rem 0 0 1.2rem;padding:0;line-height:1.6;">
+              <li>Go to <a href="https://jina.ai/embeddings" target="_blank" style="color:#22d3ee;">jina.ai/embeddings</a></li>
+              <li>Sign up and get your API key (starts with <code style="background:#1e293b;padding:1px 6px;border-radius:4px;color:#22d3ee;">jina_</code>)</li>
+              <li>Paste it above and Save</li>
+            </ol>
+            <p style="margin-top:0.3rem;color:#64748b;">💰 First 1M tokens free, then $0.01/1M — 1024-dim embeddings.</p>
+          </div>
+          <div id="embed-helper-voyage" class="key-helpers" style="display:none;margin-top:0.5rem;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.8rem;color:#94a3b8;">
+            <strong style="color:#6ee7b7;">Voyage AI — affordable embeddings:</strong>
+            <ol style="margin:0.4rem 0 0 1.2rem;padding:0;line-height:1.6;">
+              <li>Go to <a href="https://dash.voyageai.com/" target="_blank" style="color:#22d3ee;">dash.voyageai.com</a></li>
+              <li>Sign up and get your API key (starts with <code style="background:#1e293b;padding:1px 6px;border-radius:4px;color:#22d3ee;">pa-</code>)</li>
+              <li>Paste it above and Save</li>
+            </ol>
+            <p style="margin-top:0.3rem;color:#64748b;">💰 $0.01/1M tokens — 1024-dim, instruct-tuned for retrieval.</p>
+          </div>
+        </div>
+
+        <!-- Embedding status -->
+        <div id="embed-status" style="font-size:0.85rem;"></div>
+      </div>
+
       <!-- Full provider reference -->
       <details style="margin-top:1rem;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.6rem 0.8rem;">
         <summary style="cursor:pointer;font-weight:600;color:#94a3b8;font-size:0.85rem;">📋 All supported providers — 15+ options</summary>
@@ -404,43 +487,93 @@
     </div>
   </div>
 
-  <!-- Step 4: Core Gods -->
-  <div class="step" id="step-gods">
-    <div class="step-icon pending">4</div>
+  <!-- Step 4: Launch Pantheon -->
+  <div class="step" id="step-launch" style="opacity:0.5;">
+    <div class="step-icon pending" id="launch-icon">4</div>
     <div class="step-content">
-      <div class="step-title pending">Core Gods</div>
-      <div class="step-desc">
-        Hermes and Hephaestus are the foundation. Once you've added an API key, install them:
-        <div class="copy-field" style="max-width:450px;">
-          <input type="text" value="cd ~/pantheon && python3 scripts/pantheon-install ." readonly id="god-cmd">
-          <button onclick="copyLine('god-cmd')">Copy Command</button>
+      <div class="step-title pending" id="launch-title">Launch Pantheon</div>
+      <div class="step-desc" id="launch-desc">
+        Your API keys are set. One click to install gods, start the gateway, and open the Web UI.
+      </div>
+
+      <!-- Pre-launch state -->
+      <div id="launch-ready" style="display:none;margin-top:0.75rem;">
+        <button class="btn btn-primary" onclick="launchPantheon()" style="font-size:1rem;padding:0.75rem 1.5rem;width:100%;max-width:350px;">🚀 Launch Pantheon</button>
+        <div style="margin-top:0.5rem;color:#64748b;font-size:0.8rem;">
+          This will: install core gods &bull; start the gateway &bull; open the Web UI
+        </div>
+      </div>
+
+      <!-- Launching state (hidden initially) -->
+      <div id="launch-progress" style="display:none;margin-top:0.75rem;">
+        <div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:1rem;">
+          <div style="margin-bottom:0.75rem;color:#22d3ee;font-weight:600;">🚀 Starting your Pantheon...</div>
+          <div id="launch-steps">
+            <div id="lstep-installing" class="launch-step">
+              <span class="launch-spinner">⏳</span> Installing core gods (Hermes + Hephaestus)...
+            </div>
+            <div id="lstep-athenaeum" class="launch-step" style="opacity:0.4;">
+              <span class="launch-spinner">⏳</span> Creating Athenaeum knowledge store...
+            </div>
+            <div id="lstep-mcp" class="launch-step" style="opacity:0.4;">
+              <span class="launch-spinner">⏳</span> Starting MCP server (tools + search)...
+            </div>
+            <div id="lstep-gateway" class="launch-step" style="opacity:0.4;">
+              <span class="launch-spinner">⏳</span> Starting Pantheon gateway...
+            </div>
+            <div id="lstep-waiting" class="launch-step" style="opacity:0.4;">
+              <span class="launch-spinner">⏳</span> Waiting for services...
+            </div>
+          </div>
+
+          <!-- Tips while waiting -->
+          <div id="launch-tips" style="margin-top:1rem;padding:0.75rem;background:#1e293b;border-radius:8px;">
+            <div style="color:#94a3b8;font-size:0.85rem;font-weight:600;margin-bottom:0.4rem;">💡 <span id="tip-label">Did you know?</span></div>
+            <div id="tip-content" style="color:#64748b;font-size:0.8rem;line-height:1.5;min-height:3em;">
+              Want to connect Telegram, Discord, or WhatsApp?<br>
+              <strong style="color:#22d3ee;">Ask Hermes!</strong> Once you meet your gods, just type:
+            </div>
+          </div>
+
+          <div id="launch-error" style="display:none;margin-top:0.75rem;padding:0.5rem 0.75rem;background:#7f1d1d;border:1px solid #b91c1c;border-radius:8px;color:#fca5a5;font-size:0.85rem;"></div>
+        </div>
+      </div>
+
+      <!-- Done state -->
+      <div id="launch-done" style="display:none;margin-top:0.75rem;">
+        <div style="background:#0f172a;border:1px solid #0d9488;border-radius:12px;padding:1.25rem;text-align:center;">
+          <div style="font-size:2rem;margin-bottom:0.5rem;">✨</div>
+          <div style="color:#6ee7b7;font-weight:600;font-size:1.1rem;">Pantheon is ready!</div>
+          <div style="color:#94a3b8;font-size:0.85rem;margin:0.5rem 0 0.75rem;">Your gods are waiting. Click below to meet them.</div>
+          <a class="btn btn-success" href="javascript:void(0)" onclick="meetPantheon()" style="font-size:1.05rem;padding:0.75rem 2rem;" id="meet-pantheon-btn">✨ Meet Pantheon</a>
+          <div id="meet-countdown" style="color:#64748b;font-size:0.75rem;margin-top:0.5rem;display:none;"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Step 5: Launch Web UI -->
-  <div class="step" id="step-webui">
+  <!-- Step 5: Connect Your Chat -->
+  <div class="step" id="step-chat">
     <div class="step-icon pending">5</div>
     <div class="step-content">
-      <div class="step-title pending">Launch the Web UI</div>
+      <div class="step-title pending">Connect Your Chat</div>
       <div class="step-desc">
-        Your gateway runs on <strong>port 8787</strong>. Open it in your browser to start chatting.
+        Pantheon can talk to you on <strong>Telegram</strong>, <strong>Discord</strong>, <strong>WhatsApp</strong>, and more.
+        No manual setup needed — just ask Hermes from the Web UI:
       </div>
-      <div class="step-actions">
-        <a class="btn btn-primary" href="http://localhost:8787" target="_blank">🚀 Open Web UI</a>
-        <a class="btn btn-secondary" href="http://localhost:8787/health" target="_blank">Check Health</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Step 6: Forge Your First God -->
-  <div class="step" id="step-forge">
-    <div class="step-icon pending">6</div>
-    <div class="step-content">
-      <div class="step-title pending">Forge Your First God</div>
-      <div class="step-desc">
-        Use the <strong>Soul Forge</strong> in the Web UI to create a custom God. Just describe who you need — a researcher, a health companion, a coding mentor. No YAML, no terminal.
+      <div style="margin-top:0.6rem;display:flex;flex-direction:column;gap:0.4rem;">
+        <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.5rem 0.75rem;font-size:0.85rem;">
+          <code style="color:#22d3ee;">"Set up Telegram for me"</code>
+          <span style="color:#64748b;margin-left:0.5rem;">→ Get notified, check in anywhere</span>
+        </div>
+        <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.5rem 0.75rem;font-size:0.85rem;">
+          <code style="color:#22d3ee;">"Connect Discord"</code>
+          <span style="color:#64748b;margin-left:0.5rem;">→ Chat with your gods in your server</span>
+        </div>
+        <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.5rem 0.75rem;font-size:0.85rem;">
+          <code style="color:#22d3ee;">"Add WhatsApp"</code>
+          <span style="color:#64748b;margin-left:0.5rem;">→ From anything, ask anything</span>
+        </div>
       </div>
     </div>
   </div>
@@ -525,6 +658,40 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Check .env status on load
   checkEnvStatus();
+
+  // ── Embedding provider selection handler ──
+  const embedSelect = document.getElementById('embed-provider-select');
+  if (embedSelect) {
+    embedSelect.addEventListener('change', function() {
+      const val = this.value;
+      document.querySelectorAll('#embed-key-group .key-helpers').forEach(el => el.style.display = 'none');
+
+      if (!val) {
+        document.getElementById('embed-key-group').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('embed-key-group').style.display = 'block';
+      document.getElementById('embed-key-input').value = '';
+      document.getElementById('embed-key-input').focus();
+
+      // Show the helper for the selected provider
+      const helper = document.getElementById('embed-helper-' + val);
+      if (helper) helper.style.display = 'block';
+
+      // If Ollama, check status
+      if (val === 'ollama') checkOllamaStatus();
+
+      // Update hint based on provider
+      const hints = {
+        'openrouter': 'Paste your sk-or-v1- key (or same key as your primary provider)',
+        'ollama':    'Type any value (e.g. "local") — Ollama doesn\'t use API keys',
+        'jina':      'Paste your jina_ key from jina.ai',
+        'voyage':    'Paste your pa- key from dash.voyageai.com',
+      };
+      document.getElementById('embed-key-hint').textContent = hints[val] || '';
+    });
+  }
 });
 
 // ── Save API key ──
@@ -567,6 +734,284 @@ function saveApiKey() {
   });
 }
 
+// ── Save Embedding Key ──
+function saveEmbedKey() {
+  const provider = document.getElementById('embed-provider-select').value;
+  const apiKey = document.getElementById('embed-key-input').value.trim();
+  const status = document.getElementById('embed-status');
+
+  if (!provider) {
+    showEmbedStatus('error', 'Please select an embedding provider first.');
+    return;
+  }
+
+  if (!apiKey && provider !== 'ollama') {
+    showEmbedStatus('error', 'Please paste your API key.');
+    return;
+  }
+
+  showEmbedStatus('saving', 'Saving embedding configuration...');
+
+  fetch(SETUP_API + '/api/env/embed-key', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: provider, api_key: apiKey || 'ollama' }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.status === 'ok') {
+      showEmbedStatus('success', '✅ ' + data.message);
+      document.getElementById('embed-key-input').value = '';
+      document.getElementById('embed-provider-select').value = '';
+      document.getElementById('embed-key-group').style.display = 'none';
+      checkEnvStatus();
+    } else {
+      showEmbedStatus('error', '❌ ' + (data.error || 'Failed to save'));
+    }
+  })
+  .catch(err => {
+    showEmbedStatus('error', '❌ Setup server not reachable');
+  });
+}
+
+// ── Check Ollama status ──
+function checkOllamaStatus() {
+  const el = document.getElementById('ollama-status');
+  el.innerHTML = '<span style="color:#64748b;">Checking...</span>';
+
+  fetch(SETUP_API + '/api/env/ollama-status')
+    .then(r => r.json())
+    .then(data => {
+      const o = data.ollama || {};
+      if (o.installed && o.running) {
+        const models = (o.embed_models || []).join(', ') || 'none found';
+        el.innerHTML = '<span style="color:#6ee7b7;">✓ Ollama ' + o.version + ' running</span>' +
+          '<br><span style="color:#94a3b8;font-size:0.8rem;">Embed models pulled: ' + models + '</span>';
+      } else if (o.installed) {
+        el.innerHTML = '<span style="color:#fbbf24;">⚠ Ollama installed but not running</span>' +
+          '<br><span style="color:#94a3b8;font-size:0.8rem;">Run: <code style="background:#1e293b;padding:1px 6px;border-radius:4px;">ollama serve</code></span>';
+      } else {
+        el.innerHTML = '<span style="color:#fca5a5;">✗ Ollama not installed</span>' +
+          '<br><a href="https://ollama.com/download" target="_blank" style="color:#22d3ee;font-size:0.8rem;">Download Ollama →</a>' +
+          '<br><span style="color:#94a3b8;font-size:0.8rem;">Then run: <code style="background:#1e293b;padding:1px 6px;border-radius:4px;">ollama pull nomic-embed-text</code></span>';
+      }
+    })
+    .catch(() => {
+      el.innerHTML = '<span style="color:#64748b;">Could not check — setup server unreachable</span>';
+    });
+}
+
+// ── Embedding status display ──
+function showEmbedStatus(type, msg) {
+  const el = document.getElementById('embed-status');
+  el.style.display = 'block';
+
+  const colors = {
+    success: { bg: '#065f46', border: '#0d9488', text: '#6ee7b7' },
+    error: { bg: '#7f1d1d', border: '#b91c1c', text: '#fca5a5' },
+    saving: { bg: '#0e7490', border: '#0891b2', text: '#22d3ee' },
+  };
+
+  const c = colors[type] || colors.saving;
+  el.style.background = c.bg;
+  el.style.border = '1px solid ' + c.border;
+  el.style.color = c.text;
+  el.style.padding = '0.5rem 0.75rem';
+  el.style.borderRadius = '8px';
+  el.textContent = msg;
+
+  if (type === 'success') {
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+  }
+}
+
+// ── Launch Pantheon ──
+let launchPollTimer = null;
+let tipTimer = null;
+
+const LAUNCH_TIPS = [
+  {
+    label: 'Connect your chat',
+    html: 'Want <strong>Telegram</strong>, <strong>Discord</strong>, or <strong>WhatsApp</strong>?<br>Just tell Hermes: <code style="background:#0f172a;padding:1px 6px;border-radius:4px;">"Set up Telegram for me"</code>',
+  },
+  {
+    label: 'Forge a new god',
+    html: 'Need a researcher, a health coach, or a coding mentor?<br>Use the <strong>Soul Forge</strong> in the Web UI to create custom gods.',
+  },
+  {
+    label: 'Your data stays yours',
+    html: 'Pantheon runs entirely on your machine.<br>No SaaS, no data harvesting — you own every byte.',
+  },
+  {
+    label: 'Ask anything',
+    html: 'Pantheon remembers everything you tell it.<br>Ask your gods about past conversations, projects, or ideas.',
+  },
+  {
+    label: 'Extend with skills',
+    html: 'Pantheon has built-in skills for web search, email, GitHub, and more.<br>Ask Hermes what skills are available.',
+  },
+  {
+    label: 'Open source',
+    html: 'Pantheon is AGPL-licensed and community-driven.<br><a href="https://github.com/Duskript/Pantheon" target="_blank" style="color:#22d3ee;">Star us on GitHub →</a>',
+  },
+];
+
+function startTipRotation() {
+  if (tipTimer) clearInterval(tipTimer);
+  showRandomTip();
+  tipTimer = setInterval(showRandomTip, 8000);
+}
+
+function showRandomTip() {
+  const tip = LAUNCH_TIPS[Math.floor(Math.random() * LAUNCH_TIPS.length)];
+  const labelEl = document.getElementById('tip-label');
+  const contentEl = document.getElementById('tip-content');
+  if (labelEl) labelEl.textContent = tip.label;
+  if (contentEl) contentEl.innerHTML = tip.html;
+}
+
+function stopTipRotation() {
+  if (tipTimer) {
+    clearInterval(tipTimer);
+    tipTimer = null;
+  }
+}
+
+function launchPantheon() {
+  document.getElementById('launch-ready').style.display = 'none';
+  document.getElementById('launch-progress').style.display = 'block';
+  document.getElementById('launch-done').style.display = 'none';
+  document.getElementById('launch-title').className = 'step-title current';
+  document.getElementById('launch-title').textContent = 'Launching Pantheon...';
+  document.getElementById('launch-desc').textContent = 'Sit tight — this takes a moment.';
+  document.getElementById('launch-icon').className = 'step-icon current';
+  document.getElementById('launch-icon').textContent = '⟳';
+
+  // Start cycling tips while they wait
+  startTipRotation();
+
+  fetch(SETUP_API + '/api/launch', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'launching' || data.status === 'already_launching') {
+        pollLaunchStatus();
+      }
+    })
+    .catch(() => {
+      showLaunchError('Could not reach setup server. Make sure the installer is running.');
+    });
+}
+
+function pollLaunchStatus() {
+  if (launchPollTimer) clearTimeout(launchPollTimer);
+
+  fetch(SETUP_API + '/api/launch/status')
+    .then(r => r.json())
+    .then(data => {
+      const step = data.step || 'error';
+
+      // Update step indicators
+      const stepOrder = ['installing', 'athenaeum', 'mcp', 'gateway', 'waiting'];
+      const stepMap = {
+        'installing_gods': 'installing',
+        'installing': 'installing',
+        'initializing_athenaeum': 'athenaeum',
+        'starting_mcp': 'mcp',
+        'mcp': 'mcp',
+        'starting_gateway': 'gateway',
+        'gateway': 'gateway',
+        'waiting': 'waiting',
+      };
+      const currentStep = stepMap[step] || null;
+      let activeFound = false;
+      for (const s of stepOrder) {
+        const el = document.getElementById('lstep-' + s);
+        if (!el) continue;
+        if (s === currentStep && !activeFound) {
+          el.className = 'launch-step active';
+          el.querySelector('.launch-spinner').textContent = '⏳';
+          activeFound = true;
+        } else if (activeFound || step === 'done') {
+          el.className = 'launch-step done';
+          el.querySelector('.launch-spinner').textContent = '✅';
+        } else {
+          el.className = 'launch-step done';
+          el.querySelector('.launch-spinner').textContent = '✅';
+        }
+      }
+
+      if (step === 'done') {
+        onLaunchComplete();
+      } else if (step === 'error') {
+        showLaunchError(data.message || 'Launch failed');
+      } else {
+        // Poll again in 2s
+        launchPollTimer = setTimeout(pollLaunchStatus, 2000);
+      }
+    })
+    .catch(() => {
+      launchPollTimer = setTimeout(pollLaunchStatus, 3000);
+    });
+}
+
+function onLaunchComplete() {
+  if (launchPollTimer) clearTimeout(launchPollTimer);
+
+  document.getElementById('launch-progress').style.display = 'none';
+  document.getElementById('launch-done').style.display = 'block';
+  document.getElementById('launch-title').className = 'step-title done';
+  document.getElementById('launch-title').textContent = 'Pantheon Ready';
+  document.getElementById('launch-desc').innerHTML =
+    'Everything is live. Click <strong>Meet Pantheon</strong> to start.';
+  document.getElementById('launch-icon').className = 'step-icon done';
+  document.getElementById('launch-icon').textContent = '✓';
+
+  // Keep tips cycling — they're still visible
+}
+
+// ── Meet Pantheon — opens Web UI, auto-closes wizard after 30s ──
+function meetPantheon() {
+  // Open Web UI in new tab
+  window.open('http://localhost:8787', '_blank');
+
+  // Disable button to prevent double-click
+  const btn = document.getElementById('meet-pantheon-btn');
+  if (btn) {
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'default';
+    btn.onclick = null;
+    btn.textContent = '✨ See you there!';
+  }
+
+  // Show countdown
+  const cd = document.getElementById('meet-countdown');
+  cd.style.display = 'block';
+
+  let count = 30;
+  cd.textContent = 'Closing setup in ' + count + 's...';
+  const countInterval = setInterval(() => {
+    count--;
+    if (count <= 0) {
+      clearInterval(countInterval);
+      cd.textContent = 'Closing...';
+      // Try to close this tab
+      window.close();
+    } else {
+      cd.textContent = 'Closing setup in ' + count + 's...';
+    }
+  }, 1000);
+}
+
+function showLaunchError(msg) {
+  const el = document.getElementById('launch-error');
+  el.textContent = '❌ ' + msg;
+  el.style.display = 'block';
+  document.getElementById('launch-title').textContent = 'Launch Failed';
+  document.getElementById('launch-icon').textContent = '!';
+  document.getElementById('launch-icon').style.color = '#fca5a5';
+  document.getElementById('launch-icon').style.background = '#7f1d1d';
+}
+
 // ── Check .env status ──
 function checkEnvStatus() {
   const el = document.getElementById('env-status');
@@ -577,7 +1022,52 @@ function checkEnvStatus() {
     .then(data => {
       const keys = data.configured || {};
       const count = Object.keys(keys).length;
+      const embed = data.embedding || {};
 
+      // Update embedding status
+      const embedStatus = document.getElementById('embed-status');
+      const embedBadge = document.getElementById('embed-required-badge');
+      if (embed.configured) {
+        if (embedBadge) {
+          embedBadge.textContent = '✅ DONE';
+          embedBadge.style.color = '#6ee7b7';
+          embedBadge.style.background = '#065f46';
+        }
+        embedStatus.style.display = 'block';
+        embedStatus.style.background = '#065f46';
+        embedStatus.style.border = '1px solid #0d9488';
+        embedStatus.style.color = '#6ee7b7';
+        embedStatus.style.padding = '0.5rem 0.75rem';
+        embedStatus.style.borderRadius = '8px';
+        embedStatus.innerHTML = '✅ Embeddings configured' +
+          (embed.provider ? ' via <strong>' + embed.provider + '</strong>' : '');
+      } else {
+        if (embedBadge) {
+          embedBadge.textContent = 'REQUIRED';
+          embedBadge.style.color = '#fbbf24';
+          embedBadge.style.background = '#1e293b';
+        }
+        embedStatus.style.display = 'block';
+        embedStatus.style.background = '#7f1d1d';
+        embedStatus.style.border = '1px solid #b91c1c';
+        embedStatus.style.color = '#fca5a5';
+        embedStatus.style.padding = '0.5rem 0.75rem';
+        embedStatus.style.borderRadius = '8px';
+        embedStatus.innerHTML = '⚠️ No embedding provider configured — vector search will not work';
+      }
+
+      // Activate Launch step when both providers are configured
+      const launchReady = document.getElementById('launch-ready');
+      if (launchReady && !document.getElementById('launch-done').style.display === 'block') {
+        const hasPrimary = count > 0;
+        const hasEmbed = embed.configured;
+        if (hasPrimary && hasEmbed) {
+          launchReady.style.display = 'block';
+          document.getElementById('step-launch').style.opacity = '1';
+        }
+      }
+
+      // For primary provider status
       if (count > 0) {
         const list = Object.entries(keys)
           .map(([k, v]) => {

@@ -206,7 +206,7 @@ lsof -ti :8010 | xargs kill -9
 AionUi auto-detects `hermes` on PATH. Make sure:
 ```bash
 which hermes
-# → /home/konan/.local/bin/hermes
+# → ~/.local/bin/hermes
 # If not, logout/login or source ~/.bashrc
 ```
 

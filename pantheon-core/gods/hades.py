@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-_REAL_HOME = os.path.expanduser("~konan")
+_REAL_HOME = os.path.expanduser("~")
 ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 GRAPH_DB = Path(f"{_REAL_HOME}/.hermes/pantheon/graph.db")
@@ -821,7 +821,7 @@ def run_hades() -> HadesReport:
         # Phase 4: Entity extraction from Athenaeum files
         logger.info("Hades: Running entity extraction...")
         try:
-            _REAL_HOME = os.path.expanduser("~konan")
+            _REAL_HOME = os.path.expanduser("~")
             extract_script = os.path.join(_REAL_HOME, "athenaeum", "scripts", "extract-entities.py")
             if os.path.exists(extract_script):
                 import subprocess, sys

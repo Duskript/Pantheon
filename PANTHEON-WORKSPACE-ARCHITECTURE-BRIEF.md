@@ -280,7 +280,7 @@ Use this for:
 - Pantheon-specific system knowledge
 
 ### Frontend service file currently present
-`/home/konan/.config/systemd/user/pantheon-workspace.service`
+`~/.config/systemd/user/pantheon-workspace.service`
 contains:
 - `HERMES_API_URL=http://127.0.0.1:8642`
 - `CLAUDE_DASHBOARD_URL=http://127.0.0.1:8020`

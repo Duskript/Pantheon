@@ -18,7 +18,7 @@ from .ingest import IngestResult, ingest_file, load_rules
 
 logger = logging.getLogger(__name__)
 
-_REAL_HOME = os.path.expanduser("~konan")
+_REAL_HOME = os.path.expanduser("~")
 
 _DEFAULT_INBOX = os.environ.get(
     "ATHENAEUM_INBOX",

@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 logger = logging.getLogger(__name__)
 
 # Default database path
-_REAL_HOME = os.path.expanduser("~konan")
+_REAL_HOME = os.path.expanduser("~")
 _DEFAULT_DB_PATH = f"{_REAL_HOME}/.hermes/pantheon/graph.db"
 
 # Node types — extended with Thoth-style entity types

@@ -122,20 +122,39 @@ if [ -f ".env" ]; then
   warn "Edit ~/pantheon/.env to add or update API keys"
 else
   info "Creating .env from .env.example..."
-  cp .env.example .env 2>/dev/null || cat > .env << 'ENVEOF'
+  if [ -f ".env.example" ]; then
+    cp .env.example .env
+    warn "Edit ~/pantheon/.env to add API keys"
+  else
+    cat > .env << 'ENVEOF'
 # Pantheon Environment Configuration
-# Copy your API keys below. At minimum, set one LLM provider.
+# =============================================================================
+# At minimum, you need ONE primary LLM provider + ONE embedding provider.
+# Quick start: set both OPENCODE_GO_API_KEY and OPENROUTER_API_KEY below.
+# =============================================================================
 
-# Recommended starter: OpenCode Go ($10/month, multiple open models)
-# Get key at: https://opencode.ai/auth
-# OPENCODE_GO_API_KEY=put_your_key_here
+# ── Primary LLM Provider (pick one) ──────────────────────────────────────────
 
-# Alternative: OpenRouter (pay-as-you-go, 200+ models)
-# Get key at: https://openrouter.ai/keys
+# 🟢 OpenCode Go — $10/mo flat, multiple open models
+# Get key: https://opencode.ai/auth
+# OPENCODE_GO_API_KEY=sk-put_your_key_here
+
+# 🟡 OpenRouter — pay-as-you-go, 200+ models including free ones
+# Get key: https://openrouter.ai/keys
 # OPENROUTER_API_KEY=sk-or-v1-put_your_key_here
 
-# Or use local models with Ollama:
-# OLLAMA_API_KEY=ollama  # Any value works — Ollama runs locally
+# 🟣 Ollama (local) — free, offline
+# OLLAMA_API_KEY=ollama  # Any value works — Ollama ignores it
+
+# ── Embedding Provider ───────────────────────────────────────────────────────
+# Required for vector search. OpenCode Go doesn't provide embeddings.
+# Set OPENROUTER_API_KEY above and it'll be used automatically for embeddings.
+
+# Alternative (local, offline): Ollama + nomic-embed-text
+# ATHENAEUM_EMBED_PROVIDER=ollama
+# ATHENAEUM_EMBED_API_KEY=ollama
+# ATHENAEUM_EMBED_MODEL=nomic-embed-text
+# ATHENAEUM_EMBED_URL=http://localhost:11434/api/embeddings
 ENVEOF
   ok ".env created — you'll need to add API keys"
   warn "Edit ~/pantheon/.env and add at least one API key"

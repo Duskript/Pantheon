@@ -18,7 +18,7 @@ from pathlib import Path
 # Ensure the Pantheon plugin package is importable
 # Use REAL home path (Hermes overrides Path.home())
 import os as _os
-_REAL_HOME = _os.path.expanduser("~konan")
+_REAL_HOME = _os.path.expanduser("~")
 sys.path.insert(0, _REAL_HOME + "/.hermes/profiles/hephaestus")
 
 # Load profile-level .env so the CLI has access to API keys

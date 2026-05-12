@@ -50,8 +50,9 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_DEFAULT_ATHENAEUM_ROOT = "/home/konan/athenaeum"
-_DEFAULT_CHROMA_DIR = "/home/konan/.hermes/pantheon/chroma"
+import os as _os
+_DEFAULT_ATHENAEUM_ROOT = _os.path.expanduser("~/athenaeum")
+_DEFAULT_CHROMA_DIR = _os.path.expanduser("~/.hermes/pantheon/chroma")
 _DEFAULT_VAULT_CODEX = "Codex-Forge"  # where Hermes sessions log by default
 _DEFAULT_EMBED_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
 _DEFAULT_OLLAMA_HOST = "http://localhost:11434"
@@ -99,8 +100,8 @@ def _load_config(hermes_home: str) -> dict:
             try:
                 p = Path(raw)
                 if "~" in raw:
-                    # Manual ~ expansion using konan's actual home
-                    p = Path("/home/konan") / raw.lstrip("~/")
+                    # Manual ~ expansion
+                    p = Path.home() / raw.lstrip(" ~/")
                 config[key] = str(p.resolve())
             except Exception:
                 pass

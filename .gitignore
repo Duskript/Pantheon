@@ -10,7 +10,8 @@ Staging/
 
 # Environment and secrets
 .env
-*.env
+.env.local
+.env.production
 secrets/
 
 # Local config overrides
@@ -46,6 +47,19 @@ scripts/pantheon-export
 
 # Personal content
 canvas-and-the-world-fell-away.md
+
+# Large binary assets (use SVG + HTML instead)
+pantheon-logo.png
+pantheon-architecture.png
+
+# Instance-specific planning docs
+planning/STATE.md
+planning/MIGRATION.md
+planning/agent-zero-fork/
+
+# Personal debug tools
+scripts/spot-fix-embed.py
+scripts/reembed.sh
 
 # Installed god packages — managed by God SDK
 .pantheon/
