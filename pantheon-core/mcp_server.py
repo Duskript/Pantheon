@@ -61,7 +61,7 @@ class _Embedder:
     """Thin embedding wrapper — OpenRouter first, Ollama fallback."""
 
     def __init__(self):
-        self._api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        self._api_key = os.environ.get("ATHENAEUM_EMBED_API_KEY", "") or os.environ.get("OPENROUTER_API_KEY", "")
         self._model = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
         self._timeout = 30.0
 
@@ -192,7 +192,7 @@ Codices (Codex-Forge, Codex-Pantheon, Codex-Infrastructure, etc.).
 # ═══════════════════════════════════════════════════════════════════════════
 
 @mcp.tool(
-    description="Semantic search across the Athenaeum. Finds relevant content by meaning, not keywords. Returns content, source, and Codex for each result.",
+    description="[FALLBACK] Semantic vector search across the Athenaeum. USE THIS ONLY AFTER trying athenaeum_graph_search first — it's slower and uses API credits. Finds relevant content by meaning, not keywords. Returns content, source, Codex, and relevance score for each result.",
 )
 def athenaeum_search(
     query: str,
@@ -951,7 +951,7 @@ def skill_run(
 
 
 @mcp.tool(
-    description="Search the Athenaeum knowledge graph for entities, relationships, and paths. Finds entities by name/type, explores neighbor relationships, and discovers paths between entities. Returns structured JSON.",
+    description="[PRIMARY] Search the Athenaeum knowledge graph for entities, relationships, and paths. THIS IS THE PREFERRED SEARCH METHOD — it's instant, structured, and zero-cost. Finds entities by name/type, explores neighbor relationships, and discovers paths between entities. Use this FIRST before falling back to semantic search. Returns structured JSON.",
 )
 def athenaeum_graph_search(
     query: str = "",
