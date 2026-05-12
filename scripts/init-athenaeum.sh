@@ -301,11 +301,28 @@ Files are auto-detected and embedded into the vector store on change.
 SUB
 done
 
+# --- Project Ideas (scaffold blank for new users) -----------------------------
+echo "==> Project Ideas"
+PROJECT_IDEAS_REAL="$PREFIX/project-ideas.md"
+PROJECT_IDEAS_EXAMPLE="$PREFIX/project-ideas.example.md"
+
+if [ -f "$PROJECT_IDEAS_REAL" ]; then
+    echo "  EXISTS $PROJECT_IDEAS_REAL"
+else
+    if [ -f "$PROJECT_IDEAS_EXAMPLE" ]; then
+        cp "$PROJECT_IDEAS_EXAMPLE" "$PROJECT_IDEAS_REAL"
+        echo "  CREATE $PROJECT_IDEAS_REAL (from example template)"
+    else
+        echo "  SKIP  no example template found at $PROJECT_IDEAS_EXAMPLE"
+    fi
+fi
+
 # --- Summary -----------------------------------------------------------------
 echo ""
 echo "============================================"
 echo " Athenaeum initialized at: $ATHENAEUM"
 echo " Staging initialized at:   $STAGING"
+echo " Project ideas:            $PROJECT_IDEAS_REAL"
 echo " INDEX files:              $(find "$ATHENAEUM" -name INDEX.md | wc -l)"
 echo "============================================"
 echo ""
