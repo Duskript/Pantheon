@@ -176,10 +176,28 @@ else
   fi
 fi
 
+# ── Step 6: Start Setup Server ──────────────────────────────────────────────
+header "Setup Server"
+
+# Kill any previous setup server
+pkill -f "setup-server.py" 2>/dev/null || true
+sleep 0.5
+
+# Start the setup server (serves welcome page + API for .env writes)
+python3 scripts/setup-server.py &
+SETUP_PID=$!
+sleep 1
+
+if kill -0 "$SETUP_PID" 2>/dev/null; then
+  ok "Setup server running (PID: $SETUP_PID) on http://localhost:9876"
+else
+  warn "Setup server may not have started — check scripts/setup-server.py"
+fi
+
 # ── Step 7: Open Welcome Wizard ─────────────────────────────────────────────
 header "Welcome"
 
-WELCOME_URL="file://${PANTHEON_DIR}/welcome.html"
+WELCOME_URL="http://localhost:9876/welcome.html"
 WEBUI_URL="http://localhost:8787"
 
 info "Opening Welcome Wizard..."
