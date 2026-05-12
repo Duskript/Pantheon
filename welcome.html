@@ -34,6 +34,11 @@
       height: 58px;
       border-radius: 14px;
     }
+    header .logo-wrap h1 {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     header h1 {
       font-size: 2rem;
       font-weight: 700;
@@ -42,6 +47,20 @@
       -webkit-text-fill-color: transparent;
       background-clip: text;
       letter-spacing: -0.025em;
+    }
+    .beta-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #0f172a;
+      -webkit-text-fill-color: #0f172a;
+      vertical-align: middle;
+      line-height: 1;
     }
     header p {
       color: #94a3b8;
@@ -198,10 +217,10 @@
 <body>
 
 <header>
-  <div class="logo-wrap">
-    <img src="pantheon-logo.png" alt="Pantheon">
-    <h1>Pantheon</h1>
-  </div>
+    <div class="logo-wrap">
+      <img src="pantheon-logo.png" alt="Pantheon" onerror="this.style.display='none'">
+      <h1>Pantheon <span class="beta-badge">Beta</span></h1>
+    </div>
   <p>Your private AI operating system is almost ready</p>
 </header>
 
@@ -223,6 +242,7 @@
       <div style="color:#94a3b8;font-size:0.9rem;line-height:1.6;max-width:450px;margin:0 auto;">
         Your private AI operating system. Your gods run on your machine, your data stays yours.
       </div>
+      <div style="margin-top:0.5rem;font-size:0.75rem;color:#f59e0b;font-weight:600;letter-spacing:0.04em;">🛠️ Setup Wizard — Beta — things may shift as we polish the experience</div>
     </div>
 
     <div style="margin-top:1rem;display:flex;flex-direction:column;gap:0.6rem;">
