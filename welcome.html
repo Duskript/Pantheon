@@ -291,6 +291,7 @@
             <option value="opencode-go">🟢 OpenCode Go — $10/mo flat, open models</option>
             <option value="openrouter">🟡 OpenRouter — pay-as-you-go, 200+ models</option>
             <option value="ollama">🟣 Ollama — free, local, offline</option>
+            <option value="ollama-cloud">🔵 Ollama Cloud — cloud-hosted open models</option>
           </select>
         </div>
 
@@ -331,6 +332,15 @@
               <li>No API key needed — just click Save with any value</li>
             </ol>
           </div>
+          <div id="helper-ollama-cloud" class="key-helpers" style="display:none;margin-top:0.5rem;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.8rem;color:#94a3b8;">
+            <strong style="color:#60a5fa;">Using Ollama Cloud (hosted open models):</strong>
+            <ol style="margin:0.4rem 0 0 1.2rem;padding:0;line-height:1.6;">
+              <li>Go to <a href="https://ollama.com/settings" target="_blank" style="color:#22d3ee;">ollama.com/settings</a></li>
+              <li>Sign in with GitHub or Google</li>
+              <li>Copy your API key from the settings page</li>
+              <li>Paste it into <code>.env</code> next to <code>OLLAMA_API_KEY=</code></li>
+            </ol>
+          </div>
         </div>
 
         <!-- Status messages -->
@@ -342,6 +352,39 @@
         <a class="btn btn-primary" href="https://opencode.ai/auth" target="_blank">🔑 Get OpenCode Go Key</a>
         <a class="btn btn-secondary" href="https://openrouter.ai/keys" target="_blank">🔑 Get OpenRouter Key</a>
       </div>
+
+      <!-- Full provider reference -->
+      <details style="margin-top:1rem;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:0.6rem 0.8rem;">
+        <summary style="cursor:pointer;font-weight:600;color:#94a3b8;font-size:0.85rem;">📋 All supported providers — 15+ options</summary>
+        <div style="margin-top:0.5rem;overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+            <tr style="border-bottom:1px solid #1e293b;">
+              <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Provider</th>
+              <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Env Variable</th>
+              <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Get Key</th>
+              <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Cost</th>
+            </tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#6ee7b7;font-weight:600;">OpenCode Go</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OPENCODE_GO_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://opencode.ai/auth" target="_blank" style="color:#22d3ee;">opencode.ai/auth</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">$10/mo flat</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#fbbf24;font-weight:600;">OpenRouter</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OPENROUTER_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://openrouter.ai/keys" target="_blank" style="color:#22d3ee;">openrouter.ai/keys</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#a78bfa;font-weight:600;">Ollama (local)</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OLLAMA_API_KEY</code></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">None needed</td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Free</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#60a5fa;font-weight:600;">Ollama Cloud</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OLLAMA_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://ollama.com/settings" target="_blank" style="color:#22d3ee;">ollama.com/settings</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Free tier + usage</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">OpenAI</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OPENAI_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://platform.openai.com/api-keys" target="_blank" style="color:#22d3ee;">platform.openai.com</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Anthropic</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">ANTHROPIC_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://console.anthropic.com/" target="_blank" style="color:#22d3ee;">console.anthropic.com</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Google Gemini</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">GOOGLE_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#22d3ee;">aistudio.google.com</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Free tier available</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">DeepSeek</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">DEEPSEEK_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://platform.deepseek.com/" target="_blank" style="color:#22d3ee;">platform.deepseek.com</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Very cheap</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Groq</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">GROQ_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://console.groq.com/keys" target="_blank" style="color:#22d3ee;">console.groq.com</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Free tier</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Hugging Face</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">HF_TOKEN</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://huggingface.co/settings/tokens" target="_blank" style="color:#22d3ee;">huggingface.co/settings</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Free + usage</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">OpenCode Zen</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OPENCODE_ZEN_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://opencode.ai/auth" target="_blank" style="color:#22d3ee;">opencode.ai/auth</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-as-you-go</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Kimi / Moonshot</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">KIMI_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://platform.kimi.ai" target="_blank" style="color:#22d3ee;">platform.kimi.ai</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">MiniMax</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">MINIMAX_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://minimax.io" target="_blank" style="color:#22d3ee;">minimax.io</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
+            <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">z.ai (GLM)</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">GLM_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://z.ai" target="_blank" style="color:#22d3ee;">z.ai</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
+            <tr><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Qwen</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OAuth</code></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">CLI login</td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Free</td></tr>
+          </table>
+        </div>
+        <p style="margin-top:0.5rem;color:#64748b;font-size:0.75rem;">
+          The setup server only supports the four featured providers above. For other providers, add the env var manually in <code style="background:#1e293b;padding:1px 5px;border-radius:3px;">~/pantheon/.env</code>.
+        </p>
+      </details>
     </div>
   </div>
 
@@ -449,6 +492,10 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'ollama':
         label.textContent = '🖥️ Ollama (local)';
         hint.textContent = 'No key needed — enter any value (e.g. "local") and Save';
+        break;
+      case 'ollama-cloud':
+        label.textContent = '🔵 Ollama Cloud API Key';
+        hint.textContent = 'Paste your key from ollama.com/settings';
         break;
     }
   });
