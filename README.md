@@ -258,9 +258,9 @@ The installer:
 3. Creates a starter `.env` for your API keys
 4. Installs core Gods (Hermes + Hephaestus)
 5. Starts the gateway
-6. Opens the **Welcome Wizard** in your browser
+6. Opens the **Welcome Wizard** 🛠️ Beta in your browser
 
-From there, the Wizard walks you through adding API keys and forging your first God.
+From there, the Wizard walks you through adding API keys and connecting your first provider. Note: the setup wizard is in **Beta** — it covers the core flow, but you might hit rough edges as we polish it.
 
 ### Manual Setup
 
@@ -300,6 +300,8 @@ That's it. No SaaS signup. No credit card. No data leaving your machine.
 ## Project Status
 
 Pantheon is actively used and maintained by its creator. The core architecture is stable — background Gods run 24/7, the knowledge base grows with every conversation, and the Web UI is fully integrated.
+
+The **setup wizard** is in 🛠️ **Beta** — the install and configuration flow works, but we're still polishing the first-run experience. If you hit a snag, [open an issue](https://github.com/Duskript/Pantheon/issues) or ping us on Reddit.
 
 This is a personal project first — built because existing AI assistants didn't work the way one person needed them to. Every design decision flows from that: no SaaS, no data harvesting, no prompts to engineer. Just a system that adapts to you.
 
