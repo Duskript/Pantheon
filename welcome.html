@@ -214,6 +214,34 @@
       header h1 { font-size: 1.6rem; }
       .step { padding: 1rem; }
     }
+
+    /* ── Provider wizard steps ── */
+    .wizard-step {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      font-size: 0.875rem;
+      color: #cbd5e1;
+    }
+    .wiz-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #1e293b;
+      color: #22d3ee;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    details.provider-detail summary::-webkit-details-marker {
+      color: #475569;
+    }
+    details.provider-detail[open] summary {
+      padding-bottom: 0.25rem;
+    }
   </style>
 </head>
 <body>
@@ -249,43 +277,112 @@
     <div class="step-content">
       <div class="step-title current">API Keys</div>
       <div class="step-desc">
-        Pantheon needs at least one LLM provider key to run. Here are the best options:
+        Pantheon needs at least one LLM provider key. The two best starters are below — pick one.
       </div>
 
-      <table style="width:100%;margin-top:0.75rem;border-collapse:collapse;font-size:0.85rem;">
-        <tr style="border-bottom:1px solid #1e293b;">
-          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Provider</th>
-          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Price</th>
-          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Models</th>
-          <th style="text-align:left;padding:0.4rem 0.5rem;color:#94a3b8;">Why</th>
-        </tr>
-        <tr style="border-bottom:1px solid #1e293b;">
-          <td style="padding:0.5rem;font-weight:600;color:#6ee7b7;">OpenCode Go</td>
-          <td style="padding:0.5rem;color:#e2e8f0;">$10/mo flat</td>
-          <td style="padding:0.5rem;color:#94a3b8;">Open + curated</td>
-          <td style="padding:0.5rem;color:#94a3b8;">Best value for daily use</td>
-        </tr>
-        <tr style="border-bottom:1px solid #1e293b;">
-          <td style="padding:0.5rem;font-weight:600;color:#fbbf24;">OpenRouter</td>
-          <td style="padding:0.5rem;color:#e2e8f0;">Pay-as-you-go</td>
-          <td style="padding:0.5rem;color:#94a3b8;">200+ models</td>
-          <td style="padding:0.5rem;color:#94a3b8;">Biggest selection, all majors</td>
-        </tr>
-        <tr>
-          <td style="padding:0.5rem;font-weight:600;color:#a78bfa;">Ollama</td>
-          <td style="padding:0.5rem;color:#e2e8f0;">Free</td>
-          <td style="padding:0.5rem;color:#94a3b8;">Local models</td>
-          <td style="padding:0.5rem;color:#94a3b8;">100% offline, runs on your GPU</td>
-        </tr>
-      </table>
+      <!-- OpenCode Go -->
+      <details class="provider-detail" style="margin-top:1rem;">
+        <summary style="cursor:pointer;font-weight:600;color:#6ee7b7;font-size:0.95rem;padding:0.5rem 0;">
+          🟢 OpenCode Go — $10/month, open models, easiest setup
+        </summary>
+        <div style="padding:0.75rem 0 0.5rem 1rem;">
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">1</span>
+            <span>Go to <a href="https://opencode.ai/auth" target="_blank" style="color:#22d3ee;">opencode.ai/auth</a></span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">2</span>
+            <span>Sign in with GitHub or Google</span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">3</span>
+            <span>Click <strong>Create API Key</strong> — name it "Pantheon"</span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">4</span>
+            <span>Copy the key (starts with <code style="background:#1e293b;padding:1px 6px;border-radius:4px;color:#22d3ee;">sk-</code>)</span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.8rem;">
+            <span class="wiz-num">5</span>
+            <span>Paste it into <code>.env</code> next to <code>OPENCODE_GO_API_KEY=</code></span>
+          </div>
+          <div class="copy-field" style="max-width:100%;">
+            <input type="text" value="OPENCODE_GO_API_KEY=sk-paste_your_key_here" readonly id="opencode-line">
+            <button onclick="copyLine('opencode-line')">Copy Line</button>
+          </div>
+          <p style="color:#64748b;font-size:0.8rem;margin-top:0.5rem;">
+            💡 Covers: GLM-5, Kimi K2.5, MiniMax M2.5, and more. Flat $10/mo — no surprise bills.
+          </p>
+        </div>
+      </details>
 
-      <div class="step-actions">
+      <!-- OpenRouter -->
+      <details class="provider-detail" style="margin-top:0.5rem;">
+        <summary style="cursor:pointer;font-weight:600;color:#fbbf24;font-size:0.95rem;padding:0.5rem 0;">
+          🟡 OpenRouter — pay-as-you-go, 200+ models, biggest selection
+        </summary>
+        <div style="padding:0.75rem 0 0.5rem 1rem;">
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">1</span>
+            <span>Go to <a href="https://openrouter.ai/keys" target="_blank" style="color:#22d3ee;">openrouter.ai/keys</a></span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">2</span>
+            <span>Sign in with GitHub or Google</span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">3</span>
+            <span>Click <strong>Create Key</strong> — name it "Pantheon"</span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">4</span>
+            <span>Copy the key (starts with <code style="background:#1e293b;padding:1px 6px;border-radius:4px;color:#22d3ee;">sk-or-v1-</code>)</span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.8rem;">
+            <span class="wiz-num">5</span>
+            <span>Paste it into <code>.env</code> next to <code>OPENROUTER_API_KEY=</code></span>
+          </div>
+          <div class="copy-field" style="max-width:100%;">
+            <input type="text" value="OPENROUTER_API_KEY=sk-or-v1-paste_your_key_here" readonly id="openrouter-line">
+            <button onclick="copyLine('openrouter-line')">Copy Line</button>
+          </div>
+          <p style="color:#64748b;font-size:0.8rem;margin-top:0.5rem;">
+            💡 Covers: GPT-4o, Claude Sonnet 4, Gemini 3 Pro, DeepSeek R1, and 200+ more. Pay per-token.
+          </p>
+          <p style="color:#64748b;font-size:0.8rem;">
+            💰 New accounts get <strong>$1 free credit</strong> — enough to try everything.
+          </p>
+        </div>
+      </details>
+
+      <!-- Local Ollama -->
+      <details class="provider-detail" style="margin-top:0.5rem;">
+        <summary style="cursor:pointer;font-weight:600;color:#a78bfa;font-size:0.95rem;padding:0.5rem 0;">
+          🟣 Ollama — free, 100% offline, runs on your machine
+        </summary>
+        <div style="padding:0.75rem 0 0.5rem 1rem;">
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">1</span>
+            <span>Install Ollama: <a href="https://ollama.com/download" target="_blank" style="color:#22d3ee;">ollama.com/download</a></span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">2</span>
+            <span>Pull a model: <code style="background:#1e293b;padding:1px 6px;border-radius:4px;color:#22d3ee;">ollama pull llama3.3</code></span>
+          </div>
+          <div class="wizard-step" style="margin-bottom:0.6rem;">
+            <span class="wiz-num">3</span>
+            <span>No API key needed — just add to your God's config</span>
+          </div>
+        </div>
+      </details>
+
+      <div class="step-actions" style="margin-top:1rem;">
         <a class="btn btn-primary" href="https://opencode.ai/auth" target="_blank">Get OpenCode Go Key</a>
         <a class="btn btn-secondary" href="https://openrouter.ai/keys" target="_blank">Get OpenRouter Key</a>
       </div>
       <div class="copy-field">
         <input type="text" value="nano ~/pantheon/.env" readonly id="env-cmd">
-        <button onclick="copyEnv()">Copy Command</button>
+        <button onclick="copyLine('env-cmd')">Copy Command</button>
       </div>
     </div>
   </div>
@@ -299,7 +396,7 @@
         Hermes and Hephaestus are the foundation. Once you've added an API key, install them:
         <div class="copy-field" style="max-width:450px;">
           <input type="text" value="cd ~/pantheon && python3 scripts/pantheon-install ." readonly id="god-cmd">
-          <button onclick="copyGodCmd()">Copy Command</button>
+          <button onclick="copyLine('god-cmd')">Copy Command</button>
         </div>
       </div>
     </div>
@@ -350,17 +447,8 @@
 </footer>
 
 <script>
-function copyEnv() {
-  const input = document.getElementById('env-cmd');
-  input.select();
-  navigator.clipboard.writeText(input.value).then(() => {
-    const btn = input.nextElementSibling;
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = 'Copy Command', 2000);
-  });
-}
-function copyGodCmd() {
-  const input = document.getElementById('god-cmd');
+function copyLine(id) {
+  const input = document.getElementById(id);
   input.select();
   navigator.clipboard.writeText(input.value).then(() => {
     const btn = input.nextElementSibling;
