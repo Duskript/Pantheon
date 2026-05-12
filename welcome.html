@@ -288,10 +288,26 @@
           <label style="display:block;color:#94a3b8;font-size:0.85rem;font-weight:600;margin-bottom:0.4rem;">Choose a Provider</label>
           <select id="provider-select" style="width:100%;max-width:450px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.9rem;outline:none;cursor:pointer;">
             <option value="">— Select a provider —</option>
-            <option value="opencode-go">🟢 OpenCode Go — $10/mo flat, open models</option>
-            <option value="openrouter">🟡 OpenRouter — pay-as-you-go, 200+ models</option>
-            <option value="ollama">🟣 Ollama — free, local, offline</option>
-            <option value="ollama-cloud">🔵 Ollama Cloud — cloud-hosted open models</option>
+
+            <optgroup label="⭐ Featured Providers">
+              <option value="opencode-go">🟢 OpenCode Go — $10/mo flat, open models</option>
+              <option value="openrouter">🟡 OpenRouter — pay-as-you-go, 200+ models</option>
+              <option value="ollama">🟣 Ollama — free, local, offline</option>
+              <option value="ollama-cloud">🔵 Ollama Cloud — cloud-hosted open models</option>
+            </optgroup>
+
+            <optgroup label="📋 All Supported Providers">
+              <option value="anthropic">Anthropic — Claude models</option>
+              <option value="deepseek">DeepSeek — DeepSeek models</option>
+              <option value="google-gemini">Google Gemini — Gemini models</option>
+              <option value="groq">Groq — fast inference, free tier</option>
+              <option value="huggingface">Hugging Face — 20+ open models</option>
+              <option value="kimi">Kimi / Moonshot — Kimi K2.5</option>
+              <option value="minimax">MiniMax — MiniMax models</option>
+              <option value="openai">OpenAI — GPT-4o, o-series</option>
+              <option value="opencode-zen">OpenCode Zen — curated premium</option>
+              <option value="z-ai">z.ai (GLM) — GLM-5 model</option>
+            </optgroup>
           </select>
         </div>
 
@@ -378,11 +394,11 @@
             <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Kimi / Moonshot</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">KIMI_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://platform.kimi.ai" target="_blank" style="color:#22d3ee;">platform.kimi.ai</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
             <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">MiniMax</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">MINIMAX_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://minimax.io" target="_blank" style="color:#22d3ee;">minimax.io</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
             <tr style="border-bottom:1px solid #0f172a;"><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">z.ai (GLM)</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">GLM_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://z.ai" target="_blank" style="color:#22d3ee;">z.ai</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
-            <tr><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">Qwen</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">OAuth</code></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">CLI login</td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Free</td></tr>
+            <tr><td style="padding:0.4rem 0.5rem;color:#e2e8f0;">z.ai (GLM)</td><td style="padding:0.4rem 0.5rem;color:#e2e8f0;"><code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:0.75rem;">GLM_API_KEY</code></td><td style="padding:0.4rem 0.5rem;"><a href="https://z.ai" target="_blank" style="color:#22d3ee;">z.ai</a></td><td style="padding:0.4rem 0.5rem;color:#94a3b8;">Pay-per-token</td></tr>
           </table>
         </div>
         <p style="margin-top:0.5rem;color:#64748b;font-size:0.75rem;">
-          The setup server only supports the four featured providers above. For other providers, add the env var manually in <code style="background:#1e293b;padding:1px 5px;border-radius:3px;">~/pantheon/.env</code>.
+          Select any provider in the dropdown above — the form will save the key to the correct env variable.
         </p>
       </details>
     </div>
@@ -476,27 +492,34 @@ document.addEventListener('DOMContentLoaded', function() {
     input.value = '';
     input.focus();
 
-    // Show the right helper + hint
-    const helper = document.getElementById('helper-' + val);
-    if (helper) helper.style.display = 'block';
+    // Provider display names and env vars
+    const providers = {
+      'opencode-go':  { label: '🔑 OpenCode Go API Key',      hint: 'Paste your sk- key from opencode.ai/auth',               featured: true },
+      'openrouter':   { label: '🔑 OpenRouter API Key',        hint: 'Paste your sk-or-v1- key from openrouter.ai/keys',        featured: true },
+      'ollama':       { label: '🖥️ Ollama (local)',           hint: 'No key needed — enter any value (e.g. "local") and Save', featured: true },
+      'ollama-cloud': { label: '🔵 Ollama Cloud API Key',      hint: 'Paste your key from ollama.com/settings',                  featured: true },
+      'anthropic':    { label: '🔑 Anthropic API Key',         hint: 'Get at console.anthropic.com',                             featured: false },
+      'deepseek':     { label: '🔑 DeepSeek API Key',          hint: 'Get at platform.deepseek.com',                             featured: false },
+      'google-gemini':{ label: '🔑 Google Gemini API Key',     hint: 'Get at aistudio.google.com/app/apikey',                     featured: false },
+      'groq':         { label: '🔑 Groq API Key',              hint: 'Get at console.groq.com/keys',                             featured: false },
+      'huggingface':  { label: '🔑 Hugging Face Token',        hint: 'Get at huggingface.co/settings/tokens',                    featured: false },
+      'kimi':         { label: '🔑 Kimi API Key',              hint: 'Get at platform.kimi.ai',                                 featured: false },
+      'minimax':      { label: '🔑 MiniMax API Key',           hint: 'Get at minimax.io',                                       featured: false },
+      'openai':       { label: '🔑 OpenAI API Key',            hint: 'Get at platform.openai.com/api-keys',                      featured: false },
+      'opencode-zen': { label: '🔑 OpenCode Zen API Key',      hint: 'Get at opencode.ai/auth',                                 featured: false },
+      'z-ai':         { label: '🔑 z.ai (GLM) API Key',        hint: 'Get at z.ai',                                             featured: false },
+    };
 
-    switch (val) {
-      case 'opencode-go':
-        label.textContent = '🔑 OpenCode Go API Key';
-        hint.textContent = 'Paste your sk- key from opencode.ai/auth';
-        break;
-      case 'openrouter':
-        label.textContent = '🔑 OpenRouter API Key';
-        hint.textContent = 'Paste your sk-or-v1- key from openrouter.ai/keys';
-        break;
-      case 'ollama':
-        label.textContent = '🖥️ Ollama (local)';
-        hint.textContent = 'No key needed — enter any value (e.g. "local") and Save';
-        break;
-      case 'ollama-cloud':
-        label.textContent = '🔵 Ollama Cloud API Key';
-        hint.textContent = 'Paste your key from ollama.com/settings';
-        break;
+    const p = providers[val];
+    if (p) {
+      label.textContent = p.label;
+      hint.textContent = p.hint;
+
+      // Show detailed helper only for featured providers
+      if (p.featured) {
+        const helper = document.getElementById('helper-' + val);
+        if (helper) helper.style.display = 'block';
+      }
     }
   });
 

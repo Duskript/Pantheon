@@ -52,16 +52,22 @@ class SetupHandler(SimpleHTTPRequestHandler):
                 self._json(400, {"error": "provider and api_key are required"})
                 return
 
-            # Map provider names to env var names
+            # Map provider names to env var names — covers all Hermes providers
             PROVIDER_ENV_MAP = {
                 "opencode-go": "OPENCODE_GO_API_KEY",
                 "openrouter": "OPENROUTER_API_KEY",
                 "ollama": "OLLAMA_API_KEY",
                 "ollama-cloud": "OLLAMA_API_KEY",
                 "openai": "OPENAI_API_KEY",
-                "google-gemini": "GOOGLE_API_KEY",
                 "anthropic": "ANTHROPIC_API_KEY",
+                "google-gemini": "GOOGLE_API_KEY",
                 "deepseek": "DEEPSEEK_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "huggingface": "HF_TOKEN",
+                "kimi": "KIMI_API_KEY",
+                "minimax": "MINIMAX_API_KEY",
+                "opencode-zen": "OPENCODE_ZEN_API_KEY",
+                "z-ai": "GLM_API_KEY",
             }
 
             env_var = PROVIDER_ENV_MAP.get(provider)
