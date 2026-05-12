@@ -70,3 +70,6 @@ god-exports/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Personal user context — relationships, real names, private info
+user.md
