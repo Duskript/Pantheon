@@ -1,31 +1,32 @@
 gods:
-  hermes:
-    display_name: Hermes
-    role: Messenger & Interface
-    description: Your direct interface to the Pantheon. Konan talks to me, I route to the right god.
-    capabilities:
-      - chat
-      - message_relay
-      - system_interface
-    status: active
-
-  hephaestus:
-    display_name: Hephaestus
-    role: Core Builder & Tool Forger
-    description: The foundation god, bundled with Pantheon. Handles tool building, code generation, project scaffolding.
-    capabilities:
-      - tool_building
-      - code_generation
-      - project_scaffolding
-    status: active
-
   apollo:
+    capabilities:
+    - lyric_writing
+    - song_creation
+    - poetry
+    - suno_production
+    description: Lyric-writing, poetry, and song creation god. Works in your established
+      creative voice with Lyric Smith, Suno Formatter, and Stylish Style Maker.
     display_name: Apollo
     role: Creative God of Songcraft
-    description: Lyric-writing, poetry, and song creation god. Works in your established creative voice with Lyric Smith, Suno Formatter, and Stylish Style Maker.
+    status: active
+  hephaestus:
     capabilities:
-      - lyric_writing
-      - song_creation
-      - poetry
-      - suno_production
+    - tool_building
+    - code_generation
+    - project_scaffolding
+    description: The foundation god, bundled with Pantheon. Handles tool building,
+      code generation, project scaffolding.
+    display_name: Hephaestus
+    role: Core Builder & Tool Forger
+    status: active
+  hermes:
+    capabilities:
+    - chat
+    - message_relay
+    - system_interface
+    description: Your direct interface to the Pantheon. Konan talks to me, I route
+      to the right god.
+    display_name: Hermes
+    role: Messenger & Interface
     status: active
