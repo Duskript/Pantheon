@@ -90,6 +90,12 @@ class HadesReport:
             "relations_extracted": 0,
             "error": None,
         }
+        self.shared_context: Dict[str, Any] = {
+            "decisions_ingested": 0,
+            "active_archived": 0,
+            "athenaeum_entries": 0,
+            "errors": [],
+        }
         self.errors: List[str] = []
 
     def to_dict(self) -> Dict:
@@ -99,6 +105,7 @@ class HadesReport:
             "distillation": self.distillation,
             "archive": self.archive,
             "extraction": self.extraction,
+            "shared_context": self.shared_context,
             "suggestions": self.suggestions,
             "errors": self.errors,
         }
@@ -192,6 +199,23 @@ class HadesReport:
                 lines.append(f"- Relations extracted: {extr.get('relations_extracted', 0)}")
                 if extr.get("files_failed", 0) > 0:
                     lines.append(f"- ⚠️ Files failed: {extr['files_failed']}")
+
+        # Shared context sweep summary
+        sc = self.shared_context
+        if sc.get("decisions_ingested", 0) > 0 or sc.get("active_archived", 0) > 0 or sc.get("athenaeum_entries", 0) > 0:
+            lines.append("")
+            lines.append(f"## 📋 Shared Context Sweep")
+            lines.append(f"- Decisions ingested: {sc.get('decisions_ingested', 0)}")
+            lines.append(f"- Active tasks archived: {sc.get('active_archived', 0)}")
+            lines.append(f"- Athenaeum write entries noted: {sc.get('athenaeum_entries', 0)}")
+            if sc.get("errors"):
+                for e in sc["errors"]:
+                    lines.append(f"- ⚠️ {e}")
+        elif sc.get("errors"):
+            lines.append("")
+            lines.append(f"## 📋 Shared Context Sweep")
+            for e in sc["errors"]:
+                lines.append(f"- ⚠️ {e}")
 
         # Errors
         if self.errors:
@@ -694,13 +718,98 @@ def load_suggestions() -> List[Dict]:
 
 
 # ---------------------------------------------------------------------------
-# 5. Mailbox delivery — send report to Hermes
+# 6. Mailbox delivery — send report to Hermes
 # ---------------------------------------------------------------------------
 
 
-def _seq_id() -> str:
+def _msg_id() -> str:
     """Generate a unique message ID based on timestamp."""
     return datetime.now(timezone.utc).strftime("msg_%Y%m%d_%H%M%S_%f")[:26]
+
+
+# ---------------------------------------------------------------------------
+# 5. Shared Context Sweep
+# ---------------------------------------------------------------------------
+
+
+SHARED_CONTEXT_ROOT = Path(f"{_REAL_HOME}/pantheon/shared")
+SHARED_CUTOFF_HOURS = 24
+
+
+def run_shared_context_sweep() -> Dict[str, Any]:
+    """Scan ~/pantheon/shared/ for entries >24h old and consolidate them.
+
+    Decisions (>24h): Copy to Codex-Pantheon/decisions/ and remove from shared.
+    Active tasks (>24h): Move from active/ to archive/ (stale — no longer current).
+    athenaeum-writes.md: Already in Athenaeum, just count entries for the report.
+    """
+    result: Dict[str, Any] = {
+        "decisions_ingested": 0,
+        "active_archived": 0,
+        "athenaeum_entries": 0,
+        "errors": [],
+    }
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=SHARED_CUTOFF_HOURS)
+
+    if not SHARED_CONTEXT_ROOT.is_dir():
+        result["errors"].append(f"Shared context root not found: {SHARED_CONTEXT_ROOT}")
+        return result
+
+    # ── Sweep decisions/ ──────────────────────────────────────────────
+    decisions_dir = SHARED_CONTEXT_ROOT / "decisions"
+    if decisions_dir.is_dir():
+        decisions_codex = ATHENAEUM_ROOT / "Codex-Pantheon" / "decisions"
+        decisions_codex.mkdir(parents=True, exist_ok=True)
+
+        for f in sorted(decisions_dir.glob("*.md")):
+            if f.name == "INDEX.md":
+                continue
+            try:
+                mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc)
+                if mtime < cutoff:
+                    # Copy to Codex-Pantheon/decisions/
+                    dest = decisions_codex / f.name
+                    shutil.copy2(str(f), str(dest))
+                    f.unlink()
+                    result["decisions_ingested"] += 1
+                    logger.info("  → Ingested decision: %s → Codex-Pantheon/decisions/", f.name)
+            except Exception as exc:
+                result["errors"].append(f"Failed to process decision {f.name}: {exc}")
+                logger.warning("  → Decision sweep error: %s — %s", f.name, exc)
+
+    # ── Sweep active/ ─────────────────────────────────────────────────
+    active_dir = SHARED_CONTEXT_ROOT / "active"
+    archive_dir = SHARED_CONTEXT_ROOT / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    if active_dir.is_dir():
+        for f in sorted(active_dir.glob("*.md")):
+            if f.name == "INDEX.md":
+                continue
+            try:
+                mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc)
+                if mtime < cutoff:
+                    # Move to archive/ — no longer current
+                    dest = archive_dir / f.name
+                    shutil.move(str(f), str(dest))
+                    result["active_archived"] += 1
+                    logger.info("  → Archived stale active task: %s", f.name)
+            except Exception as exc:
+                result["errors"].append(f"Failed to archive active task {f.name}: {exc}")
+                logger.warning("  → Active archive error: %s — %s", f.name, exc)
+
+    # ── Count athenaeum-writes.md entries ─────────────────────────────
+    aw_path = SHARED_CONTEXT_ROOT / "athenaeum-writes.md"
+    if aw_path.exists():
+        try:
+            content = aw_path.read_text(encoding="utf-8")
+            # Count non-header, non-empty lines
+            entries = [l for l in content.split("\n") if l.strip() and not l.startswith("#") and not l.startswith("*")]
+            result["athenaeum_entries"] = len(entries)
+        except Exception as exc:
+            result["errors"].append(f"Failed to read athenaeum-writes.md: {exc}")
+
+    return result
 
 
 def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
@@ -711,7 +820,7 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
     try:
         HERMES_INBOX.mkdir(parents=True, exist_ok=True)
 
-        msg_id = _seq_id()
+        msg_id = _msg_id()
         markdown = report.to_markdown()
         health = report.health or {}
         dist = report.distillation or {}
@@ -728,6 +837,14 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
             summary_parts.append(f"🔄 Distilled {dist['distilled_files_written']} files")
         if arch.get("candidates"):
             summary_parts.append(f"🗄️ {len(arch['candidates'])} archive candidates found")
+        sc = report.shared_context or {}
+        if sc.get("decisions_ingested", 0) > 0 or sc.get("active_archived", 0) > 0:
+            parts = []
+            if sc.get("decisions_ingested"):
+                parts.append(f"{sc['decisions_ingested']} decisions")
+            if sc.get("active_archived"):
+                parts.append(f"{sc['active_archived']} tasks archived")
+            summary_parts.append(f"📋 Shared context: {', '.join(parts)}")
         extr = report.extraction or {}
         if extr.get("entities_extracted", 0) > 0:
             summary_parts.append(f"🔗 {extr['entities_extracted']} entities, {extr['relations_extracted']} relations")
@@ -757,6 +874,8 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
                 "archive_candidates": len(arch.get("candidates", [])),
                 "entities_extracted": extr.get("entities_extracted", 0),
                 "relations_extracted": extr.get("relations_extracted", 0),
+                "shared_decisions_ingested": sc.get("decisions_ingested", 0),
+                "shared_active_archived": sc.get("active_archived", 0),
                 "errors": len(report.errors),
             },
             "thread_id": None,
@@ -773,7 +892,7 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# 6. Full Hades run
+# 7. Full Hades run
 # ---------------------------------------------------------------------------
 
 
@@ -818,7 +937,21 @@ def run_hades() -> HadesReport:
             report.errors.append(f"Archive scan failed: {exc}")
             logger.exception("Hades archive error")
 
-        # Phase 4: Entity extraction from Athenaeum files
+        # Phase 4: Shared Context Sweep — ingest >24h entries from ~/pantheon/shared/
+        logger.info("Hades: Running shared context sweep...")
+        try:
+            sc = run_shared_context_sweep()
+            report.shared_context = sc
+            logger.info("  → %d decisions ingested, %d active tasks archived",
+                         sc.get("decisions_ingested", 0),
+                         sc.get("active_archived", 0))
+            if sc.get("errors"):
+                logger.warning("  → %d shared context errors", len(sc["errors"]))
+        except Exception as exc:
+            report.errors.append(f"Shared context sweep failed: {exc}")
+            logger.exception("Hades shared context sweep error")
+
+        # Phase 5: Entity extraction from Athenaeum files
         logger.info("Hades: Running entity extraction...")
         try:
             _REAL_HOME = os.path.expanduser("~")
@@ -877,7 +1010,7 @@ def run_hades() -> HadesReport:
             report.extraction["error"] = f"Entity extraction error: {exc}"
             logger.exception("Hades entity extraction error")
 
-        # Phase 5: Load suggestions
+        # Phase 6: Load suggestions
         logger.info("Hades: Loading suggestions...")
         try:
             suggestions = load_suggestions()
@@ -887,7 +1020,7 @@ def run_hades() -> HadesReport:
         except Exception as exc:
             report.errors.append(f"Suggestions load failed: {exc}")
 
-        # Phase 5: Deliver report to Hermes mailbox
+        # Phase 7: Deliver report to Hermes mailbox
         logger.info("Hades: Delivering report to Hermes mailbox...")
         try:
             msg_path = deliver_to_mailbox(report)

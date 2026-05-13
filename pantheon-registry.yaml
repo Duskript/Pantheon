@@ -1,55 +1,56 @@
 gods:
-- name: Zeus
-  harness: zeus-base.yaml
+- harness: zeus-base.yaml
+  name: Zeus
+  studios: none
   type: orchestrator
+- harness: hecate-base.yaml
+  name: Hecate
   studios: none
-- name: Hecate
-  harness: hecate-base.yaml
   type: service
-  studios: none
-- name: Apollo
-  harness: apollo-base.yaml
-  type: conversational
+- harness: apollo-base.yaml
+  name: Apollo
   studios:
   - lyric-writing
   - poetry
-- name: Hephaestus
-  harness: hephaestus-base.yaml
   type: conversational
+- harness: hephaestus-base.yaml
+  name: Hephaestus
   studios:
   - project-scoping
   - program-design
   - infrastructure-planning
-- name: Athena
-  harness: athena-base.yaml
   type: conversational
+- harness: athena-base.yaml
+  name: Athena
   studios: none
-- name: Hermes
-  harness: hermes-base.yaml
+  type: conversational
+- harness: hermes-base.yaml
+  name: Hermes
+  studios: none
   type: service
+- harness: hestia-base.yaml
+  name: Hestia
   studios: none
-- name: Hestia
-  harness: hestia-base.yaml
   type: subsystem
+- harness: demeter-base.yaml
+  name: Demeter
   studios: none
-- name: Demeter
-  harness: demeter-base.yaml
   type: subsystem
+- harness: kronos-base.yaml
+  name: Kronos
   studios: none
-- name: Kronos
-  harness: kronos-base.yaml
   type: subsystem
-  studios: none
-- name: Apollo
-  id: god-apollo
-  harness: god-apollo-base.yaml
-  type: conversational
-  version: 1.0.0
+- author: Konan
   description: "Lyric-writing, poetry, and song creation god \u2014 creative work\
     \ in your established voice"
+  harness: god-apollo-base.yaml
+  id: god-apollo
+  name: Apollo
+  private: true
+  sanctuary: The Muses' Summit
   studios:
   - lyric-writing
   - poetry
-  sanctuary: The Muses' Summit
-  private: true
-  author: Konan
+  type: conversational
+  version: 1.0.0
+
