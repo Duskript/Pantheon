@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+"""
+pantheon — Pantheon God SDK CLI.
+
+Usage:
+    pantheon god init <name> [OPTIONS]
+    pantheon god validate [name] [OPTIONS]
+
+See `pantheon --help` for full documentation.
+"""
+import os
+import sys
+
+# Add the lib directory to path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(script_dir, "lib")
+sys.path.insert(0, lib_dir)
+
+from god_cli.main import cli
+
+if __name__ == "__main__":
+    cli()

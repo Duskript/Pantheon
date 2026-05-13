@@ -1,0 +1,39 @@
+model:
+  base_url: ''
+  default: $MODEL
+  provider: $PROVIDER
+providers:
+  $PROVIDER:
+    models:
+    - $MODEL
+fallback_providers: []
+credential_pool_strategies: {}
+toolsets:
+- hermes-cli
+agent:
+  max_turns: 90
+  gateway_timeout: 1800
+  restart_drain_timeout: 60
+  api_max_retries: 3
+  service_tier: ''
+  tool_use_enforcement: auto
+  image_input_mode: auto
+terminal:
+  backend: local
+  modal_mode: auto
+  cwd: /home/$USER/pantheon
+  timeout: 180
+  env_passthrough: []
+  shell_init_files: []
+  auto_source_bashrc: true
+checkpoints:
+  enabled: true
+  max_snapshots: 50
+  retention_days: 7
+skills:
+  external_dirs: []
+  template_vars: true
+mcp_servers:
+  pantheon:
+    url: "http://127.0.0.1:8010/mcp"
+    timeout: 60
