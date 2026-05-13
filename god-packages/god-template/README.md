@@ -7,20 +7,26 @@ This is a template package for creating new Pantheon gods.
 | File | Purpose |
 |------|---------|
 | `god.yaml` | Manifest — name, version, type, model, studios |
-| `harness.yaml` | God harness — identity, routing, guardrails, failure behavior |
-| `prompts/` | Personality/system prompts (add identity.md here) |
+| `harness.yaml` | God identity + operational protocols (SOUL.md equivalent): identity, domain, shared brain, topic-shift, notifications, guardrails |
+| `prompts/persona.md.example` | Example personality file — define the god's voice, speech patterns, character |
+| `prompts/identity.md` | (optional) Additional system prompts |
 | `plugins/` | Hermes tool plugins (add Python plugins here) |
 | `assets/` | Static files and reference data |
+
+The god's identity is split across two files:
+- **`harness.yaml`** — *what* the god does: identity, domain, operational protocols (shared brain, topic-shift, notifications, delegation, guardrails)
+- **`persona.md`** — *who* the god is: voice, speech patterns, personality traits, catchphrases
 
 ## How to Use
 
 1. Copy this directory: `cp -r ~/pantheon/god-packages/god-template/ ~/god-packages/god-{your-god-id}/`
 2. Edit `god.yaml` — fill in your god's name, version, type, etc.
-3. Edit `harness.yaml` — write the identity, routing, and guardrails
-4. Add any prompts, plugins, or assets
-5. Install: `pantheon-install ~/god-packages/god-{your-god-id}/`
-6. Add to `~/pantheon/gods/gods.yaml` — register the god in the active roster
-7. **Add MCP server config** — add this block to the god's Hermes profile config at `~/.hermes/profiles/{god-id}/config.yaml`:
+3. Edit `harness.yaml` — write the identity, domain, shared brain, topic-shift, notifications, and guardrails
+4. Create `prompts/persona.md` — define the god's voice and personality using `persona.md.example` as a starting point
+5. Add any extra prompts, plugins, or assets
+6. Install: `pantheon-install ~/god-packages/god-{your-god-id}/`
+7. Add to `~/pantheon/gods/gods.yaml` — register the god in the active roster
+8. Add `mcp_servers` to the god's Hermes profile config at `~/.hermes/profiles/{god-id}/config.yaml`:
 
 ```yaml
 mcp_servers:
@@ -29,18 +35,37 @@ mcp_servers:
     timeout: 60
 ```
 
-This gives the god access to `mcp_pantheon_*` tools: athenaeum_search, messaging_send, god_list, system_health, etc. See the MCP Inter-God Bus section in the pantheon-god-architecture skill for full details.
+This gives the god access to `mcp_pantheon_*` tools: athenaeum_search, god_list, system_health, etc.
 
-8. **Register heartbeat** (if scheduled/cron-driven) — run:
+9. **Shared context is automatic** — the harness.yaml already includes the Shared Context protocol. Every new god is born with awareness of `~/pantheon/shared/`. No extra configuration needed.
+
+10. **Notifications are built in** — the harness.yaml includes the Notifications protocol with `god-notify`. Every god can push success/error/info/warning notifications to the user.
+
+11. **Register heartbeat** (if scheduled/cron-driven) — run:
    ```bash
    cd ~/pantheon && python3 scripts/heartbeat.py register <god-id> \
      --label "God Name — Description" \
      --interval <expected_interval_min>
    ```
    Then add `beat("<god-id>")` at the end of the god's run function.
-   This lets The Fates monitor uptime and alert if the god stops running.
 
-## About MCP Tools
+## What the Harness Gives You
+
+The harness.yaml includes ALL of these standard protocols — no need to add them by hand:
+
+| Section | What it does |
+|---------|-------------|
+| **Identity** | Domain, persona reference, interaction pattern |
+| **Filesystem Access** | Allowed paths + hard off-limits |
+| **MCP Tools** | Full pantheon tool list for cross-god coordination |
+| **Topic-Shift Detection** | Auto-compaction protocol with configurable thresholds |
+| **Shared Brain Protocol** | memory.md + journal workflow for persistent memory |
+| **Delegation** | (optional) Sub-agent spawning for parallel work |
+| **Shared Context** | Cross-god awareness via `~/pantheon/shared/` |
+| **Guardrails** | Hard stops + soft boundaries |
+| **Failure Behavior** | What to do when things go wrong |
+
+## MCP Tools
 
 Every new god automatically gets these MCP tools once the server config is added:
 
@@ -51,8 +76,6 @@ Every new god automatically gets these MCP tools once the server config is added
 | `mcp_pantheon_athenaeum_walk` | Browse the Athenaeum index tree |
 | `mcp_pantheon_athenaeum_write` | Write new knowledge to the Athenaeum |
 | `mcp_pantheon_athenaeum_list_codexes` | List all Codices |
-| `mcp_pantheon_messaging_send` | Send messages to any god's inbox |
-| `mcp_pantheon_messaging_check_inbox` | Check your own or another god's inbox |
 | `mcp_pantheon_hades_get_report` | Get the latest consolidation report |
 | `mcp_pantheon_god_list` | List all registered gods |
 | `mcp_pantheon_system_health` | Check Pantheon infrastructure status |
@@ -80,12 +103,8 @@ mcp_pantheon_skill_run({
   "name": "capture-idea",
   "arguments": "[\"My Idea\", \"Description of the idea\"]"
 })
+```
 
-## Monitor Your Inbox
+## Note on Inbox Checking
 
-Every god must check their inbox at session start. This is how Hermes, The Fates, and other gods pass you information between sessions.
-
-**Inbox location:** `~/pantheon/gods/messages/{god-id}/`
-**MCP tool:** `mcp_pantheon_messaging_check_inbox`
-
-Add this to your session-start routine — read unread messages and mark them read immediately. Without this, you'll miss alerts, directives from Hermes, and inter-god coordination.
+Older gods may have a "check your inbox at session start" step in their Shared Brain Protocol. This pattern is now **obsolete** — notifications are push-based via `god-notify`. New gods created from this template do NOT include inbox checking. If you're updating an existing god, remove the inbox check line from their SOUL.md.
