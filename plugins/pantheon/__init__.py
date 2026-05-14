@@ -163,6 +163,24 @@ def _list_codexes(athenaeum_root: Path) -> List[str]:
     )
 
 
+def _resolve_under_root(root: Path, rel_path: str) -> Path:
+    """Resolve a user-supplied Athenaeum path and ensure it stays in root."""
+    if not rel_path:
+        raise ValueError("path is required")
+
+    root_resolved = root.expanduser().resolve()
+    candidate = Path(rel_path)
+    if candidate.is_absolute():
+        raise ValueError("Path must be relative to the Athenaeum")
+
+    full_path = (root_resolved / candidate).resolve()
+    try:
+        full_path.relative_to(root_resolved)
+    except ValueError as exc:
+        raise ValueError("Path escapes the Athenaeum") from exc
+    return full_path
+
+
 # ---------------------------------------------------------------------------
 # Embedding client
 # ---------------------------------------------------------------------------
@@ -968,7 +986,10 @@ Current conversations are auto-logged to {vault_codex}/sessions/ and become sear
         rel_path = args.get("path", "")
         if not rel_path:
             return {"error": "path is required"}
-        full_path = self._athenaeum_root / rel_path
+        try:
+            full_path = _resolve_under_root(self._athenaeum_root, rel_path)
+        except ValueError as exc:
+            return {"error": str(exc)}
         if not full_path.exists():
             return {"error": f"File not found: {rel_path}"}
         if not full_path.is_file():
@@ -985,7 +1006,10 @@ Current conversations are auto-logged to {vault_codex}/sessions/ and become sear
 
     def _tool_walk(self, args: dict) -> dict:
         rel_path = args.get("path", "INDEX.md")
-        full_path = self._athenaeum_root / rel_path
+        try:
+            full_path = _resolve_under_root(self._athenaeum_root, rel_path)
+        except ValueError as exc:
+            return {"error": str(exc)}
         if not full_path.exists():
             return {
                 "error": f"INDEX.md not found: {rel_path}",
@@ -1024,7 +1048,10 @@ Current conversations are auto-logged to {vault_codex}/sessions/ and become sear
         rel_path = args.get("path", "")
         if not rel_path:
             return {"error": "path is required"}
-        full_path = self._athenaeum_root / rel_path
+        try:
+            full_path = _resolve_under_root(self._athenaeum_root, rel_path)
+        except ValueError as exc:
+            return {"error": str(exc)}
         if not full_path.exists():
             return {"error": f"File not found: {rel_path}"}
 

@@ -6,17 +6,20 @@ running rule matching, LLM classification, and auto-embedding.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
 import re
 import shutil
+import socket
 import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import yaml
 
@@ -65,6 +68,51 @@ PDF_EXTS = {".pdf"}
 CODE_EXTS = {".py", ".js", ".ts", ".go", ".rs", ".sh", ".rb", ".java", ".c", ".cpp", ".h"}
 
 ALL_KNOWN_EXTS = AUDIO_EXTS | IMAGE_EXTS | VIDEO_EXTS | TEXT_EXTS | PDF_EXTS | CODE_EXTS
+
+
+def _is_private_ip(ip: str) -> bool:
+    """Return True for IPs that should never be fetched by URL ingestion."""
+    addr = ipaddress.ip_address(ip)
+    return any(
+        [
+            addr.is_private,
+            addr.is_loopback,
+            addr.is_link_local,
+            addr.is_multicast,
+            addr.is_reserved,
+            addr.is_unspecified,
+        ]
+    )
+
+
+def validate_public_url(url: str) -> Optional[str]:
+    """Validate that a URL targets a public http(s) host.
+
+    Returns an error string if blocked, otherwise None.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return "Only http and https URLs can be ingested"
+    if not parsed.hostname:
+        return "URL must include a hostname"
+
+    host = parsed.hostname
+    try:
+        if _is_private_ip(host):
+            return "URL points to a local or private network address"
+    except ValueError:
+        pass
+
+    try:
+        addr_infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        return f"Unable to resolve URL hostname: {exc}"
+
+    for addr_info in addr_infos:
+        resolved_ip = addr_info[4][0]
+        if _is_private_ip(resolved_ip):
+            return "URL resolves to a local or private network address"
+    return None
 
 
 def detect_file_type(path: Path) -> str:
@@ -430,7 +478,11 @@ def ingest_file(
 
 
 def ingest_url(url: str, *, rules: Optional[List[IngestRule]] = None) -> IngestResult:
-    """Scrape a URL and ingest the content into the Athenaeum."""
+    """Scrape a public URL and ingest the content into the Athenaeum."""
+    url_error = validate_public_url(url)
+    if url_error:
+        return IngestResult(success=False, source=url, error=url_error)
+
     if rules is None:
         rules = load_rules()
 
