@@ -2589,6 +2589,78 @@ def handle_get(handler, parsed) -> bool:
         except Exception as exc:
             return _serve_shell_unavailable(handler, exc)
 
+    # ── PWA Share Target: receive shared content from mobile OS share sheet ──
+    if parsed.path == "/clip":
+        from datetime import datetime, timezone
+
+        params = parse_qs(parsed.query)
+        clip_url = (params.get("url", [None]) or [None])[0]
+        clip_title = (params.get("title", [None]) or [None])[0]
+        clip_text = (params.get("text", [None]) or [None])[0]
+
+        if clip_url or clip_title:
+            # Save the clip
+            _REAL_HOME = os.path.expanduser("~")
+            _INBOX_DIR = Path(f"{_REAL_HOME}/athenaeum/inbox")
+            _INBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+            safe_name = re.sub(r"[^a-z0-9]+", "-", (clip_title or "").lower())[:60].strip("-")
+            timestamp = str(int(time.time()))
+            filename = f"clip-{timestamp}--{safe_name}.md" if safe_name else f"clip-{timestamp}.md"
+
+            lines = [
+                "---",
+                f'title: "{clip_title or "Shared Link"}"',
+            ]
+            if clip_url:
+                lines.append(f'source: "{clip_url}"')
+            lines.append(f'clipped_at: "{datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}"')
+            if clip_text:
+                lines.append(f'note: "{clip_text[:200]}"')
+            lines.append("---\n")
+            lines.append(f"# {clip_title or 'Shared Link'}\n")
+            if clip_url:
+                lines.append(f"Source: {clip_url}\n")
+            if clip_text:
+                lines.append("> " + clip_text.replace("\n", "\n> "))
+
+            (_INBOX_DIR / filename).write_text("\n".join(lines), encoding="utf-8")
+
+            # Return a confirmation page that redirects back to the app
+            return t(
+                handler,
+                f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clipped — Pantheon</title>
+<style>
+body{{font-family:-apple-system,sans-serif;background:#0d0d1a;color:#e0e0e0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center}}
+.card{{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:16px;padding:40px;max-width:380px}}
+.icon{{font-size:48px;margin-bottom:16px}}
+h2{{margin:0 0 8px;font-weight:600}}
+p{{color:#888;font-size:14px;margin:0 0 24px}}
+a{{color:#7c5cfc;text-decoration:none;font-weight:500;font-size:14px}}
+a:hover{{text-decoration:underline}}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="icon">📥</div>
+<h2>Saved to Athenaeum</h2>
+<p>{_html.escape(clip_title or 'Link')}</p>
+<a href="/">← Back to Pantheon</a>
+</div>
+</body>
+</html>""",
+                content_type="text/html; charset=utf-8",
+            )
+        else:
+            # No share data — just redirect to main app
+            handler.send_response(302)
+            handler.send_header("Location", "/")
+            handler.end_headers()
+            return True
+
     if parsed.path == "/login":
         _settings = load_settings()
         _bn = _html.escape(_settings.get("bot_name") or "Hermes")
@@ -3893,6 +3965,11 @@ def handle_get(handler, parsed) -> bool:
             return j(handler, {"notifications": existing})
         except Exception:
             return j(handler, {"notifications": []})
+
+    # ── Connectors API (GET) ──
+    if parsed.path == "/api/connectors/catalog":
+        from api.connectors import handle_get_catalog
+        return handle_get_catalog(handler)
 
     return False  # 404
 
@@ -5230,6 +5307,54 @@ def handle_post(handler, parsed) -> bool:
         except RuntimeError as e:
             return bad(handler, str(e), 409)
 
+    # ── Web Clipper: save a clip to the Athenaeum inbox (POST) ──
+    if parsed.path == "/api/clip":
+        from datetime import datetime, timezone
+
+        _REAL_HOME = os.path.expanduser("~")
+        _INBOX_DIR = Path(f"{_REAL_HOME}/athenaeum/inbox")
+        _INBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Accept both JSON and form-encoded (PWA share target)
+        clip_url = body.get("url", "") or ""
+        clip_title = body.get("title", "") or ""
+        clip_text = body.get("text", "") or ""
+
+        if not clip_url and not clip_title:
+            return bad(handler, "url or title required", 400)
+
+        # Construct a clean clip filename
+        safe_name = re.sub(r"[^a-z0-9]+", "-", clip_title.lower())[:60].strip("-")
+        timestamp = str(int(time.time()))
+        filename = f"clip-{timestamp}--{safe_name}.md" if safe_name else f"clip-{timestamp}.md"
+        clip_path = _INBOX_DIR / filename
+
+        # Build the clip markdown
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        lines = [
+            "---",
+            f'title: "{clip_title}"',
+        ]
+        if clip_url:
+            lines.append(f'source: "{clip_url}"')
+        lines.append(f"clipped_at: \"{now_iso}\"")
+        if clip_text:
+            lines.append(f'note: "{clip_text[:200]}"')
+        lines.append("---")
+        lines.append("")
+        lines.append(f"# {clip_title}")
+        lines.append("")
+        if clip_url:
+            lines.append(f"Source: {clip_url}")
+            lines.append("")
+        if clip_text:
+            lines.append("> " + clip_text.replace("\n", "\n> "))
+            lines.append("")
+
+        clip_path.write_text("\n".join(lines), encoding="utf-8")
+        logger.info("Web clip saved: %s", filename)
+        return j(handler, {"ok": True, "file": filename})
+
     # ── Settings (POST) ──
     if parsed.path == "/api/settings":
         from api.auth import (
@@ -6235,6 +6360,15 @@ def handle_post(handler, parsed) -> bool:
         if not boon:
             return bad(handler, f"Boon not found: {boon_id}", status=404)
         return j(handler, boon)
+
+    # ── Connectors API (POST) ──
+    if parsed.path == "/api/connectors/connect":
+        from api.connectors import handle_post_connect
+        return handle_post_connect(handler)
+
+    if parsed.path == "/api/connectors/disconnect":
+        from api.connectors import handle_post_disconnect
+        return handle_post_disconnect(handler)
 
     return False  # 404
 

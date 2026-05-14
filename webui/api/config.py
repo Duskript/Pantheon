@@ -158,24 +158,26 @@ def _discover_python(agent_dir: Path) -> str:
 _AGENT_DIR = _discover_agent_dir()
 PYTHON_EXE = _discover_python(_AGENT_DIR)
 
-# ── Inject agent dir into sys.path so Hermes modules are importable ──────────
+# ── Inject agent dir + venv site-packages into sys.path ─────────────────
 
-# When users (or CI builds) run `pip install --target .` or
-# `pip install -t .` inside the hermes-agent checkout, third-party
-# package directories (openai/, pydantic/, requests/, etc.) end up
-# alongside real Hermes source files.  Putting _AGENT_DIR at the
-# FRONT of sys.path means Python resolves `import pydantic` from that
-# local directory — which breaks whenever the host platform differs
-# from the container (e.g. macOS .so files inside a Linux image).
+# Adding the agent checkout root lets Python resolve `import run_agent` etc.
+# We add it at the END of sys.path so system site-packages take precedence
+# for third-party deps — preventing platform-specific .so file mismatches.
 #
-# Fix: insert _AGENT_DIR at the END of sys.path.  Python searches
-# entries in order, so site-packages resolves pip packages correctly,
-# and Hermes-specific modules (run_agent, hermes/, etc.) still
-# resolve because they do not exist in site-packages.
+# The agent's venv site-packages are also appended so dependencies that live
+# in the venv (openai, anthropic, dotenv, httpx, etc.) are resolvable even
+# when the webui is running under system Python (e.g. via systemd).
 
 if _AGENT_DIR is not None:
     if str(_AGENT_DIR) not in sys.path:
         sys.path.append(str(_AGENT_DIR))
+
+    # ── Venv site-packages ──────────────────────────────────────────
+    for _venv_candidate in (_AGENT_DIR / "venv", _AGENT_DIR / ".venv"):
+        _sp = _venv_candidate / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+        if _sp.is_dir() and str(_sp) not in sys.path:
+            sys.path.append(str(_sp))
+
     _HERMES_FOUND = True
 else:
     _HERMES_FOUND = False
@@ -3625,6 +3627,7 @@ _SETTINGS_DEFAULTS = {
     "sidebar_density": "compact",  # compact | detailed
     "auto_title_refresh_every": "0",  # adaptive title refresh: 0=off, 5/10/20=every N exchanges
     "busy_input_mode": "queue",  # behavior when sending while agent is running: queue | interrupt | steer
+    "clip_server_url": "",  # override URL for bookmarklet/share-target (Tailscale/custom domain)
     "password_hash": None,  # PBKDF2-HMAC-SHA256 hash; None = auth disabled
     "icon_pack": "pixel",  # pixel | modern | minimal
     "layout_density": "comfortable",  # compact | comfortable | spacious

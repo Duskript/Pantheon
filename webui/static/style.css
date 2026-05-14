@@ -4573,3 +4573,373 @@ main.main.showing-logs > #mainLogs{display:flex;}
 /* The @media(max-width:640px) blocks above remain untouched. The new
    @media(max-width:767px) block adds additional mobile-first overrides.
    For narrow legacy screens (<640px), the existing 640px block still applies. */
+
+/* ── Connectors Full-Screen Overlay ───────────────────────────────────────── */
+
+.connectors-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.connectors-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+}
+
+.connectors-overlay-panel {
+  position: relative;
+  width: 90%;
+  max-width: 720px;
+  max-height: 85vh;
+  background: var(--bg, #1a1a2e);
+  border: 1px solid var(--border2, #333);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.connectors-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border, #2a2a3e);
+  flex-shrink: 0;
+}
+
+.connectors-back-btn,
+.connectors-close-btn {
+  background: none;
+  border: none;
+  color: var(--muted, #888);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.connectors-back-btn:hover,
+.connectors-close-btn:hover {
+  background: var(--hover-bg, #2a2a3e);
+  color: var(--text, #eee);
+}
+
+.connectors-overlay-title {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text, #eee);
+}
+
+.connectors-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 24px;
+  padding: 10px 14px;
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.25);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted, #999);
+  line-height: 1.4;
+}
+
+.connectors-hint svg {
+  flex-shrink: 0;
+  color: #e94560;
+}
+
+.connectors-hint code {
+  background: rgba(233, 69, 96, 0.15);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #e94560;
+}
+
+.connectors-body {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.connectors-subtitle {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--muted, #888);
+}
+
+.connectors-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.connector-cat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 16px;
+  background: var(--surface, #222);
+  border: 1px solid var(--border, #2a2a3e);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, transform 0.1s;
+  color: var(--text, #eee);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.connector-cat-card:hover {
+  border-color: var(--accent, #B8860B);
+  transform: translateY(-1px);
+}
+
+.connector-cat-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text, #eee);
+}
+
+.connector-cat-count {
+  font-size: 12px;
+  color: var(--muted, #888);
+}
+
+.connector-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface, #222);
+  border: 1px solid var(--border, #2a2a3e);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+
+.connector-card:hover {
+  border-color: var(--border2, #444);
+}
+
+.connector-card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.connector-card-icon img {
+  max-width: 32px;
+  max-height: 32px;
+  object-fit: contain;
+}
+
+.connector-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.connector-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #eee);
+  line-height: 1.3;
+}
+
+.connector-card-desc {
+  font-size: 12px;
+  color: var(--muted, #888);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.connector-card-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.connector-auth-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.connector-auth-oauth2 {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+
+.connector-auth-api_key {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+}
+
+.connector-auth-no_auth {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+}
+
+.connector-card-action {
+  flex-shrink: 0;
+}
+
+.connector-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border2, #444);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.connector-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.connector-btn-connected {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.connector-btn-connected:hover {
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.connector-btn-disconnected {
+  background: transparent;
+  color: var(--text, #eee);
+}
+
+.connector-btn-disconnected:hover {
+  background: var(--hover-bg, #2a2a3e);
+  border-color: var(--accent, #B8860B);
+}
+
+.connector-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.connector-dot-connected {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+.connector-dot-disconnected {
+  background: #555;
+}
+
+/* ── Quick-start chips in settings pane ── */
+.connectors-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.connectors-summary-count {
+  font-size: 13px;
+  color: var(--muted, #888);
+}
+
+.connector-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--surface, #222);
+  border: 1px solid var(--border, #2a2a3e);
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--text, #eee);
+  cursor: pointer;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+
+.connector-chip:hover {
+  border-color: var(--accent, #B8860B);
+}
+
+.chip-has-connections {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.chip-count {
+  font-size: 11px;
+  color: var(--muted, #888);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+@media (max-width: 600px) {
+  .connectors-overlay-panel {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    max-width: none;
+  }
+  .connectors-cat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .connector-card {
+    flex-wrap: wrap;
+  }
+  .connector-card-action {
+    width: 100%;
+  }
+  .connector-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

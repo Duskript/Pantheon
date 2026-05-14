@@ -7662,78 +7662,6 @@ function _notifSeenIds() {
   return new Set(_notifLoad().map(function(n) { return n.id; }));
 }
 
-function _notifMergeServerNotifs(serverNotifs) {
-  var seen = _notifSeenIds();
-  var local = _notifLoad();
-  var added = 0;
-  for (var i = 0; i < serverNotifs.length; i++) {
-    if (!seen.has(serverNotifs[i].id)) {
-      local.push(serverNotifs[i]);
-      added++;
-    }
-  }
-  if (added > 0) {
-    // Sort by timestamp descending
-    local.sort(function(a, b) { return b.timestamp - a.timestamp; });
-    if (local.length > NOTIF_MAX_TOTAL) local.length = NOTIF_MAX_TOTAL;
-    _notifSave(local);
-    _notifUpdateBadge();
-  }
-}
-
-function _notifPollServer() {
-  fetch('/api/notifications/poll', { cache: 'no-store' })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.notifications && data.notifications.length) {
-        _notifMergeServerNotifs(data.notifications);
-      }
-    })
-    .catch(function() {});
-}
-
-// Poll server-side notifications every 60s if there are active notifications
-function _notifStartPolling() {
-  _notifPollServer(); // immediate first check
-  setInterval(_notifPollServer, 60000);
-}
-
-function _notifUpdateBadge() {
-  const btn = document.getElementById('btnNotifications');
-  if (!btn) return;
-  const active = PantheonNotifications.getActive();
-  const count = active.length;
-  let badge = btn.querySelector('.notif-badge');
-  if (count > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'notif-badge';
-      btn.appendChild(badge);
-    }
-    badge.textContent = count > 99 ? '99+' : count;
-    // Wing flap animation on new notifs
-    btn.classList.add('notif-new');
-    btn.addEventListener('animationend', function _rm() {
-      btn.classList.remove('notif-new');
-      btn.removeEventListener('animationend', _rm);
-    }, {once:true});
-  } else {
-    if (badge) badge.remove();
-    btn.classList.remove('notif-new');
-  }
-}
-
-function _notifTimeAgo(ts) {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return mins + 'm ago';
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return hrs + 'h ago';
-  const days = Math.floor(hrs / 24);
-  return days + 'd ago';
-}
-
 const PantheonNotifications = {
   getAll() {
     return _notifLoad();
@@ -7745,7 +7673,6 @@ const PantheonNotifications = {
     return _notifLoad().filter(function(n) { return !n.dismissed; }).length;
   },
   add(opts) {
-    // opts: { icon?, title, body?, type? } — icon defaults from type
     var type = opts.type || 'info';
     var icon = opts.icon || '';
     if (!icon) {
@@ -7790,14 +7717,11 @@ const PantheonNotifications = {
     for (var i = 0; i < all.length; i++) {
       if (all[i].id === id) {
         all[i].dismissed = true;
-        found = true;
         break;
       }
     }
-    if (found) {
-      _notifSave(all);
-      _notifUpdateBadge();
-    }
+    _notifSave(all);
+    _notifUpdateBadge();
   },
   clearAll() {
     var all = _notifLoad();
@@ -7815,6 +7739,77 @@ const PantheonNotifications = {
     _notifSave(all);
   }
 };
+
+function _notifMergeServerNotifs(serverNotifs) {
+  var seen = _notifSeenIds();
+  var local = _notifLoad();
+  var added = 0;
+  for (var i = 0; i < serverNotifs.length; i++) {
+    if (!seen.has(serverNotifs[i].id)) {
+      local.push(serverNotifs[i]);
+      added++;
+    }
+  }
+  if (added > 0) {
+    // Sort by timestamp descending
+    local.sort(function(a, b) { return b.timestamp - a.timestamp; });
+    if (local.length > NOTIF_MAX_TOTAL) local.length = NOTIF_MAX_TOTAL;
+    _notifSave(local);
+    _notifUpdateBadge();
+  }
+}
+
+function _notifPollServer() {
+  fetch('/api/notifications/poll', { cache: 'no-store' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.notifications && data.notifications.length) {
+        _notifMergeServerNotifs(data.notifications);
+      }
+    })
+    .catch(function() {});
+}
+
+function _notifStartPolling() {
+  _notifPollServer(); // immediate first check
+  setInterval(_notifPollServer, 60000);
+}
+
+function _notifUpdateBadge() {
+  const btn = document.getElementById('btnNotifications');
+  if (!btn) return;
+  const active = PantheonNotifications.getActive();
+  const count = active.length;
+  let badge = btn.querySelector('.notif-badge');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'notif-badge';
+      btn.appendChild(badge);
+    }
+    badge.textContent = count > 99 ? '99+' : count;
+    // Wing flap animation on new notifs
+    btn.classList.add('notif-new');
+    btn.addEventListener('animationend', function _rm() {
+      btn.classList.remove('notif-new');
+      btn.removeEventListener('animationend', _rm);
+    }, {once:true});
+  } else {
+    if (badge) badge.remove();
+    btn.classList.remove('notif-new');
+  }
+}
+
+function _notifTimeAgo(ts) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
 
 function pantheonNotify(opts) {
   return PantheonNotifications.add(opts);

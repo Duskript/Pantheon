@@ -49,7 +49,7 @@
   <!-- ES module imports do not support the integrity= attribute (W3C limitation);    -->
   <!-- version is pinned in the vendored file path; hash documented above for audit. -->
   <script type="module">
-    import * as smd from 'static/vendor/smd.min.js';
+    import * as smd from './static/vendor/smd.min.js';
     // SRI verification happens at the ES module level via importmap or SW; pinning version in URL.
     // sha384 of smd.min.js @0.2.15: sha384-T6r95ocN9t3W8tUK2Fa6FPaO7bJryyjyW0WCalrUnpgtm2qXr5xcN4vwPYEJ6vHa
     window.smd = smd;
@@ -333,6 +333,14 @@
         <button type="button" class="side-menu-item" data-settings-section="system" onclick="switchSettingsSection('system')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><line x1="6" y1="7" x2="6.01" y2="7"/><line x1="6" y1="17" x2="6.01" y2="17"/></svg>
           <span>System</span>
+        </button>
+        <button type="button" class="side-menu-item" data-settings-section="utilities" onclick="switchSettingsSection('utilities')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <span>Utilities</span>
+        </button>
+        <button type="button" class="side-menu-item" data-settings-section="connectors" onclick="switchSettingsSection('connectors')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          <span>Connectors</span>
         </button>
         <div class="side-menu-divider"></div>
         <button type="button" class="side-menu-item" data-settings-section="god-memory" onclick="switchSettingsSection('god-memory')">
@@ -1283,9 +1291,98 @@
             </div>
             <button class="sm-btn" onclick="saveSettings()" style="margin-top:12px;width:100%;padding:8px;font-weight:600" data-i18n="settings_save_btn">Save Settings</button>
           </div>
+          <div class="settings-pane" id="settingsPaneUtilities">
+            <div class="settings-section-head">
+              <div>
+                <div class="settings-section-title">Utilities</div>
+                <div class="settings-section-meta">Web Clipper, bookmarklets, and integrations for saving content to your Athenaeum.</div>
+              </div>
+            </div>
+
+            <!-- Web Clipper Bookmarklet -->
+            <div class="settings-field">
+              <label>📎 Athenaeum Web Clipper</label>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+                Drag the button below to your browser's bookmarks bar. When you find something worth saving,
+                click the bookmarklet to clip the current page to your Athenaeum.
+              </div>
+              <div id="webClipperBookmarklet" style="padding:16px;background:var(--code-bg);border:1px solid var(--border2);border-radius:8px;text-align:center;margin-bottom:8px">
+                <span id="bookmarkletPlaceholder" style="font-size:13px;color:var(--muted)">Loading bookmarklet…</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.5">
+                <strong>Mobile:</strong> Install the Pantheon PWA to your home screen, then use the system Share sheet
+                → "Pantheon" to save links directly. No bookmarklet needed on mobile.
+              </div>
+            </div>
+
+            <!-- Clip Server URL -->
+            <div class="settings-field" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+              <label for="settingsClipServerUrl">Pantheon Server URL</label>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px">
+                The URL where your Pantheon instance is reachable. Used by the bookmarklet and PWA share target.
+                Detected automatically, but you can override if behind a custom domain or Tailscale.
+              </div>
+              <input type="url" id="settingsClipServerUrl" placeholder="https://pantheon.yourdomain.com or http://100.x.x.x:8787" style="width:100%;padding:8px;background:var(--code-bg);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:13px">
+            </div>
+
+            <div class="settings-field" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+              <label>📋 Install Instructions</label>
+              <div style="font-size:12px;color:var(--text2);line-height:1.6;padding:8px 0">
+                <strong>Desktop:</strong><br>
+                1. Drag the bookmarklet above into your browser's bookmarks bar<br>
+                2. Click it on any page you want to save<br><br>
+                <strong>Mobile (iOS/Android):</strong><br>
+                1. Open Pantheon in your browser → Share → Add to Home Screen<br>
+                2. Navigate to any page → Share → Pantheon<br>
+                3. It'll open a confirmation and the link is saved instantly<br><br>
+                <strong>Syncthing (advanced):</strong><br>
+                Sync a local folder to <code>~/athenaeum/inbox/</code> for offline bulk clipping.
+              </div>
+            </div>
+          </div>
+          <!-- Connectors Pane -->
+          <div class="settings-pane" id="settingsPaneConnectors">
+            <div class="settings-section-head">
+              <div>
+                <div class="settings-section-title">Connectors</div>
+                <div class="settings-section-meta">Connect your services through ACI.dev. Pick a category below to browse and connect integrations.</div>
+              </div>
+            </div>
+            <div id="connectorsQuickStart" style="margin-top:12px">
+              <!-- Populated by JS -->
+            </div>
+          </div>
       </div>
     </div>
   </main>
+  <!-- ── Connectors Full-Screen Overlay ── -->
+  <div id="connectorsOverlay" class="connectors-overlay" style="display:none">
+    <div class="connectors-overlay-backdrop" onclick="closeConnectorsOverlay()"></div>
+    <div class="connectors-overlay-panel">
+      <div class="connectors-overlay-header">
+        <button type="button" class="connectors-back-btn" id="connectorsBackBtn" onclick="backToConnectorCategories()" style="display:none">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <h2 class="connectors-overlay-title" id="connectorsDetailTitle">Connectors</h2>
+        <button type="button" class="connectors-close-btn" onclick="closeConnectorsOverlay()" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="connectors-hint" id="connectorsAciHint" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>ACI API key not configured. Set <code>ACI_API_KEY</code> to enable connections.</span>
+      </div>
+      <div class="connectors-body" id="connectorsCategoryView">
+        <p class="connectors-subtitle">Choose a category to browse and connect services</p>
+        <div class="connectors-cat-grid" id="connectorsCategoryCards">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+      <div class="connectors-body" id="connectorsDetailView" style="display:none">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
   <aside class="rightpanel">
     <div class="resize-handle" id="rightpanelResize"></div>
     <!-- Workspace panel content -->
@@ -1841,11 +1938,193 @@ window.summonGod = function(godName, btn) {
   });
 };
 
-// Setup close on Escape key
+// ── Connectors Overlay ──────────────────────────────────────────────────────
+
+function openConnectorsOverlay() {
+  const overlay = document.getElementById('connectorsOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  document.body.classList.add('overlay-open');
+  loadConnectorsCatalog();
+}
+
+function closeConnectorsOverlay() {
+  const overlay = document.getElementById('connectorsOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'none';
+  document.body.classList.remove('overlay-open');
+}
+
+let _connectorsCatalog = null;
+
+async function loadConnectorsCatalog() {
+  const container = document.getElementById('connectorsCategoryCards');
+  if (!container) return;
+  try {
+    const data = await api('/api/connectors/catalog');
+    _connectorsCatalog = data;
+    const cats = data.categories || [];
+    const counts = data.category_counts || {};
+    container.innerHTML = cats.map(cat => {
+      const c = counts[cat] || {total: 0, connected: 0};
+      return `<button type="button" class="connector-cat-card" onclick="showConnectorCategory('${esc(cat)}')">
+        <div class="connector-cat-name">${esc(cat)}</div>
+        <div class="connector-cat-count">${c.connected}/${c.total} connected</div>
+      </button>`;
+    }).join('');
+    const hint = document.getElementById('connectorsAciHint');
+    if (hint) hint.style.display = data.aci_configured ? 'none' : 'block';
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--error);padding:12px;font-size:13px">Failed to load connectors: ' + esc(e.message) + '</div>';
+  }
+}
+
+function showConnectorCategory(category) {
+  const data = _connectorsCatalog;
+  if (!data) return;
+  const services = (data.services || []).filter(s => s.category === category);
+  const detailView = document.getElementById('connectorsDetailView');
+  const catView = document.getElementById('connectorsCategoryView');
+  const title = document.getElementById('connectorsDetailTitle');
+  if (title) title.textContent = category;
+  if (catView) catView.style.display = 'none';
+  if (detailView) {
+    detailView.style.display = 'block';
+    detailView.innerHTML = services.map(svc => _buildConnectorCard(svc)).join('');
+  }
+}
+
+function _buildConnectorCard(svc) {
+  const connected = svc.connected;
+  const authLabel = svc.auth === 'oauth2' ? 'OAuth' : svc.auth === 'api_key' ? 'API Key' : 'No auth';
+  const statusClass = connected ? 'connected' : 'disconnected';
+  const statusLabel = connected ? 'Connected' : 'Connect';
+  return `<div class="connector-card" data-key="${esc(svc.key)}" data-auth="${esc(svc.auth)}">
+    <div class="connector-card-icon">
+      <img src="${esc(svc.logo)}" alt="${esc(svc.name)}" onerror="this.style.display='none'" width="32" height="32">
+    </div>
+    <div class="connector-card-info">
+      <div class="connector-card-name">${esc(svc.name)}</div>
+      <div class="connector-card-desc">${esc(svc.desc)}</div>
+      <div class="connector-card-meta">
+        <span class="connector-auth-badge connector-auth-${svc.auth}">${authLabel}</span>
+      </div>
+    </div>
+    <div class="connector-card-action">
+      <button type="button" class="connector-btn connector-btn-${statusClass}"
+        onclick="${connected ? `disconnectConnector('${esc(svc.key)}')` : `connectConnector('${esc(svc.key)}','${esc(svc.auth)}')`}">
+        <span class="connector-status-dot connector-dot-${statusClass}"></span>
+        ${statusLabel}
+      </button>
+    </div>
+  </div>`;
+}
+
+function backToConnectorCategories() {
+  const detailView = document.getElementById('connectorsDetailView');
+  const catView = document.getElementById('connectorsCategoryView');
+  if (catView) catView.style.display = '';
+  if (detailView) detailView.style.display = 'none';
+}
+
+async function connectConnector(key, authType) {
+  if (authType === 'api_key') {
+    const svc = _connectorsCatalog?.services?.find(s => s.key === key);
+    const name = svc ? svc.name : key;
+    const apiKey = prompt(`Enter API key for ${name}:`);
+    if (!apiKey || !apiKey.trim()) return;
+    await _doConnect(key, authType, apiKey.trim());
+  } else {
+    await _doConnect(key, authType, '');
+  }
+}
+
+async function _doConnect(key, authType, apiKey) {
+  const btn = document.querySelector(`.connector-card[data-key="${key}"] .connector-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  try {
+    const res = await api('/api/connectors/connect', {
+      method: 'POST',
+      body: JSON.stringify({key, auth: authType, api_key: apiKey})
+    });
+    if (res.status === 'oauth_redirect' && res.url) {
+      window.open(res.url, '_blank', 'width=600,height=700');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="connector-status-dot connector-dot-disconnected"></span> Connect'; }
+      alert('OAuth window opened. Complete authorization there, then refresh.');
+    } else if (res.status === 'connected') {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="connector-status-dot connector-dot-connected"></span> Connected'; }
+      loadConnectorsCatalog();
+      loadConnectorsQuickStart();
+    } else {
+      throw new Error(res.error || 'Unknown response');
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Failed'; }
+    alert('Connection failed: ' + (e.message || e));
+  }
+}
+
+async function disconnectConnector(key) {
+  if (!confirm(`Disconnect ${key}?`)) return;
+  const btn = document.querySelector(`.connector-card[data-key="${key}"] .connector-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Disconnecting…'; }
+  try {
+    await api('/api/connectors/disconnect', {method: 'POST', body: JSON.stringify({key})});
+    if (btn) {
+      btn.disabled = false;
+      btn.className = 'connector-btn connector-btn-disconnected';
+      btn.innerHTML = '<span class="connector-status-dot connector-dot-disconnected"></span> Connect';
+      btn.onclick = function(){ connectConnector(key, document.querySelector(`.connector-card[data-key="${key}"]`)?.dataset?.auth || 'oauth2'); };
+    }
+    loadConnectorsCatalog();
+    loadConnectorsQuickStart();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Failed'; }
+    alert('Disconnect failed: ' + (e.message || e));
+  }
+}
+
+async function loadConnectorsQuickStart() {
+  const container = document.getElementById('connectorsQuickStart');
+  if (!container) return;
+  try {
+    const data = await api('/api/connectors/catalog');
+    _connectorsCatalog = data;
+    const cats = data.categories || [];
+    const counts = data.category_counts || {};
+    const totalConnected = cats.reduce((sum, c) => sum + ((counts[c] || {}).connected || 0), 0);
+    const totalServices = (data.services || []).length;
+    container.innerHTML = `
+      <div class="connectors-summary">
+        <span class="connectors-summary-count">${totalConnected} of ${totalServices} services connected</span>
+        <button type="button" class="sm-btn" onclick="openConnectorsOverlay()">Manage Connections</button>
+      </div>
+      <div class="connector-chips">
+        ${cats.map(cat => {
+          const c = counts[cat] || {total: 0, connected: 0};
+          return `<button type="button" class="connector-chip ${c.connected > 0 ? 'chip-has-connections' : ''}" onclick="openConnectorsOverlay();setTimeout(()=>showConnectorCategory('${esc(cat)}'),100)">
+            ${esc(cat)} <span class="chip-count">${c.connected}/${c.total}</span>
+          </button>`;
+        }).join('')}
+      </div>`;
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Connectors unavailable: ' + esc(e.message) + '</div>';
+  }
+}
+
+// Setup close on Escape key for both overlays
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
-    var overlay = document.getElementById('summonOverlay');
-    if (overlay && overlay.style.display !== 'none') closeSummonDrawer();
+    var connectorsOverlay = document.getElementById('connectorsOverlay');
+    if (connectorsOverlay && connectorsOverlay.style.display !== 'none') {
+      closeConnectorsOverlay();
+      return;
+    }
+    var summonOverlay = document.getElementById('summonOverlay');
+    if (summonOverlay && summonOverlay.style.display !== 'none') {
+      closeSummonDrawer();
+      return;
+    }
   }
 });
 </script>

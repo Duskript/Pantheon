@@ -4220,7 +4220,7 @@ let _settingsPreferencesAutosaveTimer = null;
 let _settingsPreferencesAutosaveRetryPayload = null;
 
 function switchSettingsSection(name){
-  const section=(name==='appearance'||name==='preferences'||name==='providers'||name==='plugins'||name==='system')?name:'conversation';
+  const section=(name==='appearance'||name==='preferences'||name==='providers'||name==='plugins'||name==='system'||name==='utilities'||name==='connectors')?name:'conversation';
   // God Management opens the Gods panel
   if (name === 'god-memory') {
     switchPanel('gods');
@@ -4228,13 +4228,13 @@ function switchSettingsSection(name){
   }
   _settingsSection=section;
   _currentSettingsSection=section;
-  const map={conversation:'Conversation',appearance:'Appearance',preferences:'Preferences',providers:'Providers',plugins:'Plugins',system:'System'};
+  const map={conversation:'Conversation',appearance:'Appearance',preferences:'Preferences',providers:'Providers',plugins:'Plugins',system:'System',utilities:'Utilities',connectors:'Connectors'};
   // Sidebar menu items
   document.querySelectorAll('#settingsMenu .side-menu-item').forEach(it=>{
     it.classList.toggle('active', it.dataset.settingsSection===section);
   });
   // Panes in main
-  ['conversation','appearance','preferences','providers','plugins','system'].forEach(key=>{
+  ['conversation','appearance','preferences','providers','plugins','system','utilities','connectors'].forEach(key=>{
     const pane=$('settingsPane'+map[key]);
     if(pane) pane.classList.toggle('active', key===section);
   });
@@ -4244,6 +4244,8 @@ function switchSettingsSection(name){
   // Lazy-load integration panels when their tabs are opened
   if(section==='providers') loadProvidersPanel();
   if(section==='plugins') loadPluginsPanel();
+  if(section==='utilities') loadUtilitiesPanel();
+  if(section==='connectors') loadConnectorsQuickStart();
 }
 
 function _syncHermesPanelSessionActions(){
@@ -4778,6 +4780,11 @@ async function loadSettingsPanel(){
         botNameTimer=setTimeout(_schedulePreferencesAutosave,500);
       },{once:false});
     }
+    // Clip server URL
+    const clipUrlField=$('settingsClipServerUrl');
+    if(clipUrlField){
+      clipUrlField.value=settings.clip_server_url||'';
+    }
     // Password field: always blank (we don't send hash back)
     const pwField=$('settingsPassword');
     if(pwField){pwField.value='';pwField.addEventListener('input',_markSettingsDirty,{once:false});}
@@ -4901,6 +4908,29 @@ async function loadProvidersPanel(){
   }catch(e){
     list.innerHTML='<div style="color:var(--error);padding:12px;font-size:13px">Failed to load providers: '+e.message+'</div>';
   }
+}
+
+function loadUtilitiesPanel(){
+  const container=$('webClipperBookmarklet');
+  if(!container) return;
+  // Build the bookmarklet from the server URL
+  const serverUrl=($('settingsClipServerUrl')||{}).value||window.location.origin;
+  const bmJs='javascript:(function(){fetch('+JSON.stringify(serverUrl.replace(/\/+$/,'')+'/api/clip')+',{method:"POST",body:JSON.stringify({url:location.href,title:document.title||"",text:(window.getSelection()||"").toString().slice(0,2000)}),headers:{"Content-Type":"application/json"}}).then(r=>r.json()).then(d=>{if(d.ok){alert("📥 Clipped!")}else{alert("Clip failed: "+(d.error||"unknown"))}}).catch(e=>alert("Clip error: "+e.message))})();';
+  const dragBox=document.createElement('div');
+  dragBox.style.cssText='display:flex;flex-direction:column;align-items:center;gap:8px';
+  const bmLink=document.createElement('a');
+  bmLink.href=bmJs;
+  bmLink.textContent='📎 Clip to Athenaeum';
+  bmLink.style.cssText='display:inline-block;padding:10px 20px;border-radius:8px;background:var(--accent,#7c5cfc);color:#fff;font-size:14px;font-weight:600;text-decoration:none;cursor:grab;border:1px solid rgba(255,255,255,.15);box-shadow:0 2px 8px rgba(0,0,0,.3)';
+  bmLink.draggable=true;
+  bmLink.title='Drag this to your bookmarks bar';
+  const urlDisplay=document.createElement('div');
+  urlDisplay.style.cssText='margin-top:8px;font-size:10px;color:var(--muted);word-break:break-all;max-width:100%;overflow:hidden;text-overflow:ellipsis';
+  urlDisplay.textContent='Server: '+(serverUrl);
+  dragBox.appendChild(bmLink);
+  dragBox.appendChild(urlDisplay);
+  container.innerHTML='';
+  container.appendChild(dragBox);
 }
 
 function _formatProviderQuotaMoney(value){
@@ -5385,6 +5415,8 @@ async function saveSettings(andClose){
   body.auto_title_refresh_every=(($('settingsAutoTitleRefresh')||{}).value||'0');
   const botName=(($('settingsBotName')||{}).value||'').trim();
   body.bot_name=botName||'Hermes';
+  const clipUrl=($('settingsClipServerUrl')||{}).value||'';
+  if(clipUrl) body.clip_server_url=clipUrl;
   // Password: only act if the field has content; blank = leave auth unchanged
   if(pw && pw.trim()){
     try{
