@@ -83,6 +83,16 @@ class HadesReport:
             "errors": [],
         }
         self.suggestions: List[Dict] = []
+        self.compilation: Dict[str, Any] = {
+            "sessions_compiled": 0,
+            "articles_created": 0,
+            "articles_updated": 0,
+            "articles_by_type": {"concept": 0, "connection": 0, "qa": 0},
+            "transcripts_copied": 0,
+            "errors": [],
+            "batch_size": 0,
+            "total_backlog": 0,
+        }
         self.extraction: Dict[str, Any] = {
             "files_processed": 0,
             "files_failed": 0,
@@ -104,6 +114,7 @@ class HadesReport:
             "health": self.health,
             "distillation": self.distillation,
             "archive": self.archive,
+            "compilation": self.compilation,
             "extraction": self.extraction,
             "shared_context": self.shared_context,
             "suggestions": self.suggestions,
@@ -176,6 +187,27 @@ class HadesReport:
             lines.append(f"\n## 🔄 Distillation")
             lines.append(f"- Sessions processed: {dist.get('sessions_processed', 0)}")
             lines.append(f"- Distilled files written: {dist.get('distilled_files_written', 0)}")
+
+        # Compilation summary
+        comp = self.compilation
+        if comp.get("sessions_compiled", 0) > 0 or comp.get("errors"):
+            lines.append("")
+            lines.append(f"\n## 🧠 LLM Compilation")
+            lines.append(f"- Sessions compiled: {comp.get('sessions_compiled', 0)}")
+            lines.append(f"- Articles created: {comp.get('articles_created', 0)}")
+            lines.append(f"- Articles updated: {comp.get('articles_updated', 0)}")
+            by_type = comp.get("articles_by_type", {})
+            if any(by_type.values()):
+                lines.append(f"  - Concepts: {by_type.get('concept', 0)}")
+                lines.append(f"  - Connections: {by_type.get('connection', 0)}")
+                lines.append(f"  - Q&A: {by_type.get('qa', 0)}")
+            lines.append(f"- Transcripts copied: {comp.get('transcripts_copied', 0)}")
+            backlog = comp.get("total_backlog", 0)
+            if backlog > 0:
+                lines.append(f"- Remaining backlog: {backlog}")
+            if comp.get("errors"):
+                for e in comp["errors"]:
+                    lines.append(f"- ❌ {e}")
 
         # Archive summary
         arch = self.archive
@@ -701,7 +733,516 @@ def run_archive() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# 4. Suggestions loader
+# 4. LLM Compilation — compile un-compiled sessions into knowledge articles
+# ---------------------------------------------------------------------------
+
+# Codex classification heuristics matching AGENTS.md section 2
+CODEX_CLASSIFIERS = [
+    # (keywords, codex_name)
+    # Check more specific patterns first — order matters
+    (["music", "lyric", "song", "vocal", "melody", "chord", "beat", "skc"], "Codex-SKC"),
+    (["it helpdesk", "jira", "ticket", "sprint", "standup", "okr"], "Codex-Work"),
+    (["infrastructure", "homelab", "proxmox", "docker", "kubernetes", "nginx", "network"], "Codex-Infrastructure"),
+    (["health", "medical", "symptom", "diagnosis", "treatment", "doctor", "patient", "asclepius"], "Codex-Asclepius"),
+    (["fiction", "worldbuilding", "narrative", "story", "novel", "character", "plot"], "Codex-Fiction"),
+    (["code", "python", "javascript", "api", "function", "class", "bug", "feature", "refactor"], "Codex-Forge"),
+    (["gateway", "hermes", "pantheon", "session", "agent", "config", "plugin"], "Codex-Pantheon"),
+    (["user profile", "personal", "relationship", "family", "hobby", "preference"], "Codex-User"),
+]
+
+_DEFAULT_CODEX = "Codex-General"
+
+# Max articles to request per session in the LLM prompt
+_MAX_ARTICLES_PER_SESSION = 5
+# Max retries for a single session compilation
+_MAX_COMPILE_RETRIES = 3
+# Base URLs resolved in order of preference
+_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _classify_session(messages: List[Dict]) -> str:
+    """Classify a session's domain based on message content.
+
+    Uses simple keyword heuristics matching the AGENTS.md classification table.
+    Returns the Codex name (e.g. 'Codex-Forge') or 'Codex-General' as fallback.
+    """
+    # Collect all text content from messages
+    text_pool = ""
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            text_pool += content.lower() + " "
+        elif isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text_pool += part.get("text", "").lower() + " "
+
+    for keywords, codex in CODEX_CLASSIFIERS:
+        for kw in keywords:
+            if kw in text_pool:
+                return codex
+
+    return _DEFAULT_CODEX
+
+
+def _format_transcript_md(session_id: str, messages: List[Dict]) -> str:
+    """Format session messages into a cleaned markdown transcript.
+
+    Follows the AGENTS.md Layer 2 transcript format.
+    Strips base64 image data and other binary content.
+    """
+    md_parts = []
+    md_parts.append(f"# Session: {session_id}")
+    md_parts.append("")
+
+    # Count tokens roughly (chars / 4)
+    total_chars = sum(len(str(m.get("content", ""))) for m in messages)
+    token_estimate = total_chars // 4
+
+    # Estimate duration from timestamps
+    timestamps = [m.get("timestamp", 0) for m in messages if m.get("timestamp")]
+    duration_min = 0
+    if len(timestamps) >= 2:
+        duration_min = int((max(timestamps) - min(timestamps)) / 60)
+
+    exchange_num = 0
+    for msg in messages:
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+
+        # Clean content — strip base64 images and null bytes
+        if isinstance(content, str):
+            # Remove base64 inline images (data:image/...;base64,...)
+            import re as _re
+            content = _re.sub(r'data:image/[^;]+;base64,[^\s"\']+', "[image]", content)
+            # Remove null bytes
+            content = content.replace("\x00", "")
+        elif isinstance(content, list):
+            # Multimodal content — extract text parts only
+            text_parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text_parts.append(part.get("text", ""))
+            content = "\n".join(text_parts) if text_parts else "[multimodal content]"
+
+        if not content or not isinstance(content, str):
+            continue
+
+        content = content.strip()
+        if not content:
+            continue
+
+        if role == "user":
+            exchange_num += 1
+            md_parts.append(f"## Exchange {exchange_num}")
+            md_parts.append("")
+            md_parts.append(f"**User:** {content[:2000]}")
+            md_parts.append("")
+        elif role == "assistant":
+            reasoning = msg.get("reasoning", "") or msg.get("reasoning_content", "")
+            if reasoning:
+                if isinstance(reasoning, str) and reasoning.strip():
+                    md_parts.append(f"**Reasoning:** {reasoning[:500]}")
+            md_parts.append(f"**Assistant:** {content[:3000]}")
+            md_parts.append("")
+        elif role == "tool":
+            # Omit verbose tool results in transcript — summarize
+            tool_name = msg.get("tool_name", "")
+            if tool_name:
+                md_parts.append(f"*[Tool: {tool_name} — result truncated]*")
+            else:
+                md_parts.append("*[Tool result — truncated]*")
+            md_parts.append("")
+
+    return "\n".join(md_parts)
+
+
+def _format_compilation_prompt(session_id: str, transcript_md: str, codex: str, agents_md: str) -> str:
+    """Build the LLM prompt for session compilation following AGENTS.md."""
+    return f"""You are the Athenaeum Compiler. Your job is to compile a conversation session into permanent, searchable knowledge articles. Follow the schema in AGENTS.md.
+
+## Context
+- **Codex:** {codex}
+- **Session ID:** {session_id}
+
+## Compiler Specification (AGENTS.md)
+{agents_md}
+
+## Session Transcript
+```markdown
+{transcript_md[:8000]}
+```
+
+## Instructions
+1. Identify 1-{_MAX_ARTICLES_PER_SESSION} distinct knowledge articles from this session
+2. For each: determine if it's a new concept, a connection between concepts, or a Q&A filing
+3. Output ONLY valid JSON in the following format — no markdown wrapping, no explanation:
+
+```json
+{{
+  "articles": [
+    {{
+      "type": "concept|connection|qa",
+      "name": "kebab-case-article-name",
+      "title": "Human Readable Title",
+      "summary": "One-line summary of the article",
+      "content": "Article body in markdown format. For concepts: core explanation, key points, details. For connections: the link, key insight, evidence. For Q&A: answer, sources consulted.",
+      "tags": ["tag1", "tag2"],
+      "action": "create"
+    }}
+  ]
+}}
+```
+
+## Important guidelines
+- Prefer updating existing articles over creating near-duplicates
+- If the session reveals a non-obvious connection, create a connections/ article
+- If significant Q&A was exchanged, create a qa/ article
+- Write in encyclopedia style — factual, concise, self-contained
+- A single session typically produces 1-3 articles
+- Return ONLY the JSON — no other text."""
+
+
+def _call_llm_for_compilation(prompt: str) -> Optional[Dict]:
+    """Call the LLM (via OpenRouter) to compile a session.
+
+    Returns parsed JSON response dict or None on failure.
+    Uses the OPENROUTER_API_KEY env var for auth.
+    """
+    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        logger.warning("No API key found for LLM compilation (set OPENROUTER_API_KEY or OPENAI_API_KEY)")
+        return None
+
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(
+            base_url=_OPENROUTER_BASE_URL,
+            api_key=api_key,
+        )
+
+        response = client.chat.completions.create(
+            model="deepseek/deepseek-chat-v3-0324:free",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
+            temperature=0.3,
+            timeout=120,
+        )
+
+        content = response.choices[0].message.content.strip()
+        if not content:
+            logger.warning("Empty response from LLM compilation")
+            return None
+
+        # Strip markdown code fences if present
+        if content.startswith("```"):
+            import re as _re
+            m = _re.match(r"```(?:json)?\s*\n?(.*?)\n?```", content, _re.DOTALL)
+            if m:
+                content = m.group(1).strip()
+
+        result = json.loads(content)
+        if not isinstance(result, dict) or "articles" not in result:
+            logger.warning("LLM response missing 'articles' key")
+            return None
+
+        return result
+    except Exception as exc:
+        logger.warning("LLM compilation call failed: %s", exc)
+        return None
+
+
+def _write_articles(codex: str, session_id: str, articles: List[Dict]) -> Dict[str, int]:
+    """Write compiled articles to the Codex's distilled/ directory.
+
+    Returns counts: {created, updated, by_type}.
+    """
+    codex_dir = ATHENAEUM_ROOT / codex
+    distilled_dir = codex_dir / DISTILLED_DIR_NAME
+    concepts_dir = distilled_dir / "concepts"
+    connections_dir = distilled_dir / "connections"
+    qa_dir = distilled_dir / "qa"
+
+    for d in [concepts_dir, connections_dir, qa_dir]:
+        d.mkdir(parents=True, exist_ok=True)
+
+    created = 0
+    updated = 0
+    by_type = {"concept": 0, "connection": 0, "qa": 0}
+
+    for article in articles:
+        art_type = article.get("type", "concept")
+        name = article.get("name", "")
+        title = article.get("title", name)
+        content_body = article.get("content", "")
+        summary = article.get("summary", "")
+        tags = article.get("tags", [])
+
+        if not name:
+            continue
+
+        if art_type == "concept":
+            target_dir = concepts_dir
+        elif art_type == "connection":
+            target_dir = connections_dir
+        elif art_type == "qa":
+            target_dir = qa_dir
+        else:
+            target_dir = concepts_dir  # fallback
+
+        article_path = target_dir / f"{name}.md"
+        action = article.get("action", "create")
+
+        # Build YAML frontmatter
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        frontmatter = [
+            "---",
+            f"title: \"{title}\"",
+        ]
+        if tags:
+            frontmatter.append(f"tags: {json.dumps(tags)}")
+        frontmatter.append(f"sources:")
+        frontmatter.append(f"  - \"{codex}/sessions/{session_id}.md\"")
+        if action == "update":
+            frontmatter.append(f"updated: {now_iso}")
+        else:
+            frontmatter.append(f"created: {now_iso}")
+            frontmatter.append(f"updated: {now_iso}")
+        frontmatter.append("---")
+        frontmatter.append("")
+        frontmatter.append(f"# {title}")
+        frontmatter.append("")
+        frontmatter.append(content_body)
+
+        article_content = "\n".join(frontmatter)
+        article_path.write_text(article_content, encoding="utf-8")
+
+        if action == "update" and article_path.exists():
+            updated += 1
+        else:
+            created += 1
+        by_type[art_type] = by_type.get(art_type, 0) + 1
+
+        logger.info("  → %s %s: %s (%s)", "Updated" if action == "update" else "Created", art_type, name, codex)
+
+    # Update INDEX.md
+    index_path = distilled_dir / "INDEX.md"
+    if not index_path.exists():
+        index_lines = [
+            f"# Distilled Knowledge Index — {codex}",
+            "",
+            "| Article | Type | Summary | Compiled From | Updated |",
+            "|---|---|---|---|---|",
+        ]
+    else:
+        index_lines = index_path.read_text(encoding="utf-8").strip().split("\n")
+
+    for article in articles:
+        art_type = article.get("type", "concept")
+        name = article.get("name", "")
+        summary = article.get("summary", "")
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        # Parts referencing the article
+        type_label = {"concept": "concept", "connection": "connection", "qa": "qa"}.get(art_type, art_type)
+        index_lines.append(
+            f"| [[{type_label}s/{name}]] | {type_label} | {summary} | {session_id} | {now_iso} |"
+        )
+
+    index_path.write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+
+    # Append to compilation-log.md
+    log_path = distilled_dir / "compilation-log.md"
+    log_entry = (
+        f"## {datetime.now(timezone.utc).isoformat()}\n"
+        f"- **Session:** {session_id}\n"
+        f"- **Codex:** {codex}\n"
+        f"- **Articles:** {len(articles)}\n\n"
+    )
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(log_entry)
+
+    return {"created": created, "updated": updated, "by_type": by_type}
+
+
+def _copy_transcript_to_codex(session_id: str, transcript_md: str, codex: str) -> bool:
+    """Copy a cleaned session transcript to Codex-{domain}/sessions/."""
+    sessions_dir = ATHENAEUM_ROOT / codex / SESSIONS_DIR_NAME
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+
+    transcript_path = sessions_dir / f"{session_id}.md"
+    transcript_path.write_text(transcript_md, encoding="utf-8")
+    logger.info("  → Transcript copied: %s/%s/%s.md", codex, SESSIONS_DIR_NAME, session_id)
+    return True
+
+
+def _load_agents_md() -> str:
+    """Load the AGENTS.md compiler spec."""
+    agents_path = ATHENAEUM_ROOT / "AGENTS.md"
+    if agents_path.exists():
+        return agents_path.read_text(encoding="utf-8")
+    logger.warning("AGENTS.md not found at %s", agents_path)
+    return ""
+
+
+def llm_compile_session(session_id: str, messages: List[Dict], agents_md: str) -> Optional[Dict]:
+    """Compile a single session transcript into knowledge articles.
+
+    Args:
+        session_id: The session to compile.
+        messages: The session messages from state.db.
+        agents_md: The AGENTS.md compiler specification content.
+
+    Returns:
+        Dict with compilation results, or None on failure.
+    """
+    logger.info("Compiling session %s (%d messages)...", session_id, len(messages))
+
+    # Classify domain
+    codex = _classify_session(messages)
+    logger.info("  → Classified as: %s", codex)
+
+    # Format transcript
+    transcript_md = _format_transcript_md(session_id, messages)
+    logger.info("  → Transcript: %d chars", len(transcript_md))
+
+    # Build LLM prompt
+    prompt = _format_compilation_prompt(session_id, transcript_md, codex, agents_md)
+    logger.info("  → Prompt: %d chars", len(prompt))
+
+    # Call LLM
+    result = _call_llm_for_compilation(prompt)
+    if not result:
+        logger.warning("  → LLM compilation returned no result")
+        return None
+
+    articles = result.get("articles", [])
+    if not articles:
+        logger.warning("  → No articles in LLM response")
+        return None
+
+    logger.info("  → LLM returned %d articles", len(articles))
+
+    # Write articles to Athenaeum
+    write_result = _write_articles(codex, session_id, articles)
+
+    # Copy cleaned transcript to Codex
+    _copy_transcript_to_codex(session_id, transcript_md, codex)
+
+    return {
+        "session_id": session_id,
+        "codex": codex,
+        "articles": articles,
+        "articles_created": write_result["created"],
+        "articles_updated": write_result["updated"],
+        "articles_by_type": write_result["by_type"],
+    }
+
+
+def run_compilation(limit: int = 5) -> Dict[str, Any]:
+    """Run LLM compilation on un-compiled sessions.
+
+    Args:
+        limit: Max sessions to compile this run (default 5, for the Beelink's 7.2GB RAM).
+
+    Returns:
+        Compilation result dict matching HadesReport.compilation shape.
+    """
+    result: Dict[str, Any] = {
+        "sessions_compiled": 0,
+        "articles_created": 0,
+        "articles_updated": 0,
+        "articles_by_type": {"concept": 0, "connection": 0, "qa": 0},
+        "transcripts_copied": 0,
+        "errors": [],
+        "batch_size": limit,
+        "total_backlog": 0,
+    }
+
+    # Load AGENTS.md spec
+    agents_md = _load_agents_md()
+    if not agents_md:
+        result["errors"].append("AGENTS.md not found — cannot compile")
+        return result
+
+    # Connect to state.db
+    try:
+        from hermes_state import SessionDB
+        state_db = SessionDB()
+    except Exception as exc:
+        result["errors"].append(f"Failed to connect to state.db: {exc}")
+        logger.exception("state.db connection error")
+        return result
+
+    # Get un-compiled sessions
+    total_backlog = state_db.count_uncompiled()
+    result["total_backlog"] = total_backlog
+    logger.info("Compilation backlog: %d un-compiled sessions", total_backlog)
+
+    if total_backlog == 0:
+        logger.info("No un-compiled sessions found. Nothing to do.")
+        return result
+
+    sessions_to_compile = state_db.get_uncompiled_sessions(limit=limit)
+    logger.info("Processing %d sessions (limit=%d)...", len(sessions_to_compile), limit)
+
+    for session_info in sessions_to_compile:
+        session_id = session_info["id"]
+        try:
+            # Load messages from state.db
+            messages = state_db.get_messages(session_id)
+            if not messages:
+                logger.info("  → Session %s has no messages, marking as compiled (empty)", session_id)
+                state_db.mark_compiled(session_id)
+                result["sessions_compiled"] += 1
+                continue
+
+            # Compile with retry
+            compile_result = None
+            for attempt in range(_MAX_COMPILE_RETRIES):
+                compile_result = llm_compile_session(session_id, messages, agents_md)
+                if compile_result is not None:
+                    break
+                logger.warning("  → Retry %d/%d for session %s", attempt + 1, _MAX_COMPILE_RETRIES, session_id)
+
+            if compile_result is None:
+                result["errors"].append(f"Failed to compile session {session_id} after {_MAX_COMPILE_RETRIES} retries")
+                continue  # Leave compiled=0 so it's retried next run
+
+            # Mark as compiled
+            state_db.mark_compiled(session_id)
+
+            # Aggregate results
+            result["sessions_compiled"] += 1
+            result["articles_created"] += compile_result.get("articles_created", 0)
+            result["articles_updated"] += compile_result.get("articles_updated", 0)
+            result["transcripts_copied"] += 1
+            for art_type, count in compile_result.get("articles_by_type", {}).items():
+                result["articles_by_type"][art_type] = result["articles_by_type"].get(art_type, 0) + count
+
+            logger.info("  ✓ Session %s compiled: %d created, %d updated",
+                        session_id,
+                        compile_result.get("articles_created", 0),
+                        compile_result.get("articles_updated", 0))
+
+        except Exception as exc:
+            err_msg = f"Error compiling session {session_id}: {exc}"
+            result["errors"].append(err_msg)
+            logger.exception(err_msg)
+            # Leave compiled=0 — will be retried next run
+            continue
+
+    # Update backlog count
+    try:
+        result["total_backlog"] = state_db.count_uncompiled()
+    except Exception:
+        pass
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 5. Suggestions loader
 # ---------------------------------------------------------------------------
 
 
@@ -850,6 +1391,11 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
             summary_parts.append(f"🔗 {extr['entities_extracted']} entities, {extr['relations_extracted']} relations")
         elif extr.get("error"):
             summary_parts.append(f"🔗 Extraction error: {extr['error'][:60]}")
+        comp = report.compilation or {}
+        if comp.get("sessions_compiled", 0) > 0:
+            summary_parts.append(f"🧠 Compiled {comp['sessions_compiled']} sessions → {comp['articles_created']} articles")
+        if comp.get("errors"):
+            summary_parts.append(f"🧠 {len(comp['errors'])} compilation errors")
         if report.errors:
             summary_parts.append(f"❌ {len(report.errors)} errors during run")
 
@@ -876,6 +1422,8 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
                 "relations_extracted": extr.get("relations_extracted", 0),
                 "shared_decisions_ingested": sc.get("decisions_ingested", 0),
                 "shared_active_archived": sc.get("active_archived", 0),
+                "sessions_compiled": comp.get("sessions_compiled", 0),
+                "articles_created": comp.get("articles_created", 0),
                 "errors": len(report.errors),
             },
             "thread_id": None,
@@ -896,7 +1444,7 @@ def deliver_to_mailbox(report: HadesReport) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-def run_hades() -> HadesReport:
+def run_hades(compile_limit: int = 5) -> HadesReport:
     """Run the complete Hades consolidation pipeline.
 
     Returns a HadesReport with all findings.
@@ -1010,7 +1558,23 @@ def run_hades() -> HadesReport:
             report.extraction["error"] = f"Entity extraction error: {exc}"
             logger.exception("Hades entity extraction error")
 
-        # Phase 6: Load suggestions
+        # Phase 6: LLM Compilation — compile un-compiled sessions into knowledge articles
+        if compile_limit > 0:
+            logger.info("Hades: Running LLM compilation (limit=%d)...", compile_limit)
+            try:
+                comp = run_compilation(limit=compile_limit)
+                report.compilation = comp
+                logger.info("  → %d sessions compiled, %d articles created, %d errors",
+                             comp.get("sessions_compiled", 0),
+                             comp.get("articles_created", 0),
+                             len(comp.get("errors", [])))
+            except Exception as exc:
+                report.errors.append(f"LLM compilation failed: {exc}")
+                logger.exception("Hades compilation error")
+        else:
+            logger.info("Hades: LLM compilation skipped (--no-compile)")
+
+        # Phase 7: Load suggestions
         logger.info("Hades: Loading suggestions...")
         try:
             suggestions = load_suggestions()
@@ -1020,7 +1584,7 @@ def run_hades() -> HadesReport:
         except Exception as exc:
             report.errors.append(f"Suggestions load failed: {exc}")
 
-        # Phase 7: Deliver report to Hermes mailbox
+        # Phase 8: Deliver report to Hermes mailbox
         logger.info("Hades: Delivering report to Hermes mailbox...")
         try:
             msg_path = deliver_to_mailbox(report)
@@ -1033,7 +1597,7 @@ def run_hades() -> HadesReport:
         elapsed = time.time() - start
         logger.info("Hades complete in %.2fs", elapsed)
 
-        # Phase 6: Write heartbeat for the Fates
+        # Phase 9: Write heartbeat for the Fates
         import sys
         _hades_scripts = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts")
         if _hades_scripts not in sys.path:
@@ -1067,6 +1631,10 @@ def main():
     parser.add_argument("--archive", action="store_true", help="Scan archive candidates only")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--save", metavar="PATH", help="Save report to file")
+    parser.add_argument("--compile", nargs="?", type=int, const=5, default=5, metavar="N",
+                        help="Max sessions to compile (default: 5). Use --no-compile to skip.")
+    parser.add_argument("--no-compile", action="store_true", dest="no_compile",
+                        help="Skip LLM compilation entirely")
 
     args = parser.parse_args()
 
@@ -1084,7 +1652,8 @@ def main():
         report = HadesReport()
         report.archive = run_archive()
     else:
-        report = run_hades()
+        compile_limit = 0 if args.no_compile else args.compile
+        report = run_hades(compile_limit=compile_limit)
 
     # Record heartbeat after any mode runs
     try:

@@ -54,6 +54,10 @@ Examples:
     parser.add_argument("--archive", action="store_true", help="Scan archive candidates only")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--save", metavar="PATH", help="Save report to file")
+    parser.add_argument("--compile", nargs="?", type=int, const=5, default=5, metavar="N",
+                        help="Max sessions to compile (default: 5). Use --no-compile to skip.")
+    parser.add_argument("--no-compile", action="store_true", dest="no_compile",
+                        help="Skip LLM compilation entirely")
 
     args = parser.parse_args()
 
@@ -68,7 +72,8 @@ Examples:
         report = HadesReport()
         report.archive = run_archive()
     else:
-        report = run_hades()
+        compile_limit = 0 if args.no_compile else args.compile
+        report = run_hades(compile_limit=compile_limit)
 
     if args.json:
         output = report.to_dict()
