@@ -119,6 +119,19 @@ For self-hosted VM or homelab installs, `ctl.sh` wraps the common daemon lifecyc
 
 `ctl.sh start` runs the bootstrap in foreground/no-browser mode behind the daemon wrapper, writes logs to `~/.hermes/webui.log`, and respects `.env` plus inline overrides such as `HERMES_WEBUI_HOST=0.0.0.0 ./ctl.sh start`.
 
+### systemd (production daemon)
+
+For a persistent daemon that survives reboots, install the user-unit:
+
+```bash
+cp pantheon-webui.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now pantheon-webui.service
+journalctl --user -u pantheon-webui -f  # watch logs
+```
+
+The unit uses `HERMES_WEBUI_HOST=0.0.0.0` for LAN/Tailscale access and `HERMES_WEBUI_PORT=8787`. Edit the file before installing to match your setup. The state directory defaults to `~/.hermes/webui` — set `HERMES_WEBUI_STATE_DIR` in the unit to redirect it.
+
 The bootstrap will:
 
 1. Detect Hermes Agent and, if missing, attempt the official installer (`curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash`).
