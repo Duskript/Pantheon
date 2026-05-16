@@ -26,7 +26,6 @@ _REAL_HOME = os.path.expanduser("~")
 ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 GRAPH_DB = Path(f"{_REAL_HOME}/.hermes/pantheon/graph.db")
-SUGGEST_FILE = Path(f"{_REAL_HOME}/.hermes/pantheon/suggested-codexes.json")
 HERMES_INBOX = Path(f"{_REAL_HOME}/pantheon/gods/messages/hermes")
 INDEX_DESCRIPTION = (
     "Content in `{path}` is managed by Demeter and Mnemosyne.\n"
@@ -56,6 +55,72 @@ ARCHIVE_DIR_NAME = "archive"
 SESSIONS_DIR_NAME = "sessions"
 
 
+def _get_all_codexes() -> List[str]:
+    """Discover all Codex directories — union of hardcoded known + filesystem.
+
+    New codexes created dynamically (e.g. during LLM compilation) are
+    automatically discovered on the next Hades run.
+    """
+    fs_codexes: List[str] = []
+    if ATHENAEUM_ROOT.is_dir():
+        for d in sorted(ATHENAEUM_ROOT.iterdir()):
+            if (
+                d.is_dir()
+                and d.name.startswith("Codex-")
+                and d.name not in KNOWN_CODEXES
+                and not d.name.startswith(GOD_CODEX_PREFIX)
+            ):
+                fs_codexes.append(d.name)
+    return list(KNOWN_CODEXES) + fs_codexes
+
+
+def _create_codex(name: str, description: str = "") -> bool:
+    """Create a new Codex directory with INDEX.md.
+
+    Args:
+        name: The Codex name, e.g. 'Codex-HyMem'
+        description: One-line description for the INDEX.md
+
+    Returns:
+        True if created, False if already exists.
+    """
+    codex_dir = ATHENAEUM_ROOT / name
+    if codex_dir.exists():
+        return False
+
+    codex_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write INDEX.md
+    index_path = codex_dir / "INDEX.md"
+    index_content = f"""# {name} — Index
+
+Parent: [{ATHENAEUM_ROOT.name}](../INDEX.md)
+Last updated: {datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+{description}
+
+Content in `{name}/` is managed by Demeter and Mnemosyne.
+Files are auto-detected and embedded into the vector store on change.
+"""
+    index_path.write_text(index_content, encoding="utf-8")
+
+    # Create standard subdirectories
+    for sub in [DISTILLED_DIR_NAME, SESSIONS_DIR_NAME, ARCHIVE_DIR_NAME]:
+        (codex_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    logger.info("  → ✨ Created new Codex: %s", name)
+
+    # Add entry to CODEX_CLASSIFIERS so future sessions get auto-detected
+    # Use the codex name minus "Codex-" as the primary keyword
+    keyword = name.replace("Codex-", "", 1).lower().replace("-", " ")
+    # Don't re-add if already there (race condition with parallel runs)
+    existing_keywords = {kw for kws, _ in CODEX_CLASSIFIERS for kw in kws}
+    if keyword not in existing_keywords:
+        CODEX_CLASSIFIERS.insert(0, ([keyword], name))
+
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Result container
 # ---------------------------------------------------------------------------
@@ -82,7 +147,6 @@ class HadesReport:
             "files_archived": 0,
             "errors": [],
         }
-        self.suggestions: List[Dict] = []
         self.compilation: Dict[str, Any] = {
             "sessions_compiled": 0,
             "articles_created": 0,
@@ -117,7 +181,6 @@ class HadesReport:
             "compilation": self.compilation,
             "extraction": self.extraction,
             "shared_context": self.shared_context,
-            "suggestions": self.suggestions,
             "errors": self.errors,
         }
 
@@ -174,13 +237,6 @@ class HadesReport:
             if len(stale) > 10:
                 lines.append(f"- ... and {len(stale) - 10} more")
 
-        # Suggestions
-        suggestions = self.suggestions
-        if suggestions:
-            lines.append(f"\n## 💡 New Codex Suggestions ({len(suggestions)})")
-            for s in suggestions:
-                lines.append(f"- **{s.get('suggested_codex')}**: {s.get('reason', '')[:100]}")
-
         # Distillation summary
         dist = self.distillation
         if dist.get("distilled_files_written", 0) > 0:
@@ -208,6 +264,9 @@ class HadesReport:
             if comp.get("errors"):
                 for e in comp["errors"]:
                     lines.append(f"- ❌ {e}")
+            new_cx_list = comp.get("new_codexes_created", [])
+            if new_cx_list:
+                lines.append(f"- ✨ New Codices: {', '.join(new_cx_list)}")
 
         # Archive summary
         arch = self.archive
@@ -248,6 +307,14 @@ class HadesReport:
             lines.append(f"## 📋 Shared Context Sweep")
             for e in sc["errors"]:
                 lines.append(f"- ⚠️ {e}")
+
+        # New Codices created
+        new_codexes = self.health.get("new_codexes", [])
+        if new_codexes:
+            lines.append("")
+            lines.append(f"## ✨ New Codices Created ({len(new_codexes)})")
+            for nc in new_codexes:
+                lines.append(f"- **{nc.get('codex')}** — {nc.get('files_moved', 0)} files from '{nc.get('keyword', '?')}' cluster")
 
         # Errors
         if self.errors:
@@ -443,7 +510,7 @@ def run_health_checks() -> Dict[str, Any]:
     except ImportError:
         pass  # chromadb not available
 
-    for codex_name in KNOWN_CODEXES:
+    for codex_name in _get_all_codexes():
         codex_dir = ATHENAEUM_ROOT / codex_name
         if not codex_dir.is_dir():
             continue
@@ -640,7 +707,7 @@ def run_distillation() -> Dict[str, Any]:
         "by_codex": {},
     }
 
-    for codex_name in KNOWN_CODEXES:
+    for codex_name in _get_all_codexes():
         codex_dir = ATHENAEUM_ROOT / codex_name
         if not codex_dir.is_dir():
             continue
@@ -680,7 +747,7 @@ def run_archive() -> Dict[str, Any]:
     # Check if graph is available to consult
     graph_available = GRAPH_DB.exists()
 
-    for codex_name in KNOWN_CODEXES:
+    for codex_name in _get_all_codexes():
         codex_dir = ATHENAEUM_ROOT / codex_name
         if not codex_dir.is_dir() or codex_name in SYSTEM_CODEXES:
             continue
@@ -859,11 +926,16 @@ def _format_transcript_md(session_id: str, messages: List[Dict]) -> str:
 
 def _format_compilation_prompt(session_id: str, transcript_md: str, codex: str, agents_md: str) -> str:
     """Build the LLM prompt for session compilation following AGENTS.md."""
+    existing_codexes = _get_all_codexes()
+    codex_list = "\n".join(f"- {c}" for c in existing_codexes)
     return f"""You are the Athenaeum Compiler. Your job is to compile a conversation session into permanent, searchable knowledge articles. Follow the schema in AGENTS.md.
 
 ## Context
-- **Codex:** {codex}
+- **Assigned Codex:** {codex}
 - **Session ID:** {session_id}
+
+## Existing Codices
+{codex_list}
 
 ## Compiler Specification (AGENTS.md)
 {agents_md}
@@ -874,12 +946,17 @@ def _format_compilation_prompt(session_id: str, transcript_md: str, codex: str, 
 ```
 
 ## Instructions
-1. Identify 1-{_MAX_ARTICLES_PER_SESSION} distinct knowledge articles from this session
-2. For each: determine if it's a new concept, a connection between concepts, or a Q&A filing
-3. Output ONLY valid JSON in the following format — no markdown wrapping, no explanation:
+1. First, verify the **Assigned Codex** above. Does this session truly belong there?
+   - If the session's primary topic matches an existing Codex well → keep it, set "codex_verification" to the existing name
+   - If the session's topic doesn't fit any existing Codex → suggest a new one (e.g. "Codex-HyMem") with a clear reason
+2. Identify 1-{_MAX_ARTICLES_PER_SESSION} distinct knowledge articles from this session
+3. For each: determine if it's a new concept, a connection between concepts, or a Q&A filing
+4. Output ONLY valid JSON in the following format — no markdown wrapping, no explanation:
 
 ```json
 {{
+  "codex_verification": "Codex-Forge",
+  "codex_reason": "Session is about Python API development — fits Codex-Forge perfectly.",
   "articles": [
     {{
       "type": "concept|connection|qa",
@@ -894,6 +971,8 @@ def _format_compilation_prompt(session_id: str, transcript_md: str, codex: str, 
 }}
 ```
 
+For new codex suggestions, "codex_verification" should be the new name (e.g. "Codex-HyMem") and "codex_reason" should explain why no existing codex fits.
+
 ## Important guidelines
 - Prefer updating existing articles over creating near-duplicates
 - If the session reveals a non-obvious connection, create a connections/ article
@@ -904,33 +983,44 @@ def _format_compilation_prompt(session_id: str, transcript_md: str, codex: str, 
 
 
 def _call_llm_for_compilation(prompt: str) -> Optional[Dict]:
-    """Call the LLM (via OpenRouter) to compile a session.
+    """Call the LLM (via OpenCode Go) to compile a session.
 
     Returns parsed JSON response dict or None on failure.
-    Uses the OPENROUTER_API_KEY env var for auth.
+    Uses the same transport as entity extraction (OpenCode Go + minimax-m2.5).
     """
-    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("OPENCODE_GO_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        logger.warning("No API key found for LLM compilation (set OPENROUTER_API_KEY or OPENAI_API_KEY)")
+        logger.warning("No API key found for LLM compilation (set OPENCODE_GO_API_KEY or OPENAI_API_KEY)")
         return None
 
+    model = os.environ.get("ATHENAEUM_EXTRACT_MODEL", "minimax-m2.5")
+    base_url = os.environ.get("OPENCODE_GO_BASE_URL", "https://opencode.ai/zen/go/v1/chat/completions")
+
     try:
-        from openai import OpenAI
+        import httpx
 
-        client = OpenAI(
-            base_url=_OPENROUTER_BASE_URL,
-            api_key=api_key,
+        resp = httpx.post(
+            base_url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4096,
+                "temperature": 0.3,
+            },
+            timeout=300,  # 5 min — compilation prompts are large (AGENTS.md + transcript)
         )
-
-        response = client.chat.completions.create(
-            model="deepseek/deepseek-chat-v3-0324:free",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-            temperature=0.3,
-            timeout=120,
-        )
-
-        content = response.choices[0].message.content.strip()
+        resp.raise_for_status()
+        data = resp.json()
+        msg = data["choices"][0]["message"]
+        content = (msg.get("content") or "").strip()
+        if not content:
+            reasoning = msg.get("reasoning_content", "")
+            if reasoning and reasoning.strip():
+                content = reasoning.strip()
         if not content:
             logger.warning("Empty response from LLM compilation")
             return None
@@ -949,7 +1039,18 @@ def _call_llm_for_compilation(prompt: str) -> Optional[Dict]:
 
         return result
     except Exception as exc:
-        logger.warning("LLM compilation call failed: %s", exc)
+        # Log detailed error info — crucial for debugging rate limits, timeouts, bad responses
+        if hasattr(exc, 'response') and exc.response is not None:
+            try:
+                resp_body = exc.response.text[:500]
+            except Exception:
+                resp_body = "<unreadable>"
+            logger.warning("LLM compilation call failed [HTTP %d]: %s — %s",
+                         exc.response.status_code, exc, resp_body)
+        elif isinstance(exc, httpx.TimeoutException):
+            logger.warning("LLM compilation call timed out (300s): %s", exc)
+        else:
+            logger.warning("LLM compilation call failed (%s): %s", type(exc).__name__, exc)
         return None
 
 
@@ -1123,6 +1224,23 @@ def llm_compile_session(session_id: str, messages: List[Dict], agents_md: str) -
 
     logger.info("  → LLM returned %d articles", len(articles))
 
+    # Check if LLM suggests a different or new Codex
+    verified_codex = result.get("codex_verification", "")
+    if verified_codex and verified_codex != codex:
+        logger.info("  → LLM suggests reclassifying to: %s (was: %s)", verified_codex, codex)
+        codex = verified_codex
+
+        # Auto-create if it doesn't exist yet
+        if not (ATHENAEUM_ROOT / codex).exists():
+            reason = result.get("codex_reason", f"Auto-created by LLM compilation of session {session_id}")
+            _create_codex(codex, description=reason[:200])
+            new_codex_created = codex
+            logger.info("  → ✨ New Codex auto-created: %s", codex)
+        else:
+            new_codex_created = None
+    else:
+        new_codex_created = None
+
     # Write articles to Athenaeum
     write_result = _write_articles(codex, session_id, articles)
 
@@ -1136,6 +1254,7 @@ def llm_compile_session(session_id: str, messages: List[Dict], agents_md: str) -
         "articles_created": write_result["created"],
         "articles_updated": write_result["updated"],
         "articles_by_type": write_result["by_type"],
+        "new_codex_created": new_codex_created,
     }
 
 
@@ -1157,6 +1276,7 @@ def run_compilation(limit: int = 5) -> Dict[str, Any]:
         "errors": [],
         "batch_size": limit,
         "total_backlog": 0,
+        "new_codexes_created": [],
     }
 
     # Load AGENTS.md spec
@@ -1203,6 +1323,9 @@ def run_compilation(limit: int = 5) -> Dict[str, Any]:
                 compile_result = llm_compile_session(session_id, messages, agents_md)
                 if compile_result is not None:
                     break
+                if attempt < _MAX_COMPILE_RETRIES - 1:
+                    import time as _time
+                    _time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s...
                 logger.warning("  → Retry %d/%d for session %s", attempt + 1, _MAX_COMPILE_RETRIES, session_id)
 
             if compile_result is None:
@@ -1219,6 +1342,10 @@ def run_compilation(limit: int = 5) -> Dict[str, Any]:
             result["transcripts_copied"] += 1
             for art_type, count in compile_result.get("articles_by_type", {}).items():
                 result["articles_by_type"][art_type] = result["articles_by_type"].get(art_type, 0) + count
+
+            new_cx = compile_result.get("new_codex_created")
+            if new_cx:
+                result["new_codexes_created"].append(new_cx)
 
             logger.info("  ✓ Session %s compiled: %d created, %d updated",
                         session_id,
@@ -1242,20 +1369,112 @@ def run_compilation(limit: int = 5) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# 5. Suggestions loader
+# 5. Codex-General cluster detection — find unclassified topic clusters
 # ---------------------------------------------------------------------------
 
 
-def load_suggestions() -> List[Dict]:
-    """Load and clear the pending Codex suggestions queue."""
-    if SUGGEST_FILE.exists():
+def _scan_general_for_codexes(min_cluster_size: int = 5) -> List[Dict]:
+    """Scan Codex-General for topic clusters and auto-create new Codices.
+
+    Reads files in Codex-General's root (not sessions/distilled/archive),
+    extracts topic keywords from content, and creates new Codexes when
+    a topic cluster exceeds min_cluster_size files.
+
+    Args:
+        min_cluster_size: Minimum files sharing a keyword to form a cluster
+
+    Returns:
+        List of dicts with {codex, keyword, files_moved} for new Codexes created.
+    """
+    general_dir = ATHENAEUM_ROOT / "Codex-General"
+    if not general_dir.is_dir():
+        return []
+
+    created_codexes: List[Dict] = []
+    keyword_clusters: Dict[str, List[str]] = {}
+
+    # Collect all non-special files in the root of Codex-General
+    # (not sessions/, distilled/, or archive/ subdirs)
+    files_to_scan = list(general_dir.glob("*.md"))
+    if len(files_to_scan) < min_cluster_size:
+        return []  # Not enough files to bother
+
+    # For each file, extract topic keywords from frontmatter, title, or first line
+    import re as _re
+
+    for f in files_to_scan:
+        if f.name.startswith("INDEX"):
+            continue
         try:
-            suggestions: List[Dict] = json.loads(SUGGEST_FILE.read_text())
-            SUGGEST_FILE.write_text("[]")
-            return suggestions
-        except (json.JSONDecodeError, Exception):
-            return []
-    return []
+            content = f.read_text(encoding="utf-8", errors="replace")[:2000]
+        except Exception:
+            continue
+
+        # Try to get title from frontmatter or first heading
+        title_match = _re.search(r"^#\s+(.+)", content, _re.MULTILINE)
+        if not title_match:
+            continue
+
+        title = title_match.group(1).strip().lower()
+        # Extract meaningful keywords (words 4+ chars, skip common words)
+        words = _re.findall(r"\b[a-z]{4,}\b", title)
+        stopwords = {"this", "that", "with", "from", "have", "been", "will",
+                     "what", "when", "where", "which", "their", "there"}
+        keywords = [w for w in words if w not in stopwords]
+
+        for kw in set(keywords):
+            if kw not in keyword_clusters:
+                keyword_clusters[kw] = []
+            keyword_clusters[kw].append(str(f.relative_to(ATHENAEUM_ROOT)))
+
+    # Find clusters above threshold
+    clusters = [(kw, files) for kw, files in keyword_clusters.items()
+                if len(files) >= min_cluster_size]
+
+    if not clusters:
+        logger.info("  → No topic clusters found in Codex-General")
+        return []
+
+    # Sort by cluster size (largest first)
+    clusters.sort(key=lambda x: len(x[1]), reverse=True)
+
+    logger.info("  → Found %d topic clusters in Codex-General", len(clusters))
+
+    for keyword, files in clusters[:3]:  # Max 3 new codexes per run
+        codex_name = f"Codex-{keyword.capitalize()}"
+        if (ATHENAEUM_ROOT / codex_name).exists():
+            continue  # Already exists, skip
+
+        created = _create_codex(
+            codex_name,
+            description=f"Auto-detected from Codex-General cluster: {len(files)} files about '{keyword}'"
+        )
+        if not created:
+            continue
+
+        # Move files to the new Codex
+        moved = 0
+        for rel_path in files:
+            src = ATHENAEUM_ROOT / rel_path
+            dest = ATHENAEUM_ROOT / codex_name / src.name
+            try:
+                src.rename(dest)
+                moved += 1
+            except Exception as exc:
+                logger.warning("  → Failed to move %s: %s", src.name, exc)
+
+        created_codexes.append({
+            "codex": codex_name,
+            "keyword": keyword,
+            "files_moved": moved,
+        })
+        logger.info("  → ✨ Codex %s created with %d files from '%s' cluster",
+                     codex_name, moved, keyword)
+
+    if created_codexes:
+        logger.info("  → Total new Codexes from General scan: %d", len(created_codexes))
+
+    return created_codexes
 
 
 # ---------------------------------------------------------------------------
@@ -1452,6 +1671,18 @@ def run_hades(compile_limit: int = 5) -> HadesReport:
     report = HadesReport()
     start = time.time()
 
+    # Load environment variables from .env files for in-process operations
+    # (compilation, distillation) — extraction subprocess loads its own
+    _home = os.path.expanduser("~")
+    for _env_path in [Path(f"{_home}/.hermes/.env"), Path(f"{_home}/pantheon/.env")]:
+        if _env_path.exists():
+            for line in _env_path.read_text().split("\n"):
+                line = line.strip()
+                if line and "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    v = v.strip().strip("'\"")
+                    os.environ.setdefault(k.strip(), v)
+
     try:
         # Phase 1: Health checks
         logger.info("Hades: Running health checks...")
@@ -1507,7 +1738,7 @@ def run_hades(compile_limit: int = 5) -> HadesReport:
             if os.path.exists(extract_script):
                 import subprocess, sys
                 env = os.environ.copy()
-                for _env_path in [Path(f"{_REAL_HOME}/.hermes/.env"), Path(f"{_REAL_HOME}/pantheon/.env")]:
+                for _env_path in [Path(f"{_REAL_HOME}/.hermes/.env"), Path(f"{_REAL_HOME}/.hermes/profiles/hephaestus/.env"), Path(f"{_REAL_HOME}/pantheon/.env")]:
                     if _env_path.exists():
                         for line in _env_path.read_text().split("\n"):
                             line = line.strip()
@@ -1515,8 +1746,8 @@ def run_hades(compile_limit: int = 5) -> HadesReport:
                                 k, v = line.split("=", 1)
                                 env.setdefault(k.strip(), v.strip().strip("'\""))
                 result = subprocess.run(
-                    [sys.executable, extract_script],
-                    capture_output=True, text=True, timeout=1200, env=env,
+                    [sys.executable, extract_script, "--workers", "4"],
+                    capture_output=True, text=True, timeout=3600, env=env,
                 )
                 if result.returncode == 0:
                     # Parse summary from output
@@ -1545,7 +1776,7 @@ def run_hades(compile_limit: int = 5) -> HadesReport:
                                  report.extraction["entities_extracted"],
                                  report.extraction["relations_extracted"])
                 else:
-                    err = result.stderr.strip()[:200] if result.stderr.strip() else "exit code != 0"
+                    err = result.stderr.strip()[:2000] if result.stderr.strip() else "exit code != 0"
                     report.extraction["error"] = f"extract-entities failed: {err}"
                     logger.warning("  → Entity extraction failed: %s", err)
             else:
@@ -1574,15 +1805,15 @@ def run_hades(compile_limit: int = 5) -> HadesReport:
         else:
             logger.info("Hades: LLM compilation skipped (--no-compile)")
 
-        # Phase 7: Load suggestions
-        logger.info("Hades: Loading suggestions...")
+        # Phase 7: Scan Codex-General for topic clusters → auto-create new Codices
+        logger.info("Hades: Scanning Codex-General for topic clusters...")
         try:
-            suggestions = load_suggestions()
-            report.suggestions = suggestions
-            if suggestions:
-                logger.info("  → %d pending Codex suggestions", len(suggestions))
+            new_codexes = _scan_general_for_codexes()
+            if new_codexes:
+                report.health["new_codexes"] = new_codexes
+                logger.info("  → %d new Codexes created from General scan", len(new_codexes))
         except Exception as exc:
-            report.errors.append(f"Suggestions load failed: {exc}")
+            report.errors.append(f"Codex-General scan failed: {exc}")
 
         # Phase 8: Deliver report to Hermes mailbox
         logger.info("Hades: Delivering report to Hermes mailbox...")
@@ -1631,8 +1862,8 @@ def main():
     parser.add_argument("--archive", action="store_true", help="Scan archive candidates only")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--save", metavar="PATH", help="Save report to file")
-    parser.add_argument("--compile", nargs="?", type=int, const=5, default=5, metavar="N",
-                        help="Max sessions to compile (default: 5). Use --no-compile to skip.")
+    parser.add_argument("--compile", nargs="?", type=int, const=100, default=100, metavar="N",
+                        help="Max sessions to compile (default: 100). Use --no-compile to skip.")
     parser.add_argument("--no-compile", action="store_true", dest="no_compile",
                         help="Skip LLM compilation entirely")
 
@@ -1644,7 +1875,6 @@ def main():
     if args.health:
         report = HadesReport()
         report.health = run_health_checks()
-        report.suggestions = load_suggestions()
     elif args.distill:
         report = HadesReport()
         report.distillation = run_distillation()

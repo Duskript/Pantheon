@@ -97,3 +97,6 @@ webui/full-UI.png
 webui/graphify-out/
 webui/.graphify_*
 webui/archive/
+
+# Local Hermes planning artifacts
+.hermes/plans/

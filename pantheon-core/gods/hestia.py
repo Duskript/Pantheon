@@ -144,7 +144,6 @@ class HestiaChecker:
         return [
             self.check_ollama(),
             self.check_chromadb(),
-            self.check_pantheon_api(),
             self.check_mcp_server(),
             self.check_disk_space(),
         ]
