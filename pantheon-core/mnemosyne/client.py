@@ -16,6 +16,56 @@ from .exceptions import MnemosyneUnavailableError
 
 _COLLECTION_PREFIX = "pantheon"
 
+_HIGH_IMPORTANCE_TERMS = (
+    "preference", "prefers", "correction", "remember", "decision",
+    "critical", "security", "credential", "secret", "api key", "auth",
+    "production", "deploy", "architecture", "hard rule", "never",
+)
+_MEDIUM_IMPORTANCE_TERMS = (
+    "project", "workflow", "config", "setup", "bug", "fix", "test",
+    "integration", "cron", "service", "gateway", "memory",
+)
+
+
+def score_memory_importance(text: str, metadata: dict[str, Any] | None = None) -> float:
+    """Return a Mem0-style priority score for Athenaeum vector metadata.
+
+    The score is deterministic and dependency-free. It gives retrieval/reranking
+    layers a stable signal without requiring Mem0 itself. Values are normalized
+    to ``0.0``–``1.0`` where higher means the document is more likely to contain
+    durable facts, decisions, preferences, or operational hazards.
+    """
+    metadata = metadata or {}
+    lowered = text.lower()
+    score = 0.30
+
+    priority = str(metadata.get("priority", "")).lower()
+    if "high" in priority:
+        score += 0.30
+    elif "medium" in priority:
+        score += 0.15
+    elif "low" in priority:
+        score -= 0.05
+
+    if "priority:** high" in lowered or "priority: high" in lowered:
+        score += 0.30
+    elif "priority:** medium" in lowered or "priority: medium" in lowered:
+        score += 0.15
+    elif "priority:** low" in lowered or "priority: low" in lowered:
+        score -= 0.05
+
+    high_hits = sum(1 for term in _HIGH_IMPORTANCE_TERMS if term in lowered)
+    medium_hits = sum(1 for term in _MEDIUM_IMPORTANCE_TERMS if term in lowered)
+    score += min(high_hits, 4) * 0.08
+    score += min(medium_hits, 4) * 0.035
+
+    if text.startswith("#") or "\n## " in text:
+        score += 0.05
+    if len(text) > 2000:
+        score += 0.05
+
+    return round(max(0.0, min(1.0, score)), 3)
+
 
 def partition_for(codex: str) -> str:
     """Return the ChromaDB collection name for a given Codex partition tag.
@@ -166,13 +216,14 @@ class MnemosyneClient:
             documents = raw.get("documents", [[]])[0]
             metadatas = raw.get("metadatas", [[]])[0]
             for doc, meta in zip(documents, metadatas):
-                results.append(
-                    {
-                        "content": doc,
-                        "source": meta.get("source", ""),
-                        "codex": meta.get("codex", name),
-                    }
-                )
+                item = {
+                    "content": doc,
+                    "source": meta.get("source", ""),
+                    "codex": meta.get("codex", name),
+                }
+                if "priority_score" in meta:
+                    item["priority_score"] = meta.get("priority_score")
+                results.append(item)
 
         # Sort by relevance order (ChromaDB returns nearest-first per collection).
         return results[:n_results]
@@ -199,11 +250,16 @@ class MnemosyneClient:
         doc_id = str(file_path.resolve())
 
         try:
+            metadata = {
+                "source": str(file_path),
+                "codex": codex,
+                "priority_score": score_memory_importance(content, {"codex": codex}),
+            }
             collection.upsert(
                 ids=[doc_id],
                 embeddings=[embedding],
                 documents=[content],
-                metadatas=[{"source": str(file_path), "codex": codex}],
+                metadatas=[metadata],
             )
         except Exception as exc:
             raise MnemosyneUnavailableError(

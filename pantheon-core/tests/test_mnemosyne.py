@@ -40,7 +40,7 @@ def _make_chromadb_stub() -> ModuleType:
 _chromadb_stub = _make_chromadb_stub()
 
 # Import after the stub is injected.
-from mnemosyne.client import MnemosyneClient, partition_for  # noqa: E402
+from mnemosyne.client import MnemosyneClient, partition_for, score_memory_importance  # noqa: E402
 from mnemosyne.exceptions import MnemosyneUnavailableError  # noqa: E402
 
 
@@ -214,10 +214,69 @@ class TestUnavailability:
         mock_chroma.heartbeat.return_value = True
         mock_chroma.list_collections.return_value = []
 
-        import httpx
+        httpx_stub = ModuleType("httpx")
 
-        with patch.object(_chromadb_stub, "HttpClient", return_value=mock_chroma):
-            with patch("httpx.post", side_effect=httpx.ConnectError("ollama down")):
+        class ConnectError(Exception):
+            pass
+
+        httpx_stub.ConnectError = ConnectError
+        httpx_stub.post = MagicMock(side_effect=ConnectError("ollama down"))
+
+        with patch.dict(sys.modules, {"httpx": httpx_stub}):
+            with patch.object(_chromadb_stub, "HttpClient", return_value=mock_chroma):
                 client = MnemosyneClient(scope="all")
                 with pytest.raises(MnemosyneUnavailableError):
                     client.query("embed this")
+
+
+# ---------------------------------------------------------------------------
+# Mem0-style priority scoring
+# ---------------------------------------------------------------------------
+
+class TestPriorityScoring:
+    def test_high_priority_operational_memory_scores_higher(self) -> None:
+        high = score_memory_importance(
+            "- **Priority:** HIGH\nHard rule: never commit secrets or API keys."
+        )
+        low = score_memory_importance("A casual note about lunch.")
+        assert high > low
+        assert 0.0 <= low <= 1.0
+        assert 0.0 <= high <= 1.0
+
+    def test_query_returns_priority_score_when_metadata_has_it(self) -> None:
+        collection = MagicMock()
+        collection.name = "pantheon_codex_skc"
+        collection.count.return_value = 1
+        collection.query.return_value = {
+            "documents": [["Important doc"]],
+            "metadatas": [[{"source": "/s", "codex": "Codex-SKC", "priority_score": 0.88}]],
+        }
+        mock_chroma = MagicMock()
+        mock_chroma.heartbeat.return_value = True
+        mock_chroma.list_collections.return_value = [collection]
+        mock_chroma.get_collection.return_value = collection
+        with patch.object(_chromadb_stub, "HttpClient", return_value=mock_chroma):
+            with patch.object(MnemosyneClient, "_get_embedding", return_value=[0.0]):
+                client = MnemosyneClient(scope="all")
+                results = client.query("important")
+
+        assert results[0]["priority_score"] == 0.88
+
+    def test_embed_file_stores_priority_score_metadata(self, tmp_path) -> None:
+        file_path = tmp_path / "memory.md"
+        file_path.write_text("- **Priority:** HIGH\nDecision: Pantheon should avoid credential leaks.", encoding="utf-8")
+
+        collection = MagicMock()
+        mock_chroma = MagicMock()
+        mock_chroma.heartbeat.return_value = True
+        mock_chroma.get_or_create_collection.return_value = collection
+
+        with patch.object(_chromadb_stub, "HttpClient", return_value=mock_chroma):
+            with patch.object(MnemosyneClient, "_get_embedding", return_value=[0.1]):
+                client = MnemosyneClient(scope="all")
+                client.embed_file(str(file_path), "Codex-Pantheon")
+
+        metadata = collection.upsert.call_args.kwargs["metadatas"][0]
+        assert metadata["source"] == str(file_path)
+        assert metadata["codex"] == "Codex-Pantheon"
+        assert metadata["priority_score"] > 0.5

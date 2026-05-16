@@ -250,6 +250,22 @@ class GraphClient:
     def _new_id(self) -> str:
         return uuid.uuid4().hex[:16]
 
+    @staticmethod
+    def _slug(value: str, limit: int = 80) -> str:
+        """Stable, dependency-free slug for deterministic fact node IDs."""
+        value = value.lower().strip()
+        chars = []
+        previous_dash = False
+        for ch in value:
+            keep = ch.isalnum()
+            if keep:
+                chars.append(ch)
+                previous_dash = False
+            elif not previous_dash:
+                chars.append("-")
+                previous_dash = True
+        return "".join(chars).strip("-")[:limit] or "unknown"
+
     def upsert_node(
         self,
         node_id: str,
@@ -682,6 +698,105 @@ class GraphClient:
         session_node = f"session:{session_id[:16]}"
         file_node = f"file:{file_path}"
         self.add_edge(session_node, file_node, EDGE_REFERENCES)
+
+    def find_conflicts_for_fact(
+        self,
+        subject: str,
+        predicate: str,
+        value: str,
+        *,
+        codex: str = "",
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Find existing fact nodes that contradict a proposed fact.
+
+        Conflict detection follows the Mem0/Graphiti pattern at a lightweight
+        graph layer: same normalized subject + predicate, different normalized
+        value, and not explicitly marked superseded/resolved in metadata.
+        """
+        if not self._conn:
+            raise RuntimeError("GraphClient not connected")
+
+        subject_norm = self._slug(subject)
+        predicate_norm = self._slug(predicate)
+        value_norm = self._slug(value)
+        rows = self._conn.execute(
+            """
+            SELECT * FROM nodes
+            WHERE type = ?
+              AND (? = '' OR codex = ?)
+              AND json_extract(metadata, '$.subject_norm') = ?
+              AND json_extract(metadata, '$.predicate_norm') = ?
+              AND json_extract(metadata, '$.value_norm') != ?
+              AND COALESCE(json_extract(metadata, '$.conflict_status'), 'active') NOT IN ('resolved', 'superseded')
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (NODE_TYPE_FACT, codex, codex, subject_norm, predicate_norm, value_norm, limit),
+        ).fetchall()
+        return [self._row_to_dict(row) for row in rows]
+
+    def register_fact(
+        self,
+        subject: str,
+        predicate: str,
+        value: str,
+        *,
+        codex: str = "",
+        source: str = "",
+        confidence: float = 1.0,
+        metadata: Optional[Dict[str, Any]] = None,
+        link_conflicts: bool = True,
+    ) -> str:
+        """Register a structured fact and link contradictions.
+
+        Facts are deterministic nodes keyed by normalized subject/predicate/value.
+        When another active fact shares subject+predicate but has a different
+        value, this method creates `contradicts` edges so triage/review tools can
+        surface the conflict instead of silently keeping both claims.
+        """
+        if not self._conn:
+            raise RuntimeError("GraphClient not connected")
+
+        subject_norm = self._slug(subject)
+        predicate_norm = self._slug(predicate)
+        value_norm = self._slug(value)
+        node_id = f"fact:{subject_norm}:{predicate_norm}:{value_norm}"[:180]
+        fact_metadata = {
+            "subject": subject,
+            "predicate": predicate,
+            "value": value,
+            "subject_norm": subject_norm,
+            "predicate_norm": predicate_norm,
+            "value_norm": value_norm,
+            "source": source,
+            "confidence": max(0.0, min(1.0, float(confidence))),
+            "conflict_status": "active",
+        }
+        fact_metadata.update(metadata or {})
+        self.upsert_node(
+            node_id,
+            NODE_TYPE_FACT,
+            f"{subject} {predicate} {value}",
+            codex=codex,
+            metadata=fact_metadata,
+        )
+
+        if link_conflicts:
+            for conflict in self.find_conflicts_for_fact(subject, predicate, value, codex=codex):
+                if conflict.get("id") == node_id:
+                    continue
+                edge_metadata = {
+                    "subject": subject,
+                    "predicate": predicate,
+                    "new_value": value,
+                    "existing_value": conflict.get("metadata", {}).get("value", ""),
+                    "source": source,
+                }
+                self.add_edge(node_id, conflict["id"], EDGE_CONTRADICTS, weight=1.0, metadata=edge_metadata)
+                self.add_edge(conflict["id"], node_id, EDGE_CONTRADICTS, weight=1.0, metadata=edge_metadata)
+
+        return node_id
 
     # ------------------------------------------------------------------
     # Stats
