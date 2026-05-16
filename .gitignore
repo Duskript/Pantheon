@@ -67,6 +67,13 @@ planning/agent-zero-fork/
 scripts/spot-fix-embed.py
 scripts/reembed.sh
 
+# Parked experiments / local-only scaffolds
+browser-extension/
+browser-extension.tar.gz
+webui/static/browser-extension.tar.gz
+clara-templates/
+potential-gods/clara/
+
 # Installed god packages — managed by God SDK
 .pantheon/
 
