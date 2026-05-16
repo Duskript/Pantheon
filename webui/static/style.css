@@ -290,7 +290,7 @@
     }
   }
   body{background:var(--bg);color:var(--text);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
-  .layout{display:flex;width:100%;flex:1 1 auto;min-height:0;margin-top:calc(39px + var(--app-titlebar-safe-top,0px));}
+  .layout{display:flex;width:100%;flex:1 1 auto;min-height:0;margin-top:calc(39px + var(--app-titlebar-safe-top,0px));margin-left:0;}
   .app-titlebar{display:flex;align-items:center;justify-content:center;height:38px;flex-shrink:0;background:var(--sidebar);border-bottom:1px solid var(--border);padding:0 12px;padding-top:var(--app-titlebar-safe-top);padding-left:max(12px,env(safe-area-inset-left,0));padding-right:max(12px,env(safe-area-inset-right,0));box-sizing:content-box;font-size:12px;color:var(--muted);user-select:none;-webkit-app-region:drag;position:fixed;top:0;left:0;right:0;z-index:300;}
   .app-titlebar-inner{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;justify-content:center;}
   .system-health-panel.insights-card{display:flex;flex-direction:column;gap:12px;color:var(--muted);}
@@ -806,7 +806,7 @@
   .clarify-hint{margin-top:8px;font-size:11px;line-height:1.45;color:var(--muted);}
   .clarify-card.visible .clarify-question{padding-left:1px;}
   /* Left rail (desktop primary navigation) */
-  .rail{display:none;width:48px;flex-shrink:0;flex-direction:column;align-items:center;gap:4px;padding:8px 0;background:var(--sidebar);border-right:1px solid var(--border);}
+  .rail{display:none;width:48px;flex-shrink:0;flex-direction:column;align-items:center;gap:4px;padding:8px 0;background:var(--sidebar);border-right:1px solid var(--border);margin-left:0;}
   /* God roster in rail */
   .god-rail{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;padding:4px 0;}
   .god-rail-btn{width:36px;height:36px;border-radius:50%;border:2px solid transparent;background:var(--hover-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;transition:all .2s;flex-shrink:0;padding:0;font-size:16px;line-height:1;}
@@ -4426,11 +4426,8 @@ main.main.showing-logs > #mainLogs{display:flex;}
     max-width: min(1200px, calc(100% - 48px));
   }
 
-  .layout {
-    max-width: 1800px;
-    margin-left: auto;
-    margin-right: auto;
-  }
+  /* Layout spans full width on all screens — no max-width constraint
+     (ultrawide monitors should use every pixel) */
 }
 
 /* ── Accessibility zoom: text-scale & space-scale ──────────────────────────── */

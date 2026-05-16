@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 from api.auth import check_auth
 from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
-from api.helpers import j, get_profile_cookie
+from api.helpers import _security_headers, j, get_profile_cookie
 from api.profiles import set_request_profile, clear_request_profile
 from api.routes import handle_delete, handle_get, handle_patch, handle_post
 from api.startup import auto_install_agent_deps, fix_credential_permissions
@@ -121,6 +121,16 @@ class Handler(BaseHTTPRequestHandler):
             'ms': duration_ms,
         })
         print(f'[webui] {record}', flush=True)
+
+    def do_OPTIONS(self) -> None:
+        """Handle CORS preflight requests (browser extension cross-origin)."""
+        self._req_t0 = time.time()
+        self.send_response(204)
+        # CORS headers are added by _security_headers
+        self.send_header('Content-Length', '0')
+        _security_headers(self)
+        self.end_headers()
+        self.wfile.write(b'')
 
     def do_GET(self) -> None:
         self._req_t0 = time.time()

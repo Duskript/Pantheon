@@ -3445,8 +3445,10 @@ else startSystemHealthMonitor();
 // ── Hermes agent/gateway heartbeat alert (#716) ──
 const AGENT_HEALTH_INTERVAL_MS=30000;
 const AGENT_HEALTH_DISMISSED_KEY='agent-health-dismissed';
+const AGENT_HEALTH_FAIL_THRESHOLD=2;  // require 2 consecutive failures before showing banner
 let _agentHealthTimer=null;
 let _agentHealthLastState='unknown';
+let _agentHealthConsecutiveFailures=0;
 function _agentHealthDismissed(){
   try{return localStorage.getItem(AGENT_HEALTH_DISMISSED_KEY)==='1';}
   catch(_){return false;}
@@ -3483,21 +3485,27 @@ async function pollAgentHealth(){
     const payload=await api('/api/health/agent');
     if(payload.alive === true){
       _agentHealthLastState='alive';
+      _agentHealthConsecutiveFailures=0;
       _setAgentHealthDismissed(false);
       _hideAgentHealthAlert();
       return;
     }
     if(payload.alive === false){
-      _agentHealthLastState='down';
-      _showAgentHealthAlert(payload);
+      _agentHealthConsecutiveFailures++;
+      if(_agentHealthConsecutiveFailures >= AGENT_HEALTH_FAIL_THRESHOLD){
+        _agentHealthLastState='down';
+        _showAgentHealthAlert(payload);
+      }
       return;
     }
     if(payload.alive == null){
       _agentHealthLastState='unknown';
+      _agentHealthConsecutiveFailures=0;
       _hideAgentHealthAlert();
     }
   }catch(_){
     _agentHealthLastState='unknown';
+    _agentHealthConsecutiveFailures=0;
     _hideAgentHealthAlert();
   }
 }
@@ -7214,22 +7222,6 @@ async function switchGod(godName) {
 }
 
 // Load god roster on boot
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    loadGodRoster();
-    startGodPolling();
-    _notifUpdateBadge();
-    _notifStartPolling();
-    _updateGodGlow();
-  });
-} else {
-  loadGodRoster();
-  startGodPolling();
-  _updateGodGlow();
-  _notifUpdateBadge();
-  _notifStartPolling();
-}
-
 // ── Titlebar Actions ─────────────────────────────────────────────
 
 function toggleIdeasDropdown() {
@@ -8645,3 +8637,22 @@ window._ideasSave = function() {
   })
   .catch(function(err) { alert('Edit error: ' + (err && err.message ? err.message : 'Network error')); });
 };
+
+// ── Boot ─────────────────────────────────────────────────────────
+// Deferred to end of file so all const declarations (PantheonNotifications, etc.)
+// are hoisted/declared before invocation. Firefox respects const TDZ; Chrome did not.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    loadGodRoster();
+    startGodPolling();
+    _notifUpdateBadge();
+    _notifStartPolling();
+    _updateGodGlow();
+  });
+} else {
+  loadGodRoster();
+  startGodPolling();
+  _updateGodGlow();
+  _notifUpdateBadge();
+  _notifStartPolling();
+}

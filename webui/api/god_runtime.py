@@ -157,6 +157,11 @@ def _get_god_state(name: str) -> dict:
     """Get the current runtime state for a god/profile by scanning processes.
 
     Returns {'state': 'awake'|'sleeping', 'pid': int|None, 'since': float|None}
+
+    Named profiles (non-default) do not run separate gateway processes —
+    they are served by the single default gateway process.  When a named
+    profile has no per-profile gateway, we fall back to the default gateway
+    state so the UI correctly shows the god as reachable.
     """
     global _GOD_STATE_CACHE, _GOD_STATE_CACHE_TS
     now = time.time()
@@ -165,10 +170,20 @@ def _get_god_state(name: str) -> dict:
         _GOD_STATE_CACHE_TS = now
 
     entry = _GOD_STATE_CACHE.get(name, {})
+    state = entry.get('state', 'sleeping')
+    pid = entry.get('pid')
+
+    # Named profiles without their own gateway process → served by default gateway
+    if state == 'sleeping' and pid is None and name != 'default':
+        default_entry = _GOD_STATE_CACHE.get('default', {})
+        if default_entry.get('state') == 'awake':
+            state = 'awake'
+            pid = default_entry['pid']
+
     return {
-        'state': entry.get('state', 'sleeping'),
-        'pid': entry.get('pid'),
-        'since': entry.get('since'),
+        'state': state,
+        'pid': pid,
+        'since': entry.get('since') if pid != entry.get('pid') else entry.get('since'),
     }
 
 
