@@ -3999,7 +3999,14 @@ a:hover{{text-decoration:underline}}
                 "provider": p.get("provider"),
                 "skill_count": p.get("skill_count", 0),
             })
-        return j(handler, {"gods": gods, "active": get_active_profile_name()})
+        # Use cookie-based profile if set, fall back to process-global
+        from api.helpers import get_profile_cookie
+        cookie_profile = get_profile_cookie(handler)
+        active_profile = cookie_profile if cookie_profile else get_active_profile_name()
+        # Update is_active based on cookie
+        for g in gods:
+            g["is_active"] = (g["name"] == active_profile)
+        return j(handler, {"gods": gods, "active": active_profile})
 
     # ── Single God Detail (GET) ──
     if parsed.path.startswith("/api/gods/") and '/' not in parsed.path[len("/api/gods/"):]:
