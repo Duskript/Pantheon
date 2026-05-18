@@ -216,6 +216,8 @@
     observer.observe(document.getElementById('root') || document.body, { childList: true, subtree: true });
   }
 
+  window.openBoonsManager = openBoonManager;
+
   if (document.readyState === 'loading') {
     setTimeout(start, 2000);
   } else {

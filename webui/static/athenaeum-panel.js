@@ -479,6 +479,28 @@ function mountAthenaeum(container) {
 
 if (typeof window !== 'undefined') {
   window.mountAthenaeum = mountAthenaeum;
+  window.openAthenaeumPanel = function() {
+    var existing = document.getElementById('athenaeum-panel-overlay');
+    if (existing) { existing.remove(); return; }
+    var overlay = document.createElement('div');
+    overlay.id = 'athenaeum-panel-overlay';
+    Object.assign(overlay.style, {
+      position: 'fixed', inset: '0', zIndex: '9998',
+      background: 'rgba(0,0,0,0.7)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center'
+    });
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    var panel = document.createElement('div');
+    panel.style.cssText = 'background:var(--bg-primary,#0A0908);border:1px solid var(--border);border-radius:12px;width:700px;max-width:95vw;height:80vh;overflow:hidden;display:flex;flex-direction:column';
+    var close = document.createElement('button');
+    close.textContent = '✕';
+    close.style.cssText = 'position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;z-index:1';
+    close.onclick = function() { overlay.remove(); };
+    panel.appendChild(close);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    mountAthenaeum(panel);
+  };
   const existing = document.getElementById('athenaeum-panel');
   if (existing) mountAthenaeum(existing);
 }
