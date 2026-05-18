@@ -1,0 +1,388 @@
+/* ── Pantheon Companion — Side Panel ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0D0D1A;
+  --surface: #141425;
+  --surface-hover: #1A1A30;
+  --border: #2A2A45;
+  --text: #FFF8DC;
+  --muted: #C0C0C0;
+  --accent: #FFD700;
+  --accent-bg: rgba(255, 215, 0, 0.08);
+  --accent-dim: rgba(255, 215, 0, 0.25);
+  --error: #EF5350;
+  --success: #4CAF50;
+  --warning: #FFA726;
+  --radius: 8px;
+  --radius-sm: 4px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+.view { display: flex; flex-direction: column; height: 100%; }
+.view:not([hidden]) { display: flex; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD / TOOLBAR VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.header-title { font-size: 14px; font-weight: 700; color: var(--accent); }
+.header-actions { display: flex; gap: 4px; }
+.header-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.header-btn:hover { background: var(--surface-hover); color: var(--text); border-color: var(--border); }
+
+.section {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.section:last-of-type { border-bottom: none; }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.badge {
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+}
+
+/* ── God List ── */
+.god-list { display: flex; flex-direction: column; gap: 4px; }
+.loading { font-size: 11px; color: var(--muted); padding: 4px 0; }
+.god-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.god-item:hover { background: var(--surface-hover); }
+.god-item.selected { background: var(--accent-bg); border-left: 2px solid var(--accent); }
+.god-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  position: relative;
+}
+.god-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  border: 1.5px solid var(--bg);
+}
+.god-dot.awake { background: var(--success); }
+.god-dot.idle { background: var(--warning); }
+.god-dot.sleeping { background: #868E96; }
+.god-dot.dead { background: var(--error); }
+.god-info { flex: 1; min-width: 0; }
+.god-name { font-size: 12px; font-weight: 500; color: var(--text); }
+.god-domain { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.god-model { font-size: 9px; color: rgba(192, 192, 192, 0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.god-arrow { color: var(--muted); font-size: 10px; opacity: 0.6; }
+
+/* ── Sessions ── */
+.session-list { display: flex; flex-direction: column; gap: 3px; max-height: 160px; overflow-y: auto; }
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.session-item:hover { background: var(--surface-hover); }
+.session-item .session-icon { font-size: 12px; flex-shrink: 0; width: 18px; text-align: center; }
+.session-item .session-info { flex: 1; min-width: 0; }
+.session-item .session-title { font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-item .session-meta { font-size: 9px; color: var(--muted); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-item .session-god-tag {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 99px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.session-empty { font-size: 11px; color: var(--muted); padding: 8px 4px; text-align: center; }
+
+/* ── Health ── */
+.health-info { display: flex; flex-direction: column; gap: 4px; }
+.health-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+.health-row span:last-child { font-weight: 500; color: var(--text); }
+.health-dot { font-size: 10px; }
+.health-dot[data-status="ok"] { color: var(--success); }
+.health-dot[data-status="warn"] { color: var(--warning); }
+.health-dot[data-status="error"] { color: var(--error); }
+
+/* ── Quick Capture ── */
+.quick-capture {
+  display: flex;
+  gap: 6px;
+}
+.capture-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.capture-input:focus { border-color: var(--accent); }
+.capture-input::placeholder { color: rgba(192, 192, 192, 0.4); }
+.capture-btn {
+  padding: 8px 14px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.capture-btn:hover { opacity: 0.85; }
+
+/* ── Footer ── */
+.footer {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.footer-btn {
+  flex: 1;
+  padding: 6px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.footer-btn:hover { background: var(--surface-hover); color: var(--text); }
+.footer-btn.danger:hover { border-color: var(--error); color: var(--error); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CHAT VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#chat-back {
+  font-size: 14px;
+  width: 26px;
+  height: 26px;
+}
+#chat-god-name { font-size: 12px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.god-select {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+.chat-header-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.chat-header-btn:hover { background: var(--surface-hover); color: var(--accent); border-color: var(--accent); }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scroll-behavior: smooth;
+}
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  gap: 4px;
+}
+.chat-empty-hint { font-size: 11px; opacity: 0.6; }
+
+.msg {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  max-width: 85%;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.user {
+  background: var(--accent);
+  color: #000;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+.msg.assistant {
+  background: var(--surface);
+  color: var(--text);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  border-left: 2px solid var(--accent);
+}
+.msg.system {
+  background: var(--accent-bg);
+  color: var(--muted);
+  align-self: center;
+  font-size: 11px;
+  text-align: center;
+  max-width: 100%;
+}
+
+.chat-input-area {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.chat-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  resize: none;
+  font-family: var(--font);
+  max-height: 80px;
+  line-height: 1.4;
+}
+.chat-input:focus { border-color: var(--accent); }
+.chat-input::placeholder { color: rgba(192, 192, 192, 0.4); }
+.chat-input:disabled { opacity: 0.4; }
+
+.chat-send-btn {
+  padding: 8px 12px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  align-self: flex-end;
+}
+.chat-send-btn:hover { opacity: 0.85; }
+.chat-send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.typing {
+  align-self: flex-start;
+  padding: 8px 14px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border-left: 2px solid var(--accent);
+  font-size: 12px;
+  color: var(--muted);
+}
+.typing::after {
+  content: '...';
+  animation: dots 1.2s steps(3, end) infinite;
+}
+@keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60%, 100% { content: '...'; } }

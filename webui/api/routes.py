@@ -2772,6 +2772,7 @@ def _deep_health_checks(stream_check: dict | None = None) -> tuple[dict, bool]:
 
 
 def _handle_health(handler, parsed):
+    from api.models import get_effective_default_model
     deep = parse_qs(parsed.query or "").get("deep", [""])[0].lower() in {"1", "true", "yes", "on"}
     stream_check = _streams_lock_health()
     payload = {
@@ -2780,6 +2781,7 @@ def _handle_health(handler, parsed):
         "active_streams": int(stream_check.get("active_streams") or 0),
         "uptime_seconds": round(time.time() - SERVER_START_TIME, 1),
         "accept_loop": _accept_loop_health(handler),
+        "model": get_effective_default_model(),
     }
     if deep:
         if stream_check.get("status") != "ok":
@@ -3146,7 +3148,7 @@ a:hover{{text-decoration:underline}}
     if parsed.path == "/api/logs":
         return _handle_logs(handler, parsed)
 
-    if parsed.path == "/health":
+    if parsed.path == "/health" or parsed.path == "/api/health":
         return _handle_health(handler, parsed)
 
     if parsed.path == "/api/health/agent":

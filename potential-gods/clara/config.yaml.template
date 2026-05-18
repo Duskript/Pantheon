@@ -1,0 +1,61 @@
+# ── Clara Profile Config Template ──────────────────────────────────
+# Replace placeholders with client-specific values before deploying.
+
+model:
+  default: deepseek-v4-flash
+  provider: opencode-go
+  base_url: ''
+  api_mode: chat_completions
+
+providers:
+  opencode-go:
+    default_model: deepseek-v4-flash
+    models:
+      - deepseek-v4-flash
+      - deepseek-v4-pro
+      - kimi-k2.6
+    name: OpenCode Go
+
+fallback_providers: []
+credential_pool_strategies: {}
+
+toolsets:
+  - hermes-cli
+  - web
+
+agent:
+  max_turns: 120
+  gateway_timeout: 1800
+  restart_drain_timeout: 60
+  api_max_retries: 3
+  tool_use_enforcement: auto
+  image_input_mode: auto
+  disabled_toolsets: []
+  # Clara is always in character — no personality switching
+  personalities: {}
+
+# ── Google Workspace MCP ───────────────────────────────────────────
+# Credentials set up during deployment.
+# See: ~/.local/share/google-workspace-mcp/credentials/
+# And: ~/.config/google-workspace-mcp/accounts.json
+#
+# Scopes needed:
+#   https://www.googleapis.com/auth/gmail.readonly  (triage)
+#   https://www.googleapis.com/auth/gmail.modify    (triage + archive/tag)
+#   https://www.googleapis.com/auth/calendar        (scheduling)
+#   https://www.googleapis.com/auth/tasks           (task tracking)
+
+# ── Cron jobs (provisioned at setup) ───────────────────────────────
+# These get created during first-time setup, not baked into config.
+# crons:
+#   morning-inbox-scan: "0 8 * * 1-5"
+#   renewal-check: "0 10 * * 1-5"
+#   weekly-briefing: "0 16 * * 5"
+
+# ── Prior Auth Tracking ───────────────────────────────────────────
+# Prior auth state is stored in the AtHENAEUM under Codex-PriorAuth/.
+# Each submission gets a state file:
+#   - pending: submitted, awaiting response
+#   - approved: approved, next renewal date known
+#   - denied: denied, reason recorded
+#   - renewal-soon: within X days of renewal window

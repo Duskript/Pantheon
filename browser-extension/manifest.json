@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "Pantheon Companion",
+  "version": "0.1.0",
+  "description": "Summon your gods, capture ideas, and chat with Pantheon from any tab.",
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "sidePanel",
+    "notifications",
+    "activeTab"
+  ],
+
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+
+  "action": {
+    "default_title": "Pantheon Companion",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "pantheon-companion@duskript",
+      "strict_min_version": "120.0"
+    }
+  }
+}
