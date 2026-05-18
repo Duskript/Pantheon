@@ -246,8 +246,8 @@
       const btn = document.getElementById('god-rail-settings');
       if (btn) {
         btn.addEventListener('click', () => {
-          // Trigger the existing settings modal in the React app
-          const settingsBtn = document.querySelector('[title="Settings"]');
+          // Trigger the existing settings modal in the React header
+          const settingsBtn = document.querySelector('.toolbar-pill [title="Settings"], .header-controls [title="Settings"]');
           if (settingsBtn) settingsBtn.click();
         });
       }

@@ -196,7 +196,20 @@
 
     root.appendChild(btn);
     root.appendChild(panel);
-    document.body.appendChild(root);
+
+    // Inject into header toolbar instead of body
+    function tryInject() {
+      const toolbar = document.querySelector('.toolbar-pill');
+      if (toolbar) {
+        toolbar.insertBefore(btn, toolbar.firstChild);
+        document.body.appendChild(panel);
+      } else {
+        document.body.appendChild(root);
+      }
+    }
+    // Delay to let React render the header first
+    setTimeout(tryInject, 1500);
+    setTimeout(tryInject, 4000);
 
     els = { badge: root.querySelector('#nb-badge'), panel: list, root };
 
