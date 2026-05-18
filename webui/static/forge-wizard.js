@@ -185,6 +185,24 @@
     new ForgeWizard(container || document.body);
   };
 
+  window.openForgeWizard = function() {
+    var existing = document.getElementById('forge-wizard-overlay');
+    if (existing) { existing.remove(); return; }
+    var overlay = document.createElement('div');
+    overlay.id = 'forge-wizard-overlay';
+    Object.assign(overlay.style, {
+      position: 'fixed', inset: '0', zIndex: '9998',
+      background: 'rgba(0,0,0,0.7)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center'
+    });
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    var panel = document.createElement('div');
+    panel.style.cssText = 'background:var(--bg-primary,#0A0908);border:1px solid var(--border);border-radius:12px;width:650px;max-width:95vw;max-height:85vh;overflow:auto';
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    new ForgeWizard(panel);
+  };
+
   // Auto-mount
   setTimeout(() => {
     const existing = document.getElementById('forge-wizard-panel');
