@@ -8358,7 +8358,27 @@ def _handle_chat_start(handler, body):
     try:
         s = get_session(body["session_id"])
     except KeyError:
-        return bad(handler, "Session not found", 404)
+        # Auto-create session for client-side generated IDs (hermes-ui compat)
+        from api.models import new_session, SESSIONS, LOCK
+        try:
+            workspace = str(resolve_trusted_workspace(body.get("workspace"))) if body.get("workspace") else None
+        except ValueError:
+            workspace = None
+        s = new_session(
+            workspace=workspace,
+            model=body.get("model") or None,
+            model_provider=body.get("model_provider") or None,
+            profile=body.get("profile") or None,
+        )
+        # Override auto-generated UUID with the client-provided session_id
+        old_sid = s.session_id
+        s.session_id = body["session_id"]
+        # Fix the in-memory cache so future get_session() calls find this session
+        with LOCK:
+            if old_sid in SESSIONS:
+                del SESSIONS[old_sid]
+            SESSIONS[s.session_id] = s
+            SESSIONS.move_to_end(s.session_id)
     requested_profile = str(body.get("profile") or "").strip()
     if requested_profile:
         try:

@@ -1,18 +1,20 @@
 /* ── Pantheon Sidebar Extras ──
  * Injects Boons, Ideas, Athenaeum into the sidebar "More tools" (nav-extra).
+ * Uses polling instead of MutationObserver to avoid React reconciliation conflicts.
  */
 (function() {
   'use strict';
 
+  var injected = false;
+
   function injectExtras() {
     var navExtra = document.querySelector('.nav-extra');
     if (!navExtra) {
-      setTimeout(injectExtras, 500);
+      injected = false;
       return;
     }
 
-    // Remove existing injections
-    document.querySelectorAll('.pantheon-extra').forEach(function(el) { el.remove(); });
+    if (injected) return; // Only inject once per appearance
 
     var existingLabels = [];
     navExtra.querySelectorAll('.nav-item-label').forEach(function(el) {
@@ -23,7 +25,6 @@
     if (!existingLabels.includes('Boons')) {
       var boonsBtn = document.createElement('div');
       boonsBtn.className = 'nav-item pantheon-extra';
-      boonsBtn.style.cssText = '';
       boonsBtn.innerHTML = '<span class="nav-item-icon" style="color:#c9a754">📦</span><span class="nav-item-label">Boons</span>';
       boonsBtn.onclick = function() { window.openBoonsManager && window.openBoonsManager(); };
       boonsBtn.title = 'View saved boons';
@@ -49,26 +50,24 @@
       athBtn.title = 'Knowledge graph search';
       navExtra.appendChild(athBtn);
     }
+
+    injected = true;
   }
 
-  // Watch for nav-extra appearing (it's conditional on sidebarToolsExpanded)
-  var observer = new MutationObserver(function() {
-    injectExtras();
-  });
-
-  function start() {
-    injectExtras();
-    var sidebar = document.querySelector('.sidebar');
-    if (sidebar) {
-      observer.observe(sidebar, { childList: true, subtree: true });
+  // Poll for nav-extra every 500ms. When gone, reset injected flag.
+  setInterval(function() {
+    var navExtra = document.querySelector('.nav-extra');
+    if (navExtra) {
+      injectExtras();
     } else {
-      setTimeout(start, 500);
+      injected = false;
     }
-  }
+  }, 500);
 
+  // Initial injection after DOM ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(start, 1500); });
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(injectExtras, 1500); });
   } else {
-    setTimeout(start, 1500);
+    setTimeout(injectExtras, 1500);
   }
 })();
