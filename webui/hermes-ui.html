@@ -570,7 +570,8 @@
 
   .messages {
     flex: 1; overflow-y: auto; display: flex; flex-direction: column;
-    background: var(--bg-primary); padding: 20px;
+    background: var(--bg-primary); padding: 20px; content-visibility: auto;
+    contain-intrinsic-size: 0 500px;
   }
   .messages::-webkit-scrollbar { width: 6px; }
   .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
