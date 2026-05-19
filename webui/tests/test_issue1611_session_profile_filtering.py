@@ -205,6 +205,33 @@ def test_static_sessions_js_trusts_server_profile_scoping():
     )
 
 
+# ── Hermes UI React sidebar localStorage scoping ───────────────────────────
+
+
+def test_hermes_ui_filters_local_storage_to_server_scoped_sessions():
+    """hermes-ui.html must not merge every browser-cached conversation.
+
+    The React sidebar fetches /api/sessions, which is already scoped by the
+    active hermes_profile cookie. Browser localStorage can still contain stale
+    conversations from previously selected gods. The loader must use the server
+    response as the scope boundary and only allow local rows whose ids are also
+    present in the scoped server list. Otherwise Hephaestus sees Hermes sessions
+    after a profile switch.
+    """
+    from pathlib import Path
+
+    repo_root = Path(__file__).parent.parent
+    src = (repo_root / 'hermes-ui.html').read_text(encoding='utf-8')
+
+    assert "function filterLocalConversationsToServerScope" in src
+    assert "function normalizeServerConversations" in src
+    assert (
+        "convs=mergeConversationSources(filterLocalConversationsToServerScope(localConvs,serverConvs),"
+        "normalizeServerConversations(serverConvs));"
+    ) in src
+    assert "convs=mergeConversationSources(localConvs,Array.isArray(serverConvs)?serverConvs:" not in src
+
+
 # ── Cleanup ────────────────────────────────────────────────────────────────
 
 
