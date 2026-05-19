@@ -23,7 +23,7 @@
     if (!data) return;
     const prev = state.notifications.length;
     const prevIds = new Set(state.notifications.map(n => n.id));
-    state.notifications = data.notifications || [];
+    state.notifications = (data.notifications || []).filter(n => !n.dismissed);
     const hasNew = state.notifications.some(n => !n.dismissed && !prevIds.has(n.id));
     if (hasNew && prev > 0) pulseBadge();
     render();
@@ -39,15 +39,18 @@
   }
 
   async function dismiss(id) {
-    await api('/notifications/dismiss', { method: 'POST', body: JSON.stringify({ id }) });
-    const n = state.notifications.find(n => n.id === id);
-    if (n) n.dismissed = true;
+    const result = await api('/notifications/dismiss', { method: 'POST', body: JSON.stringify({ id }) });
+    if (!result || result.error) return;
+    state.notifications = state.notifications.filter(n => n.id !== id);
+    state.expanded.delete(id);
     render();
   }
 
   async function clearAll() {
-    await api('/notifications/clear', { method: 'POST' });
-    state.notifications.forEach(n => n.dismissed = true);
+    const result = await api('/notifications/clear', { method: 'POST' });
+    if (!result || result.error) return;
+    state.notifications = [];
+    state.expanded.clear();
     render();
   }
 
@@ -98,6 +101,10 @@
       els.badge.textContent = count;
       els.badge.style.display = count > 0 ? 'flex' : 'none';
     }
+    if (els.dismissAll) {
+      els.dismissAll.disabled = count === 0;
+      els.dismissAll.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
     if (!state.open || !els.list) return;
 
     els.list.innerHTML = '';
@@ -113,14 +120,14 @@
 
     const footer = document.createElement('div');
     footer.className = 'nb-footer';
-    footer.innerHTML = '<button class="nb-clear-all">Clear all</button>';
+    footer.innerHTML = '<button class="nb-clear-all">Dismiss all</button>';
     els.list.appendChild(footer);
 
     els.list.querySelectorAll('[data-dismiss]').forEach(btn =>
       btn.addEventListener('click', e => { e.stopPropagation(); dismiss(btn.dataset.dismiss); }));
     els.list.querySelectorAll('[data-expand]').forEach(btn =>
       btn.addEventListener('click', e => { e.stopPropagation(); toggleExpand(btn.dataset.expand); }));
-    els.list.querySelector('.nb-clear-all')?.addEventListener('click', clearAll);
+    els.list.querySelector('.nb-clear-all')?.addEventListener('click', e => { e.stopPropagation(); clearAll(); });
   }
 
   function positionPanel() {
@@ -167,7 +174,7 @@
         background:var(--bg-secondary,#1e1e2e); border:1px solid var(--border,#333); border-radius:10px;
         box-shadow:0 8px 32px rgba(0,0,0,.45); flex-direction:column; overflow:hidden; display:none; z-index:9500; }
       #nb-panel-header { padding:10px 14px; font-size:13px; font-weight:600; color:var(--text-secondary,#a6adc8);
-        border-bottom:1px solid var(--border,#333); flex-shrink:0; }
+        border-bottom:1px solid var(--border,#333); flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:10px; }
       .nb-list { overflow-y:auto; flex:1; min-height:0; }
       .nb-item { padding:10px 14px; border-bottom:1px solid var(--border,#333); cursor:default;
         transition:background .12s; }
@@ -187,9 +194,11 @@
       .nb-expand:hover { text-decoration:underline; }
       .nb-empty { padding:24px 14px; text-align:center; color:var(--text-muted,#6c7086); font-size:13px; }
       .nb-footer { padding:8px 14px; border-top:1px solid var(--border,#333); flex-shrink:0; }
-      .nb-clear-all { background:none; border:1px solid var(--border,#333); border-radius:6px;
+      .nb-dismiss-all, .nb-clear-all { background:none; border:1px solid var(--border,#333); border-radius:6px;
         color:var(--text-secondary,#a6adc8); font-size:12px; cursor:pointer; padding:5px 12px; width:100%; }
-      .nb-clear-all:hover { border-color:var(--accent,#89b4fa); color:var(--accent,#89b4fa); }
+      .nb-dismiss-all { width:auto; padding:3px 8px; align-items:center; justify-content:center; }
+      .nb-dismiss-all:hover, .nb-clear-all:hover { border-color:var(--accent,#89b4fa); color:var(--accent,#89b4fa); }
+      .nb-dismiss-all:disabled, .nb-clear-all:disabled { opacity:.45; cursor:not-allowed; }
     `;
     document.head.appendChild(style);
   }
@@ -209,7 +218,7 @@
     panel.id = 'nb-panel';
     const header = document.createElement('div');
     header.id = 'nb-panel-header';
-    header.textContent = 'Notifications';
+    header.innerHTML = '<span>Notifications</span><button class="nb-dismiss-all" type="button">Dismiss all</button>';
     const list = document.createElement('div');
     list.className = 'nb-list';
     panel.appendChild(header);
@@ -232,9 +241,10 @@
     setTimeout(tryInject, 1500);
     setTimeout(tryInject, 4000);
 
-    els = { badge: btn.querySelector('#nb-badge'), panel, list, root, btn };
+    els = { badge: btn.querySelector('#nb-badge'), panel, list, root, btn, dismissAll: header.querySelector('.nb-dismiss-all') };
 
     btn.addEventListener('click', e => { e.stopPropagation(); togglePanel(); });
+    els.dismissAll?.addEventListener('click', e => { e.stopPropagation(); clearAll(); });
     window.addEventListener('resize', () => { if (state.open) positionPanel(); }, { passive: true });
     document.addEventListener('click', e => {
       const inside = (els.btn && els.btn.contains(e.target)) ||
