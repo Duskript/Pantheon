@@ -1,342 +1,495 @@
-# Pantheon — The God / Studio / Harness Model
+# Pantheon System Architecture
 
-> **⚠️ PARTIALLY STALE — See canonical reference at `~/pantheon/ARCHITECTURE.md`**
-> This document describes the original conceptual architecture (God/Studio/Harness).
-> The harness layer was never implemented in code. For the current system architecture,
-> including file layouts, component dependencies, and deployment, see the canonical document.
+> **Canonical reference — Last updated: 2026-05-20**
+> Maps every Pantheon component, what it touches, what depends on it, and where it diverges from a stock Hermes Agent installation.
 >
-> Source: Constitution Section 4
-> Read this document when: defining, editing, or instantiating any god, studio, or harness file; working on the registry; or making decisions about agent behavior and routing.
+> Keep this updated as architecture changes.
 
 ---
 
-## The Three Layers
+## 1. High-Level Overview
 
-**The God**
-The god is the agent's identity, domain, and personality. It defines what the agent is responsible for and what it is not. Gods do not overlap. When something is outside a god's domain the harness routes it to the appropriate god rather than attempting to handle it.
+Pantheon is a layer of custom infrastructure on top of **Hermes Agent** (the base LLM agent system). It adds:
+- A **god profile system** — multi-agent identities with per-god configs, skills, sessions, and memory
+- A **web management UI** — browser interface for managing gods, summoning/exporting, health monitoring
+- A **knowledge management system** (Athenaeum + Hades + Ichor) — structured, persistent, graph-aware memory
+- An **export/summon pipeline** — god distribution via GitHub PRs against `Duskript/Pantheon-Summons`
+- **Gateway plugins** — runtime hooks that extend agent behavior (ichor gates, shared facts, etc.)
 
-**The Studio**
-A studio is a specialization layer loaded on top of a god's base harness for a specific task domain. A god can have multiple studios. Studios inherit the god's base identity and add targeted knowledge context, scoped Mnemosyne partitions, and domain-specific guardrails. Not all gods have studios — studios exist only where meaningful specialization is required.
+### Layer Diagram
 
-**The Harness**
-The harness is the constraining structure that makes a god's output reliable and consistent. It defines exactly what the god does, what it refuses, what format it outputs, how it handles ambiguity, and how it routes out-of-scope requests. The harness is enforced at the definition level — not by convention or trust. A god without a harness is not a Pantheon agent.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    TAILSCALE (pantheon)                      │
+│  serve / → :8787 (prod)  /dev → :8788  /dashboard → :9119   │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────┐  ┌──────────────────────────────┐  │
+│  │  Hermes Web UI      │  │  Hermes Dashboard            │  │
+│  │  (prod :8787)       │  │  (dev :8788)  (dashboard)    │  │
+│  │  server.py + api/   │  │                               │  │
+│  └─────────┬───────────┘  └──────────┬───────────────────┘  │
+│            │                          │                       │
+│            ▼                          ▼                       │
+│  ┌────────────────────────────────────────────────────┐      │
+│  │              Hermes Agent Runtime                   │      │
+│  │  ~/.hermes/  (config.yaml, profiles, skills)        │      │
+│  │  Gateway + Plugins + MCP Servers                    │      │
+│  └────────┬──────────────┬──────────────┬──────────────┘      │
+│           │              │              │                      │
+│           ▼              ▼              ▼                      │
+│  ┌────────────┐  ┌────────────┐  ┌──────────────────┐        │
+│  │ Athenaeum  │  │ Ichor      │  │ Legacy YAMLs     │        │
+│  │ ~/athenaeum│  │ Memory     │  │ (dead references)│        │
+│  │ Codexes    │  │ System     │  │ harnesses/*.yaml │        │
+│  └────────────┘  └────────────┘  │ gods.yaml        │        │
+│                                  └──────────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### File System Layout
+
+```
+~/
+├── .hermes/                          ← Hermes Agent home (base system)
+│   ├── config.yaml                   ← Agent configuration
+│   ├── SOUL.md                       ← Hermes identity
+│   ├── persona.md                    ← Hermes behavior
+│   ├── icon.png                      ← Hermes icon
+│   ├── god.json                      ← Hermes metadata
+│   ├── skills/                       ← Global skill repository (133 skills)
+│   ├── profiles/                     ← God profiles (the core god system)
+│   │   ├── hermes/                   ← Hermes profile
+│   │   ├── apollo/                   ← Apollo profile
+│   │   ├── thoth/                    ← Thoth profile
+│   │   ├── marvin/                   ← Marvin profile
+│   │   ├── caduceus/                 ← Caduceus profile
+│   │   ├── hephaestus/               ← Hephaestus profile
+│   │   ├── cachyos/                  ← CachyOS Bridge (restricted)
+│   │   └── .../                      ← Each god has:
+│   │       ├── SOUL.md               ←   Identity/personality
+│   │       ├── persona.md            ←   Behavior guide
+│   │       ├── config.yaml           ←   Model, toolsets, MCP, provider
+│   │       ├── god.json              ←   Metadata (display_name, icon, color, domain)
+│   │       ├── icon.png              ←   Profile avatar
+│   │       ├── skills/               ←   Skill files (populated on install)
+│   │       ├── sessions/             ←   Session transcripts (runtime)
+│   │       ├── memories/             ←   Cross-session memory (runtime)
+│   │       ├── plans/, cron/         ←   Plans and cron jobs (runtime)
+│   │       ├── logs/, bin/           ←   Runtime artifacts
+│   │       ├── platforms/            ←   Platform connection state
+│   │       ├── skins/                ←   UI skins
+│   │       ├── webui_state/          ←   UI state cache
+│   │       ├── workspace/            ←   God's workspace
+│   │       ├── state.db              ←   Session/state SQLite DB
+│   │       └── auth.json             ←   Authentication
+│   ├── cron/                         ← Scheduled job definitions
+│   ├── plugins/                      ← Gateway plugins
+│   │   ├── ichor-gates/              ←   Ichor nudge integration
+│   │   ├── pantheon/                 ←   Pantheon-specific hooks
+│   │   ├── pantheon-shared-facts/    ←   Shared fact tracking
+│   │   ├── hermes-achievements/      ←   Achievement system
+│   │   └── rtk-rewrite/              ←   RTK prompt rewrite
+│   ├── ichor/                        ← Ichor memory backend data
+│   ├── sessions/                     ← Global session store
+│   ├── memories/                     ← Global memory store
+│   ├── hooks/                        ← Event hooks
+│   ├── logs/                         ← Hermes agent logs
+│   └── ...                           ← Other standard Hermes dirs
+│
+├── pantheon/                         ← Pantheon custom code
+│   ├── webui/                        ← Web UI server
+│   │   ├── server.py                 ←   HTTP server (dev mode)
+│   │   ├── hermes-ui.html            ←   React frontend (full Pantheon UI)
+│   │   ├── static/
+│   │   │   ├── index.html            ←   Vanilla JS frontend (fallback)
+│   │   │   ├── god-management.js     ←   God management panel (Summon/Export/Edit/Exile)
+│   │   │   ├── forge-wizard.js       ←   God creation wizard
+│   │   │   ├── god-picker.js         ←   God sidebar grid
+│   │   │   └── ...                   ←   Other static assets
+│   │   └── api/
+│   │       ├── routes.py             ←   ALL API routing (455KB, 11K+ lines)
+│   │       ├── profiles.py           ←   Profile management
+│   │       ├── soul_forge.py         ←   God creation forge
+│   │       ├── athenaeum.py          ←   Knowledge base management
+│   │       ├── config.py             ←   Configuration (173KB)
+│   │       ├── providers.py          ←   Provider/model listing
+│   │       ├── models.py             ←   Model management
+│   │       ├── streaming.py          ←   SSE streaming (172KB)
+│   │       ├── system_health.py      ←   Health monitoring
+│   │       ├── mcp_services.py       ←   MCP service management
+│   │       ├── kanban_bridge.py      ←   Kanban integration
+│   │       ├── auth.py               ←   Authentication
+│   │       ├── helpers.py            ←   Shared utilities
+│   │       ├── workspace.py          ←   Workspace management
+│   │       ├── onboarding.py         ←   Onboarding flow
+│   │       ├── upload.py             ←   File upload handling
+│   │       ├── oauth.py              ←   OAuth flows
+│   │       └── ...                   ←   Other API modules
+│   │
+│   ├── harnesses/                    ← ☠️ LEGACY — 12 YAML files, zero code references
+│   ├── gods/
+│   │   ├── gods.yaml                 ← ☠️ LEGACY — superseded by profile god.json
+│   │   ├── GOD-FORGING-GUIDE.md      ← Documentation
+│   │   └── manifest-reference.md     ← Documentation
+│   ├── planning/
+│   │   └── ARCHITECTURE.md           ← ⚠️ PARTIALLY STALE — God/Studio/Harness model
+│   └── shared/
+│       ├── DIGEST.md                 ← Cross-god shared context (generated by cron)
+│       ├── decisions/                ← Architectural Decision Records
+│       └── archive/                  ← Archived docs
+│
+└── athenaeum/                        ← Knowledge base (Codexes)
+    ├── Codex-Apollo/                 ← Apollo domain knowledge
+    ├── Codex-God-thoth/              ← Thoth domain knowledge
+    ├── Codex-God-caduceus/           ← Caduceus domain knowledge
+    ├── Codex-God-Hephaestus/         ← Hephaestus domain knowledge
+    ├── Codex-Forge/                  ← Technical/code knowledge
+    ├── Codex-Pantheon/               ← Pantheon system knowledge
+    ├── Codex-General/                ← General knowledge
+    ├── Codex-Infrastructure/         ← Infrastructure knowledge
+    ├── Codex-User/                   ← User profile knowledge
+    └── ...                           ← Other codexes
+```
 
 ---
 
-## The Hierarchy
+## 2. Component Dependency Graph
 
-```
-Sanctuary (the room you work in)
-└── God (who you are talking to)
-    └── Studio (what they are specialized for)
-        └── Harness (the guardrails and routing rules)
-            └── Mnemosyne Partition (the scoped knowledge)
-```
+Each component listed with: what files/locations it uses, what depends on it, and notes.
 
----
+### 2.1 Hermes Agent Base System
 
-## The Harness File Schema
+**Location:** `~/.hermes/`
+**Config:** `~/.hermes/config.yaml`
+**Entry points:** Hermes CLI (`hermes`), Gateway, WebUI API
 
-Every god is defined by a YAML harness file stored in `/Athenaeum/Codex-Pantheon/harnesses/`. This file is the complete definition of the agent. Nothing about a god's behavior exists outside this file.
-
-The `schema_version` field is required on every harness file. The loader validates this field first before reading anything else. A harness without a `schema_version` is treated as invalid and will not load.
-
-```yaml
-# Example: apollo-lyric-writing.yaml
-
-schema_version: 1
-
-name: Apollo
-studio: Lyric Writing
-sanctuary: The Studio
-
-extends: apollo-base.yaml
-
-driver: llm
-model: gemma4
-vault_path: /Athenaeum/Codex-SKC/sessions/
-mnemosyne_scope:
-  - /Athenaeum/Codex-SKC/lyrics/
-  - /Athenaeum/Codex-SKC/style/
-  - /Athenaeum/Codex-SKC/distilled/
-
-identity: |
-  You are Apollo operating in Lyric Writing mode.
-  You assist exclusively with creative writing within
-  the SKC artistic voice and style. You have access
-  to the SKC creative corpus via Mnemosyne. You flag
-  lyrical repetition from past work. You format output
-  for Suno compatibility when requested.
-
-receives:
-  - Creative prompts
-  - Mnemosyne corpus results
-  - SKC style context
-
-output:
-  format: structured_sections
-  fields: [section_type, content, notes]
-  log_to_vault: true
-
-routing:
-  - if: it_or_infrastructure_topic
-    then: route_to(hephaestus)
-  - if: requires_vault_knowledge
-    then: call(athena) → inject → continue
-  - if: requires_corpus_search
-    then: call(mnemosyne) → inject → continue
-  - if: long_form_narrative_request
-    then: suggest_sanctuary(calliope, long-form-fiction)
-  - if: outside_all_known_domains
-    then: escalate(zeus, reason="unclassified")
-
-guardrails:
-  hard_stops:
-    - Never execute system commands
-    - Never write outside SKC voice without explicit override flag
-    - Never access Athenaeum directly — always via Athena or Mnemosyne
-  soft_boundaries:
-    - Flag if prompt feels outside established SKC themes
-    - Flag if requested style conflicts with SKC style documents
-    - Flag if imagery closely matches existing corpus content
-
-failure_behavior:
-  on_ambiguity: ask_one_clarifying_question
-  on_out_of_scope: route_with_explanation
-  on_hard_stop: return_refusal_with_reason
-  on_mnemosyne_unavailable: proceed_without_corpus_note_limitation
-```
-
----
-
-## The Driver Field
-
-Not every god requires a language model. The harness `driver` field defines what powers the god. This is a required field for all harness files.
-
-```yaml
-driver: llm       # Language model via Ollama — conversational and reasoning gods
-driver: script    # Python or shell script — scheduled jobs, monitors, file watchers
-driver: service   # Long-running process or API — vector DB interfaces, log pipelines
-driver: hybrid    # Script with optional LLM calls for classification or summarization
-```
-
-| God | Driver | Reason |
+| What it owns | What reads it | What writes it |
 |---|---|---|
-| Zeus | llm | Orchestration requires reasoning |
-| Apollo | llm | Creative output requires inference |
-| Hephaestus | llm | Planning requires reasoning |
-| Athena | llm | Knowledge retrieval and synthesis |
-| Mnemosyne | hybrid | Vector DB operations via service driver, LLM for Staging classification and Codex proposal |
-| Hestia | script | Health checks — pure monitoring logic |
-| Demeter | script | Cron scheduler — pure job triggering |
-| Kronos | service | Log pipeline — append only, no inference |
-| Hades | hybrid | File consolidation logic + LLM for summarization |
-| Hermes | hybrid | Inter-god message routing and handoffs |
-| Hecate | llm | Intent classification requires inference |
-| Hera | service | Config state management — no inference needed |
-| Ares | script | Enforcement rules — deterministic logic only |
-| Charon | script | File transfer pipeline — no inference needed |
-| Prometheus | hybrid | Web search execution via script, result summarization for Mnemosyne staging uses LLM |
+| `config.yaml` | All Hermes subsystems (gateway, plugins, profiles, webui) | Manual edits, `hermes config set` |
+| Global `skills/` | All profiles via `skills` toolset | Skill curator, `hermes skill create` |
+| Global `sessions/` | WebUI on session page load | Gateway on session end |
+| `cron/` (jobs.json) | Hermes scheduler | `hermes cron` CLI |
+| `plugins/` | Gateway at startup | Manual installs |
 
-For `script` and `service` drivers the `model` field is omitted entirely. For `hybrid` drivers the `model` field is optional and only invoked for specific steps defined in the harness.
+### 2.2 God Profiles System
+
+**Source:** `~/pantheon/webui/api/profiles.py` (43KB)
+**Storage:** `~/.hermes/profiles/<god>/`
+
+**Dependencies:**
+- Reads: `~/.hermes/config.yaml` (for profile root), `god.json`, `config.yaml` per god
+- Writes: profile directories via `create_profile_api()` → `hermes_cli.profiles.create_profile()`
+- Depended on by: Soul Forge, God Management UI, Export/Summon, Health monitoring
+
+**Key functions:**
+- `_resolve_profile_home_for_name(name)` → maps god name to `~/.hermes/profiles/<name>/`
+- `_read_god_metadata(profile_dir)` → reads `god.json`
+- `_write_god_metadata(profile_dir, metadata)` → writes `god.json`
+- `create_profile_api(name)` → delegates to `hermes_cli.profiles.create_profile` for scaffolding
+- `list_profiles_api()` → returns all profiles with gateway status, model, provider, skill count
+
+**Key API routes (in routes.py):**
+- `GET /api/profiles` → list with status
+- `GET /api/gods` → list all gods
+- `GET /api/gods/{name}` → individual god info
+- `POST /api/gods/{name}` → start/stop/set_model
+- `GET /api/gods/{name}/icon` → serve icon.png
+- `GET /api/gods/{name}/skills` → profile + global skills
+- `GET /api/gods/{name}/mcp-servers` → MCP config from config.yaml
+- `GET /api/gods/{name}/codex-folders` → associated Codex-God-{name} or Codex-{Name}
+
+**Runtime auto-creates for each god:**
+- Directories: `skills/`, `sessions/`, `memories/`, `plans/`, `cron/`, `logs/`, `bin/`, `skins/`, `platforms/`, `workspace/`, `webui_state/`
+- Files: `config.yaml` (with defaults), `auth.json`, `state.db`
+
+### 2.3 Soul Forge (God Creation)
+
+**Source:** `~/pantheon/webui/api/soul_forge.py` (13KB)
+**Caller:** `POST /api/gods/{name}/forge` in routes.py
+
+**Creates:**
+- `SOUL.md` — the crafted soul document
+- `god.json` — metadata (display_name, icon, color, domain)
+
+**Does NOT create:**
+- ❌ Skills — skills/ dir left empty
+- ❌ Codex — no Codex-God-{name} initialized
+- ❌ persona.md — not generated
+- ❌ config.yaml defaults — not seeded
+- ❌ MCP config — not set up
+
+**Hook points:**
+- Calls `hermes_cli.profiles.create_profile()` for scaffolding (may or may not work)
+- Called from: God Management UI → Forge Wizard (`static/forge-wizard.js`)
+
+### 2.4 Athenaeum (Knowledge Codexes)
+
+**Source:** `~/pantheon/webui/api/athenaeum.py` (14KB)
+**Storage:** `~/athenaeum/`
+
+**Structure:**
+```
+~/athenaeum/
+├── Codex-{DomainName}/           ← Domain-level codex (Apollo, Forge, Pantheon...)
+│   ├── INDEX.md                  ← Codex index
+│   ├── sessions/                 ← Session transcripts
+│   ├── distilled/                ← Compiled knowledge
+│   └── knowledge/                ← Reference articles
+├── Codex-God-{godname}/          ← God-specific codex (thoth, caduceus...)
+│   ├── research/                 ← God-specific knowledge
+│   └── memory.md                 ← God-specific memory
+└── .chromadb/                    ← Vector embeddings
+```
+
+**API routes:**
+- `GET /api/athenaeum/list` → list all codexes
+- `GET /api/athenaeum/walk?path=INDEX.md` → navigate tree
+- `GET /api/athenaeum/read?path=...` → read file
+- `GET /api/athenaeum/search?q=...` → semantic search
+
+**Hades nightly** — consolidation pipeline:
+- Runs daily (cron)
+- Compiles sessions into distilled knowledge
+- Updates INDEX.md files
+- Archives stale sessions
+
+### 2.5 Ichor Memory System
+
+**Sources:**
+- `~/.hermes/ichor/` — backend storage
+- `~/.hermes/plugins/ichor-gates/` — gateway integration plugin
+- `ichor` tool suite built into Hermes Agent
+
+**Architecture:**
+```
+Ichor Memory — Multi-Backend Fused Search
+│
+├── FTS5 (SQLite)      — Keyword search, events, facts
+├── ChromaDB            — Semantic vector search (in ~/athenaeum/.chromadb/)
+├── Graph DB            — Entity-relationship graph
+└── Events              — Structured event log
+```
+
+**API routes (via MCP `pantheon` server at :8010):**
+- `ichor_health()` — check all backend status
+- `ichor_retrieve(query)` — fused search across all backends
+- `ichor_store(key, content, category)` — store to appropriate backend
+- `ichor_forget(key)` — delete item
+- `ichor_brief(god_name)` — ranked context brief for a god
+- `ichor_graph_query(query)` — natural language graph query
+
+**Known divergence from stock Hermes:**
+- User is considering wiring Ichor store to the **memory nudge** (an LLM call on session end) instead of the compaction pipeline. This would be a significant customization.
+- The `ichor-gates` plugin intercepts gateway message flow to inject Ichor context.
+
+### 2.6 Export / Summon Pipeline
+
+**Export:**
+- `POST /api/gods/{name}/export` in routes.py (~line 5215)
+- Accepts: `selected_skills[]`, `selected_mcp[]`, `codex_folders[]`
+- Returns: tar.gz with `god-{name}/` containing SOUL.md, persona.md, config, icon, selected skills, selected MCP configs, selected codexes
+- Two paths: `pantheon-bundle` CLI (if available) or profile-based fallback
+- Tarball structure:
+  ```
+  god-{name}/
+  ├── SOUL.md
+  ├── persona.md
+  ├── config.yaml
+  ├── profles.json (if exists)
+  ├── icon.png
+  ├── mcp.json (selected MCP servers)
+  ├── skills/
+  │   ├── {skill1}/
+  │   └── {skill2}/
+  └── codex/
+      └── Codex-{Name}/
+  ```
+
+**Summon:**
+- `GET /api/gods/summon/list` → available gods from `Duskript/Pantheon-Summons` repo
+- `POST /api/gods/summon` → create PR against summon repo with god bundle
+- Routes: lines ~5520-5700 in routes.py
+
+**Repo:** `https://github.com/Duskript/Pantheon-Summons`
+**Current gods in repo:** `marvin/` (SOUL.md + icon.png only, no metadata.json yet)
+
+### 2.7 Gateway Plugins
+
+**Location:** `~/.hermes/plugins/`
+
+| Plugin | Files | What it does |
+|---|---|---|
+| `ichor-gates/` | `__init__.py` (9KB), `plugin.yaml` | Intercepts gateway message flow, injects Ichor context per message |
+| `pantheon/` | `__init__.py` (33KB), `plugin.yaml` | Pantheon-specific gateway hooks (routing, multi-god) |
+| `pantheon-shared-facts/` | `__init__.py` (14KB), `plugin.yaml` | Tracks shared facts across gods |
+| `hermes-achievements/` | (binary plugin) | Achievement/trophy system |
+| `rtk-rewrite/` | (binary plugin) | RTK prompt rewriting |
+
+**Plugin loading:** Gateway loads plugins from `~/.hermes/plugins/` at startup. Each must have `plugin.yaml` + `__init__.py` with `setup()` hook.
+
+### 2.8 WebUI / Frontend
+
+**Two frontends:**
+
+| Version | File | Route | Notes |
+|---|---|---|---|
+| React | `hermes-ui.html` | Normal (controlled by `HERMES_WEBUI_INDEX`) | Full Pantheon UI with glassmorphic design |
+| Vanilla JS | `static/index.html` | Fallback | Simpler, used for dev work |
+
+**Key JS modules:**
+- `god-management.js` — God management panel (Summon/Export modal/Edit/Exile), 1167+ lines IIFE
+- `forge-wizard.js` — God creation wizard with icon/color picker
+- `god-picker.js` — God sidebar selection grid
+- `header-overflow.js` — Header menu with god management entry
+- `god-rail.js` — God sidebar rail
+
+**Server config:**
+- Prod: systemd service, port 8787
+- Dev: manual `python3 server.py`, port 8788
+- Dashboard: separate process, port 9119
+
+### 2.9 MCP Services
+
+**Internal MCP server:** `pantheon` at `http://127.0.0.1:8010/mcp`
+  - Serves: Athenaeum (search, walk, read, write), Ichor (health, retrieve, store, forget, brief, graph_query), God list, Hades reports, Skill info/run, Messaging
+  - Configured in each god's `config.yaml` under `mcp_servers:`
+
+**External:** Composio MCP — primary external service connector
+
+**MCP tool registration:** Tools defined in each god's config, served via Hermes Agent's native MCP client
 
 ---
 
-## Base and Studio Harness Inheritance
+## 3. Divergence Points — Where Pantheon ≠ Stock Hermes
 
-Base harness files define a god's core identity and default behavior. Studio harness files extend the base, adding only what differs. This prevents duplication and ensures the god's core identity stays consistent across all studios.
+These are the places where our customizations deviate from a standard Hermes Agent installation.
 
-```
-apollo-base.yaml           ← core identity, default routing, base guardrails
-apollo-lyric-writing.yaml  ← extends base, adds SKC corpus scope and Suno awareness
-apollo-poetry.yaml         ← extends base, adds poetry structure and meter awareness
-apollo-short-fiction.yaml  ← extends base, adds narrative structure awareness
-```
+### 3.1 Profile System (HEAVY CUSTOMIZATION)
+Stock Hermes has a flat profile system. Pantheon layers on:
+- `god.json` metadata (display_name, icon, color, domain) — stock Hermes doesn't use this file
+- `GET /api/gods/*` routes — entirely custom routing layer
+- Soul Forge — custom god creation pipeline
+- Export/Summon — custom god distribution pipeline
 
-Merge rules:
-- Child values always override parent values
-- Routing rules: child rules are prepended to base rules (child routes evaluated first)
-- Guardrails: hard stops are additive — child hard stops are never removed by a child harness
-- Circular extends references must be detected and rejected at load time
-- Missing harness files cause a hard failure — no silent fallback to defaults
+### 3.2 WebUI (HEAVY CUSTOMIZATION)
+- `./pantheon/webui/` is a fork of the Hermes Web UI (nesquena)
+- Custom frontend (React hermes-ui.html)
+- Custom API modules (soul_forge, kanban_bridge, athenaeum, mcp_services)
+- Routes.py is 455KB — FAR beyond stock Hermes Web UI
+
+### 3.3 Ichor / Memory (MODERATE CUSTOMIZATION)
+- Stock Hermes memory is simpler (FTS5 + ChromaDB)
+- Pantheon adds Graph DB layer, structured events backend
+- `ichor-gates` plugin is a Pantheon invention
+- Memory nudge → Ichor integration is being considered (would be a Pantheon-only hook)
+
+### 3.4 Athenaeum / Hades (PANTHEON-ORIGINAL)
+- Entirely custom — not part of stock Hermes
+- Codex system with per-god knowledge domains
+- Hades nightly compilation pipeline
+- WebUI API for browsing/searching
+
+### 3.5 Gateway Plugins (MODERATE CUSTOMIZATION)
+- `ichor-gates`, `pantheon`, `pantheon-shared-facts` are Pantheon-only
+- Not part of any stock Hermes plugin catalog
 
 ---
 
-## Harness Schema Versioning
+## 4. Legacy / Dead Systems
 
-Every harness file carries a `schema_version` integer. The loader validates this field before reading anything else. This ensures builders always know what schema version a file was written against and provides a clear migration path when the schema evolves.
+These files remain on disk but are NOT referenced by any active code. They are safe to clean up once the architecture doc is established.
 
-### Schema Version Rules
+### 4.1 `~/pantheon/harnesses/*.yaml` (12 files)
+- **Status:** ☠️ DEAD — zero references in routes.py, config.yaml, or any active code
+- **Content:** Old god-role definitions (thoth-base.yaml, apollo-base.yaml, etc.)
+- **Replaced by:** Per-god `config.yaml` in profile directories
+- **Suggested cleanup:** Add deprecation header, then archive or delete
 
-- `schema_version` is a required field on every harness file — base and studio
-- The current schema version is defined in the loader as `CURRENT_SCHEMA_VERSION`
-- A file with no `schema_version` field is treated as invalid — same as a missing required field
-- A file with a `schema_version` below current triggers a schema mismatch failure
-- A file with a `schema_version` above current is a hard failure — do not attempt to load a file written for a future schema
+### 4.2 `~/pantheon/gods/gods.yaml`
+- **Status:** ☠️ DEAD — zero references in routes.py
+- **Content:** Lists all gods with display_name, role, description, capabilities, status
+- **Replaced by:** Per-god `god.json` in profile directories + `GET /api/profiles` endpoint
+- **Suggested cleanup:** Add deprecation header, then archive or delete
 
-### Loader Behavior on Schema Mismatch
+### 4.3 `~/pantheon/planning/ARCHITECTURE.md`
+- **Status:** ⚠️ PARTIALLY STALE — describes the God/Studio/Harness conceptual model
+- The harness model was never implemented as code — it was aspirational architecture
+- `gods.yaml` was meant to be the registry; it's now dead
+- Capital-R "Architecture" references may confuse vs THIS document
 
-When the loader detects a schema version mismatch it fails loudly. The Sanctuary does not open. The loader produces a structured error report:
+---
+
+## 5. Deployment Architecture
 
 ```
-⚠ Apollo harness failed to load — schema out of date
+                   TAILNET (tail164759.ts.net)
+                          │
+              ┌───────────┴───────────┐
+              │   pantheon node        │
+              │   100.68.106.59        │
+              │   pantheon.tail164759  │
+              │   .ts.net              │
+              └───────────┬───────────┘
+                          │
+                          ▼
+              ┌───────────────────────┐
+              │   Tailscale Serve      │
+              │   (port 443)           │
+              ├───────────────────────┤
+              │  /  → localhost:8787   │  ← Prod WebUI
+              │  /dev → localhost:8788 │  ← Dev WebUI
+              │  /dashboard → :9119    │  ← Dashboard
+              └───────────────────────┘
 
-  File    : harnesses/apollo-lyric-writing.yaml
-  Found   : schema_version 1
-  Expected: schema_version 2
-
-  Issues found:
-  • 'failure_behavior' field is now required — missing from this harness
-  • 'output.schema' has been renamed to 'output.fields'
-
-  To fix automatically:
-    ./scripts/migrate-harness.sh harnesses/apollo-lyric-writing.yaml
-
-  To fix manually:
-    Open apollo-lyric-writing.yaml in Hera → Harnesses
+Services:
+  ┌── prod-webui ──┐  ┌── dev-webui ────┐  ┌── dashboard ──┐
+  │  Port 8787      │  │  Port 8788      │  │  Port 9119    │
+  │  systemd        │  │  manual start   │  │  -hermes flag  │
+  │  Binds 127.0.0.1│  │  Binds 0.0.0.0  │  │               │
+  └────────────────┘  └────────────────┘  └───────────────┘
 ```
 
-Iris surfaces this report to the user in readable form. Hera displays a warning badge on the affected harness in the harness list. Kronos logs the failure with the file path, version found, and version expected.
-
-### Migration Script
-
-`scripts/migrate-harness.sh` upgrades a single harness file from schema version N to N+1. It is run deliberately — never automatically. Each schema version increment ships with a corresponding migration transform in the script.
-
+### Dev Server
 ```bash
-# Usage
-./scripts/migrate-harness.sh harnesses/apollo-lyric-writing.yaml
-
-# Output
-Migrating apollo-lyric-writing.yaml from schema v1 to v2...
-  + Added 'failure_behavior' field with default values
-  ~ Renamed 'output.schema' to 'output.fields'
-Migration complete. Review changes in Hera before reloading.
+cd ~/pantheon/webui
+HERMES_WEBUI_HOST=0.0.0.0 HERMES_WEBUI_PORT=8788 \
+  HERMES_WEBUI_INDEX=hermes-ui.html python3 server.py
 ```
 
-The script never overwrites the original silently — it writes the migrated version and logs what changed. The user reviews the result in Hera before the harness is reloaded. Kronos logs every migration run.
+### Promote to Prod
+Konan says "ship it" → swap to 8787. **Never swap without explicit OK.**
 
 ---
 
-## The God Registry
+## 6. Known Pain Points & TODO
 
-Zeus loads the god registry at startup. The registry is a single YAML file listing all available gods, their base harness files, and their available studios.
-
-```yaml
-# pantheon-registry.yaml
-
-gods:
-  - name: Zeus
-    harness: zeus-base.yaml
-    type: orchestrator
-    studios: none
-
-  - name: Apollo
-    harness: apollo-base.yaml
-    type: conversational
-    studios:
-      - lyric-writing
-      - poetry
-      - short-fiction
-
-  - name: Hephaestus
-    harness: hephaestus-base.yaml
-    type: conversational
-    studios:
-      - program-design
-      - infrastructure-planning
-      - project-scoping
-
-  - name: Athena
-    harness: athena-base.yaml
-    type: conversational
-    studios:
-      - knowledge-query
-      - research
-      - vault-management
-
-  - name: Hermes
-    harness: hermes-base.yaml
-    type: service
-    studios: none
-
-  - name: Mnemosyne
-    harness: mnemosyne-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Hades
-    harness: hades-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Hecate
-    harness: hecate-base.yaml
-    type: service
-    studios: none
-
-  - name: Hestia
-    harness: hestia-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Demeter
-    harness: demeter-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Kronos
-    harness: kronos-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Hera
-    harness: hera-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Ares
-    harness: ares-base.yaml
-    type: subsystem
-    studios: none
-
-  - name: Caduceus
-    harness: caduceus-base.yaml
-    type: conversational
-    studios:
-      - medical-research
-      - health-reference
-
-  - name: Calliope
-    harness: calliope-base.yaml
-    type: conversational
-    studios:
-      - long-form-fiction
-      - worldbuilding
-
-  - name: Prometheus
-    harness: prometheus-base.yaml
-    type: service
-    studios: none
-```
-
----
-
-## Agent Types
-
-| Type | Description | User Interaction |
+| Issue | Impact | Status |
 |---|---|---|
-| conversational | Primary user-facing agents | Direct |
-| orchestrator | Routes and synthesizes — Zeus only | Direct |
-| service | Event-driven, handles handoffs and routing | Indirect |
-| subsystem | Background processes, never conversational | None |
+| God forge doesn't seed skills/codex/config | New gods start incomplete | Needs fix |
+| Codex naming inconsistency (`Codex-God-{name}` vs `Codex-{Name}`) | Export can't find codexes | Partially fixed |
+| Legacy YAML files not marked as dead | Confuses newcomers | Needs cleanup |
+| No `metadata.json` standard in summon repo | Export/Summon data incomplete | Not started |
+| Ichor store may move from compaction to memory nudge | Architecture change pending | Under discussion |
+| `routes.py` is 455KB monolithic file | Hard to maintain, hard to diff | Not addressed |
+| No unit tests for god-management.js | UI changes risk regression | Not addressed |
 
 ---
 
-## Hard Rules For This Layer
+## 7. File Reference Index
 
-- Every god must have a harness file before it is instantiated.
-- No god operates outside its defined domain. Out-of-scope requests are routed, not handled.
-- Studio harness files always extend a base — they never define a god from scratch.
-- The registry is the only authoritative list of available gods. If a god is not in the registry it does not exist.
-- Hera holds the official state of all harness files. Changes to harness files are propagated by Hera.
-- Hard stops in a harness are non-negotiable. They cannot be overridden by user instruction at runtime.
+Quick lookup: which file should I read for what?
+
+| I want to... | Read this file |
+|---|---|
+| Understand the full API surface | `~/pantheon/webui/api/routes.py` |
+| Create a new god | `~/pantheon/webui/api/soul_forge.py` |
+| Manage profiles/gods list | `~/pantheon/webui/api/profiles.py` |
+| Browse the Athenaeum | `~/pantheon/webui/api/athenaeum.py` |
+| Work on the God Management UI | `~/pantheon/webui/static/god-management.js` |
+| Work on the Forge Wizard | `~/pantheon/webui/static/forge-wizard.js` |
+| Configure a god's model/skills | `~/.hermes/profiles/<god>/config.yaml` |
+| See what skills exist | `~/.hermes/skills/` or `GET /api/skills` |
+| See what codexes exist | `~/athenaeum/` or `GET /api/athenaeum/list` |
+| Understand base Hermes Agent | `~/.hermes/config.yaml` |
+| See current shared decisions | `~/pantheon/shared/DIGEST.md` (cron-generated) |
+| Configure Tailscale serve | `tailscale serve status` |
