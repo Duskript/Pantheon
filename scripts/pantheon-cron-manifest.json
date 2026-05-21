@@ -1,0 +1,73 @@
+{
+  "comment": "Pantheon Cron Job Manifest — all cron jobs managed by install-pantheon.sh",
+  "created": "2026-05-21",
+  "hermes_cron_jobs": [
+    {
+      "name": "Shared Context Digest",
+      "schedule": "every 120m",
+      "deliver": "local",
+      "prompt": "Generate a shared context digest for Pantheon gods.",
+      "script": "shared-context-digest.py"
+    },
+    {
+      "name": "shared-context-injection",
+      "schedule": "*/15 * * * *",
+      "deliver": "local",
+      "prompt": "Run the shared context injection script. Execute python3 ~/.hermes/scripts/inject-shared-context.py"
+    },
+    {
+      "name": "Ichor Subconscious Engine",
+      "schedule": "every 15m",
+      "deliver": "local",
+      "prompt": "Run the Ichor Subconscious Engine tick. The pre-run script (ichor_subconscious.py) already queried the event store. Process any new events and synthesize insights.",
+      "script": "ichor_subconscious.py"
+    },
+    {
+      "name": "Hades Nightly Consolidation",
+      "schedule": "0 0 * * *",
+      "deliver": "local",
+      "skills": ["pantheon-operations"],
+      "prompt": "Run the Hades nightly consolidation pipeline. python3 ~/pantheon/pantheon-core/hades/main.py --full",
+      "enabled_toolsets": ["terminal", "file"]
+    },
+    {
+      "name": "Athenaeum entity extraction (pre-Hades)",
+      "schedule": "45 23 * * *",
+      "deliver": "local",
+      "prompt": "Run the Athenaeum entity extraction pipeline. python3 ~/athenaeum/scripts/extract-entities.py",
+      "workdir": "/home/konan/athenaeum"
+    },
+    {
+      "name": "Ichor Forge — Nightly Harness Analysis",
+      "schedule": "30 23 * * *",
+      "deliver": "local",
+      "skills": ["ichor-harness-engineering"],
+      "prompt": "Run the Ichor Forge nightly analysis cycle. python3 ~/pantheon/pantheon-core/ichor/forge.py",
+      "enabled_toolsets": ["terminal"]
+    },
+    {
+      "name": "Morning Briefing",
+      "schedule": "0 6 * * *",
+      "deliver": "local",
+      "prompt": "Compose an energetic morning briefing for Konan delivered in fast-talking Hermes style.",
+      "script": "morning-briefing.py"
+    }
+  ],
+  "system_crontab_entries": [
+    {
+      "schedule": "0 */2 * * *",
+      "command": "cd ~/pantheon && python3 pantheon-core/gods/hestia.py >> ~/pantheon/logs/hestia.log 2>&1",
+      "description": "Hestia periodic maintenance every 2 hours"
+    },
+    {
+      "schedule": "*/5 * * * *",
+      "command": "cd ~/pantheon && python3 scripts/the-fates.py >> ~/pantheon/logs/the-fates.log 2>&1",
+      "description": "The Fates event processing every 5 minutes"
+    },
+    {
+      "schedule": "0 7 * * *",
+      "command": "cd ~/pantheon && scripts/hades --save \"~/athenaeum/Codex-Pantheon/reports/hades-$(date +\\%Y-\\%m-\\%d).md\" >> ~/pantheon/logs/hades.log 2>&1",
+      "description": "Hades daily report at 7 AM"
+    }
+  ]
+}

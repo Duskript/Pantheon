@@ -1,0 +1,4 @@
+name: pantheon-ichor-nudge
+description: "Piggybacks structured Ichor event extraction onto the memory nudge's existing LLM call. Also fires Tier A regex fallback on session inactivity (30 min) and session close. Zero extra LLM calls — the nudge does triple duty: memory review, skill review, and Ichor extraction."
+version: 1.0.0
+author: Hermes (Pantheon-Core)

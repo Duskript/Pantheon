@@ -1,0 +1,7 @@
+name: pantheon-shared-facts
+description: "Extracts decisions/facts during compression and writes to ~/pantheon/shared/decisions/"
+author: Hermes
+version: 1.0.0
+hooks:
+  - on_pre_compress
+  - on_memory_write

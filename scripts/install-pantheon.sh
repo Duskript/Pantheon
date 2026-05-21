@@ -14,8 +14,12 @@
 #   2. Clones Pantheon to ~/pantheon (if not already cloned)
 #   3. Creates ~/pantheon/.env from .env.example (if not exists)
 #   4. Installs core gods (Hermes + Hephaestus)
-#   5. Sets up and starts the gateway as a user service
-#   6. Opens the Welcome Wizard in your browser
+#   5. Deploys Pantheon plugins (symlinks to ~/.hermes/plugins/)
+#   6. Configures memory provider + enables plugins in config
+#   7. Creates Pantheon cron jobs (digests, Ichor, Hades, etc.)
+#   8. Installs systemd services (WebUI, MCP server, Demeter watcher)
+#   9. Sets up and starts the gateway
+#  10. Opens the Welcome Wizard in your browser
 # =============================================================================
 
 set -e
@@ -178,6 +182,161 @@ else
   warn "Could not auto-install — run 'cd ~/pantheon && python3 scripts/pantheon-install .' manually"
 fi
 
+# ── Step 5b: Deploy Pantheon Plugins ─────────────────────────────────────────
+header "Pantheon Plugins"
+
+PLUGIN_SOURCE_DIR="$PANTHEON_DIR/plugins"
+PLUGIN_TARGET_DIR="$HERMES_DIR/plugins"
+
+mkdir -p "$PLUGIN_TARGET_DIR"
+
+# List of plugins to deploy (exclude pantheon — it's already deployed as the
+# Athenaeum memory provider and may be a copy or symlink already)
+PLUGINS=("ichor-gates" "pantheon-ichor-nudge" "pantheon-shared-facts" "rtk-rewrite")
+
+for plugin in "${PLUGINS[@]}"; do
+  source_path="$PLUGIN_SOURCE_DIR/$plugin"
+  target_path="$PLUGIN_TARGET_DIR/$plugin"
+
+  if [ ! -d "$source_path" ]; then
+    warn "Plugin source not found: $source_path — skipping"
+    continue
+  fi
+
+  if [ ! -f "$source_path/plugin.yaml" ]; then
+    warn "Plugin $plugin missing plugin.yaml — skipping"
+    continue
+  fi
+
+  if [ ! -f "$source_path/__init__.py" ]; then
+    warn "Plugin $plugin missing __init__.py — skipping"
+    continue
+  fi
+
+  if [ -L "$target_path" ] || [ -d "$target_path" ]; then
+    # Check if it's already a symlink pointing to the right place
+    if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_path" ]; then
+      ok "Plugin $plugin already symlinked correctly"
+    else
+      warn "Plugin $plugin target exists — skipping (remove $target_path manually to re-link)"
+    fi
+  else
+    ln -s "$source_path" "$target_path"
+    ok "Symlinked plugin: $plugin"
+  fi
+done
+
+# Also ensure the pantheon plugin is present (existing provider)
+pantheon_source="$PLUGIN_SOURCE_DIR/pantheon"
+pantheon_target="$PLUGIN_TARGET_DIR/pantheon"
+if [ ! -d "$pantheon_target" ] && [ ! -L "$pantheon_target" ]; then
+  if [ -d "$pantheon_source" ]; then
+    ln -s "$pantheon_source" "$pantheon_target"
+    ok "Symlinked plugin: pantheon"
+  fi
+fi
+
+# ── Step 5c: Update Plugin Configuration ─────────────────────────────────────
+header "Plugin Configuration"
+
+CONFIG_FILE="$HERMES_DIR/config.yaml"
+
+if [ -f "$CONFIG_FILE" ]; then
+  # Enable plugins in config.yaml using yq if available, or python3
+  # Merge the enabled list: ensure all four plugins are present
+
+  python3 -c "
+import yaml, sys, os
+
+config_path = os.path.expanduser('$CONFIG_FILE')
+with open(config_path) as f:
+    config = yaml.safe_load(f)
+
+if config is None:
+    config = {}
+
+# Ensure plugins section exists
+if 'plugins' not in config:
+    config['plugins'] = {}
+if 'enabled' not in config['plugins']:
+    config['plugins']['enabled'] = []
+
+required = ['ichor-gates', 'pantheon-ichor-nudge', 'pantheon-shared-facts', 'rtk-rewrite']
+current = config['plugins']['enabled']
+for p in required:
+    if p not in current:
+        current.append(p)
+
+config['plugins']['enabled'] = current
+
+# Also ensure memory provider is set
+if config.get('memory', {}).get('provider', '') != 'pantheon-shared-facts':
+    if 'memory' not in config:
+        config['memory'] = {}
+    config['memory']['provider'] = 'pantheon-shared-facts'
+
+with open(config_path, 'w') as f:
+    yaml.dump(config, f, default_flow_style=False)
+
+print('Config updated successfully')
+"
+  ok "Plugin configuration updated in config.yaml"
+else
+  warn "Config file not found at $CONFIG_FILE — skipping plugin config update"
+  warn "Run 'hermes setup --non-interactive' first, then re-run this script"
+fi
+
+# ── Step 5d: Setup Cron Jobs ────────────────────────────────────────────────
+header "Cron Jobs"
+
+if [ -f "$PANTHEON_DIR/scripts/setup-pantheon-cron.sh" ]; then
+  bash "$PANTHEON_DIR/scripts/setup-pantheon-cron.sh"
+  ok "Cron jobs set up"
+else
+  warn "Cron setup script not found at $PANTHEON_DIR/scripts/setup-pantheon-cron.sh"
+  warn "Run manually after install: cd ~/pantheon && bash scripts/setup-pantheon-cron.sh"
+fi
+
+# ── Step 5e: Deploy Systemd Services ─────────────────────────────────────────
+header "Systemd Services"
+
+SERVICE_DIR="${HOME}/.config/systemd/user"
+mkdir -p "$SERVICE_DIR"
+
+# Service files in the repo: webui/pantheon-webui.service, pantheon-core/pantheon-mcp.service, webui/demeter-watcher.service
+SERVICES=(
+  "webui/pantheon-webui.service"
+  "pantheon-core/pantheon-mcp.service"
+  "webui/demeter-watcher.service"
+)
+
+for relpath in "${SERVICES[@]}"; do
+  src="$PANTHEON_DIR/$relpath"
+  name=$(basename "$relpath")
+  tgt="$SERVICE_DIR/$name"
+
+  if [ ! -f "$src" ]; then
+    warn "Service file not found: $src — skipping"
+    continue
+  fi
+
+  cp "$src" "$tgt"
+  ok "Installed $name"
+done
+
+systemctl --user daemon-reload 2>/dev/null && ok "Systemd reloaded"
+
+# Enable and start services
+for relpath in "${SERVICES[@]}"; do
+  name=$(basename "$relpath")
+  if systemctl --user enable "$name" 2>/dev/null; then
+    systemctl --user start "$name" 2>/dev/null || warn "Could not start $name (may need manual config)"
+    ok "Enabled + started $name"
+  else
+    warn "Could not enable $name — systemd user services may not be available"
+  fi
+done
+
 # ── Step 6: Start Gateway ───────────────────────────────────────────────────
 header "Gateway"
 
@@ -195,7 +354,7 @@ else
   fi
 fi
 
-# ── Step 6: Start Setup Server ──────────────────────────────────────────────
+# ── Step 7: Start Setup Server ──────────────────────────────────────────────
 header "Setup Server"
 
 # Kill any previous setup server
@@ -213,7 +372,7 @@ else
   warn "Setup server may not have started — check scripts/setup-server.py"
 fi
 
-# ── Step 7: Open Welcome Wizard ─────────────────────────────────────────────
+# ── Step 8: Open Welcome Wizard ─────────────────────────────────────────────
 header "Welcome"
 
 WELCOME_URL="http://localhost:9876/welcome.html"

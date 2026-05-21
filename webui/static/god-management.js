@@ -776,10 +776,11 @@
 
     async function doGodExport(god, overlay) {
       const st = getExportState(god);
+      const body = overlay.querySelector('.gm-export-body');
       const exportBtn = overlay.querySelector('#gm-export-do-export');
       if (exportBtn) {
         exportBtn.disabled = true;
-        exportBtn.textContent = 'Exporting...';
+        exportBtn.textContent = '⏳ Bundling...';
       }
 
       const payload = {
@@ -799,22 +800,88 @@
           throw new Error(errText);
         }
         const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^";\n]+)"?/);
+        const filename = match ? match[1] : `god-${god.name}.tar.gz`;
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `god-${god.name}.tar.gz`;
-        a.click();
-        URL.revokeObjectURL(url);
 
-        if (exportBtn) {
-          exportBtn.textContent = '✅ Exported!';
+        // Replace the modal body with a persistent success view
+        if (body) {
+          const downloadUrl = url;
+          const fileName = filename;
+          const fileSize = blob.size;
+          body.innerHTML = `
+            <div style="text-align:center;padding:20px 0">
+              <div style="font-size:42px;margin-bottom:10px">✅</div>
+              <div style="font-size:16px;font-weight:700;color:var(--text-primary,#e2e8f0)">Bundle exported!</div>
+              <div style="font-size:13px;color:var(--text-muted,#94a3b8);margin-top:6px">${escHtml(fileName)} (${Math.round(fileSize / 1024)} KB)</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <a href="${downloadUrl}" download="${fileName}" style="
+                display:block;text-align:center;padding:10px 16px;border-radius:8px;
+                background:var(--accent-bg-strong,#7c6fe0);color:#fff;
+                text-decoration:none;font-weight:600;font-size:14px;
+              ">📥 Download Bundle</a>
+              <button id="gm-export-submit-summons" style="
+                display:block;width:100%;text-align:center;padding:10px 16px;border-radius:8px;
+                background:var(--accent,#22c55e);color:#fff;border:none;
+                font-weight:600;font-size:14px;cursor:pointer;
+              ">🌟 Submit to Pantheon-Summons</button>
+              <button class="gm-export-btn-cancel" onclick="this.closest('#gm-export-overlay').remove()" style="width:100%;margin-top:4px">Close</button>
+            </div>
+          `;
+          // Wire up submit-to-summons
+          const submitBtn = body.querySelector('#gm-export-submit-summons');
+          if (submitBtn) {
+            submitBtn.addEventListener('click', async () => {
+              submitBtn.disabled = true;
+              submitBtn.innerHTML = '⏳ Submitting...';
+              try {
+                const payload = {
+                  include_skills: st.skills.size > 0,
+                  codex_folders: Array.from(st.codexFolders).length > 0 ? Array.from(st.codexFolders) : null
+                };
+                const res = await fetch(`/api/gods/${encodeURIComponent(god.name)}/submit-to-summons`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (data.error) {
+                  submitBtn.innerHTML = `⚠️ ${escHtml(data.error)}`;
+                  submitBtn.disabled = false;
+                } else if (data.pr_url) {
+                  submitBtn.innerHTML = '✅ PR Created!';
+                  body.innerHTML += `
+                    <div style="text-align:center;padding:12px;margin-top:8px;background:var(--bg-tertiary,#1e1e36);border-radius:8px;font-size:13px">
+                      🌟 <a href="${escHtml(data.pr_url)}" target="_blank" style="color:var(--accent,#22d3ee);text-decoration:underline">View PR on GitHub</a>
+                    </div>
+                  `;
+                } else {
+                  submitBtn.innerHTML = '✅ Submitted!';
+                }
+              } catch (e) {
+                submitBtn.innerHTML = '⚠️ Network error';
+                submitBtn.disabled = false;
+              }
+            });
+          }
         }
-        setTimeout(() => overlay.remove(), 1500);
       } catch (e) {
         console.error('[god-management] export failed:', e);
         if (exportBtn) {
           exportBtn.textContent = '❌ Failed';
           exportBtn.disabled = false;
+        }
+        if (body) {
+          body.innerHTML = `
+            <div style="text-align:center;padding:20px 0;color:var(--error,#ef4444)">
+              <div style="font-size:42px;margin-bottom:10px">❌</div>
+              <div style="font-size:15px;font-weight:600">Export failed</div>
+              <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-top:6px">${escHtml(e.message)}</div>
+              <button class="gm-export-btn-cancel" onclick="this.closest('#gm-export-overlay').remove()" style="margin-top:12px">Close</button>
+            </div>
+          `;
         }
       }
     }
