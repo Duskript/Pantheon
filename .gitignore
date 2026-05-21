@@ -37,6 +37,12 @@ planning/hermes-alive-state.json
 # Instance-specific gods — only Hermes + Hephaestus ship in core
 Codex-Apollo/
 god-packages/god-apollo/
+harnesses/apollo-base.yaml
+harnesses/apollo-lyric-writing.yaml
+harnesses/apollo-poetry.yaml
+harnesses/caduceus-base.yaml
+harnesses/god-apollo-base.yaml
+harnesses/thoth-base.yaml
 
 # One-time migration scripts — local to each instance
 scripts/migrate-export.sh
