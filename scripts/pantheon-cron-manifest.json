@@ -13,7 +13,7 @@
       "name": "shared-context-injection",
       "schedule": "*/15 * * * *",
       "deliver": "local",
-      "prompt": "Run the shared context injection script. Execute python3 ~/.hermes/scripts/inject-shared-context.py"
+      "prompt": "Run the shared context injection script. Execute python3 ~/pantheon/scripts/inject-shared-context.py"
     },
     {
       "name": "Ichor Subconscious Engine",

@@ -289,6 +289,24 @@ fi
 # ── Step 5d: Setup Cron Jobs ────────────────────────────────────────────────
 header "Cron Jobs"
 
+# Symlink critical cron scripts from repo to ~/.hermes/scripts/ so Hermes can find them
+mkdir -p "${HERMES_DIR}/scripts"
+CRON_SCRIPTS=("shared-context-digest.py" "ichor_subconscious.py" "morning-briefing.py" "inject-shared-context.py")
+for script in "${CRON_SCRIPTS[@]}"; do
+  repo_script="$PANTHEON_DIR/scripts/$script"
+  target_link="${HERMES_DIR}/scripts/$script"
+  if [ -f "$repo_script" ]; then
+    if [ ! -L "$target_link" ] && [ ! -f "$target_link" ]; then
+      ln -s "$repo_script" "$target_link"
+      ok "Symlinked cron script: $script"
+    else
+      ok "Cron script already linked: $script"
+    fi
+  else
+    warn "Cron script not found in repo: $script"
+  fi
+done
+
 if [ -f "$PANTHEON_DIR/scripts/setup-pantheon-cron.sh" ]; then
   bash "$PANTHEON_DIR/scripts/setup-pantheon-cron.sh"
   ok "Cron jobs set up"
