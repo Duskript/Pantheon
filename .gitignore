@@ -76,6 +76,7 @@ pantheon-architecture.png
 planning/STATE.md
 planning/MIGRATION.md
 planning/agent-zero-fork/
+planning/API-KEYS.md
 
 # Personal debug tools
 scripts/spot-fix-embed.py
