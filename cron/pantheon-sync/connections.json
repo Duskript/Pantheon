@@ -1,32 +1,29 @@
 {
-  "_note": "Sample active connections for Pantheon Sync Scheduler. Real adapters land in T12.",
+  "_note": "Active Pantheon sync connections. Each uses a 'provider' key that maps to a registered adapter.",
   "connections": [
     {
-      "id": "wiki-dedup",
-      "provider": "wiki-dedup",
-      "plugin": "wiki-dedup",
-      "adapter": "wiki_dedup_adapter",
-      "enabled": true,
+      "id": "gmail-primary",
+      "provider": "gmail",
+      "enabled": false,
       "sync_interval_minutes": 20,
-      "daily_budget": 1000
+      "daily_budget": 500,
+      "_note": "Enable after T14 OAuth wiring. Requires Composio BYOK credentials."
     },
     {
-      "id": "wiki-provenance",
-      "provider": "wiki-provenance",
-      "plugin": "wiki-provenance",
-      "adapter": "wiki_provenance_adapter",
-      "enabled": true,
+      "id": "github-primary",
+      "provider": "github",
+      "enabled": false,
       "sync_interval_minutes": 20,
-      "daily_budget": 1000
+      "daily_budget": 500,
+      "_note": "Enable after T14 OAuth wiring."
     },
     {
-      "id": "wikiguard",
-      "provider": "wikiguard",
-      "plugin": "wikiguard",
-      "adapter": "wikiguard_adapter",
-      "enabled": true,
+      "id": "slack-primary",
+      "provider": "slack",
+      "enabled": false,
       "sync_interval_minutes": 20,
-      "daily_budget": 500
+      "daily_budget": 500,
+      "_note": "Enable after T14 OAuth wiring."
     }
   ]
 }

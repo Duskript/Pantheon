@@ -31,6 +31,12 @@ from typing import Any, Callable, Dict, List
 from sync_state import SyncState
 
 # ---------------------------------------------------------------------------
+# Import adapter framework (T12) — auto-registers Gmail, GitHub, Slack adapters
+# ---------------------------------------------------------------------------
+
+from adapters import get_adapter, list_adapters  # noqa: E402
+
+# ---------------------------------------------------------------------------
 # Paths — everything lives under ~/.hermes/cron/pantheon-sync/
 # ---------------------------------------------------------------------------
 
@@ -74,6 +80,36 @@ log = _setup_logging()
 # ---------------------------------------------------------------------------
 
 
+def _resolve_adapter(connection: dict) -> Any:
+    """Resolve an adapter callable for a connection.
+
+    Returns a callable matching the legacy API: (conn, state) → dict.
+    """
+    provider = connection.get("provider")
+
+    # New T12 adapters (provider-based)
+    if provider and provider in list_adapters():
+        adapter = get_adapter(provider)
+
+        def _bridge(conn: dict, _state: SyncState) -> dict:
+            result = adapter.sync()
+            return {
+                "synced": len(result.records),
+                "cursor": result.next_cursor,
+                "status": result.status,
+                "records": result.records,
+            }
+
+        return _bridge
+
+    # Legacy adapter name lookup
+    adapter_name = connection.get("adapter", "")
+    if adapter_name in ADAPTER_REGISTRY:
+        return ADAPTER_REGISTRY[adapter_name]
+
+    return _stub_sync
+
+
 def _stub_sync(connection: dict, _state: SyncState) -> dict:
     """Log intent and return a placeholder result."""
     provider = connection.get("provider", "unknown")
@@ -82,12 +118,8 @@ def _stub_sync(connection: dict, _state: SyncState) -> dict:
     return {"synced": 0, "cursor": None, "status": "ok"}
 
 
-# Map adapter name → callable.  Patched in T12 when real adapters land.
-ADAPTER_REGISTRY: Dict[str, Callable] = {
-    "wiki_dedup_adapter": _stub_sync,
-    "wiki_provenance_adapter": _stub_sync,
-    "wikiguard_adapter": _stub_sync,
-}
+# Map adapter name → callable.  Legacy — prefer 'provider' field in connections.
+ADAPTER_REGISTRY: Dict[str, Callable] = {}
 
 # ---------------------------------------------------------------------------
 # Connection loading
@@ -201,23 +233,13 @@ def run_sync_tick() -> int:
                 continue
 
             # --- Call adapter -------------------------------------------------
-            adapter_name = conn.get("adapter", "")
-            adapter = ADAPTER_REGISTRY.get(adapter_name)
-
-            if adapter is None:
-                log.warning(
-                    "No adapter '%s' for %s — falling back to stub",
-                    adapter_name,
-                    conn_id,
-                )
-                adapter = _stub_sync
+            adapter = _resolve_adapter(conn)
 
             result = adapter(conn, state)
 
             synced = result.get("synced", 0)
             cursor = result.get("cursor")
             state.record_sync(conn_id, synced, cursor)
-
             log.info(
                 "SYNC  %-24s  synced=%-4d  status=%s",
                 conn_id,
