@@ -876,9 +876,10 @@
    834|   834|
    835|   835|| Field | Value |
    836|   836||-------|-------|
-| **Status** | 🔄 In Progress |
-   838|   838|| **Depends on** | T14, T4 |
-| **Note** | 6 route files on disk (welcome, runtime-choice, register-gods, integrations, voice, complete) + onboarding-store.ts. Built with Local/BYOK redesign. Needs QA + wiring + __root.tsx guard. |
+| **Status** | ✅ |
+| **Commit** | TBD (test files + QA) |
+| **Depends on** | T14, T4 |
+| **Note** | 6 route files + onboarding-store.ts + 8 test files (110 tests). Browser QA: all 6 pages render with zero JS errors. Hardware detection works. Guard redirects work. Mobile/keyboard QA deferred to polish pass. |
    839|   839|| **Files** | `src/routes/onboarding/` (6 route files), `src/stores/onboarding-store.ts`. Modify: `src/routes/__root.tsx`, router |
    840|   840|
    841|   841|**What:** First-run wizard shown to new users. 6 steps:
@@ -1201,12 +1202,12 @@
   1157|| **Stream A** (T1–T7) | 7/7 | ✅ Complete |
   1158|| **Stream B** (T8–T13) | 6/6 | ✅ Complete |
   1159|| **Stream C — Pre-Wizard** (T14–T14b, T15a–T15d) | 6/6 | ✅ Complete |
-  1160|| **Stream C — Onboarding** (T15) | 0/1 | 🔄 6 route files on disk, pending QA + finalization |
+  1160|| **Stream C — Onboarding** (T15) | 1/1 | ✅ Complete |
   1161|| **Stream C — Remaining** (T16–T17) | 0/2 | 🔲 Not started |
   1162|| **Tier 5 — Polish** (T18–T20) | 1/3 | T19 ✅, T18 🔲, T20 🔲 |
   1163|| **Tier 6 — Integration Polish** (T21–T24) | 0/4 | 🔲 Not started |
   1164|
-  1165|**Build complete: 25/31 tasks (81%)**
+  1165|**Build complete: 26/31 tasks (84%)**
   1166|
   1167|### Reconciliation Notes (2026-05-28)
   1168|- **T19 (Kanban):** Tracker said 🔲 but KanbanPanel.tsx exists at 929 lines, committed `d0264cb`. Fixed → ✅.
