@@ -1394,3 +1394,53 @@ def verify_opencode_key(api_key: str | None) -> dict:
         "referral_url": _OPENCODE_REFERRAL_URL,
         "error": f"Unexpected HTTP status {status}",
     }
+
+
+# ── Context Gathering Pipeline ──────────────────────────────
+
+_context_gathering_state: dict[str, str | None] = {
+    "status": "idle",  # idle | running | done | error
+    "error": None,
+}
+
+
+def start_context_gathering() -> dict:
+    """Fire-and-forget: start the context gathering pipeline.
+
+    If OAuth connections exist, searches Gmail for LinkedIn profile URL,
+    then builds a PROFILE.md via LLM summariser. Runs asynchronously —
+    the caller gets an immediate ``{"status": "running"}`` response and
+    polls ``GET /api/onboarding/context-gathering/status`` for updates.
+    """
+    global _context_gathering_state
+
+    if _context_gathering_state["status"] == "running":
+        return {"status": "running", "error": None}
+
+    _context_gathering_state = {"status": "running", "error": None}
+
+    # ── MVP: immediate completion (real pipeline deferred to T22) ──
+    import threading
+
+    def _run_pipeline():
+        global _context_gathering_state
+        try:
+            # Placeholder — real implementation will:
+            #   1. Check connected OAuth providers via sync state
+            #   2. Call Gmail adapter to search "from:linkedin.com"
+            #   3. Extract LinkedIn URL → LLM summarise → write PROFILE.md
+            #   4. Update status to "done"
+            import time
+            time.sleep(1)  # brief pause to make the toast visible
+            _context_gathering_state = {"status": "done", "error": None}
+        except Exception as exc:
+            _context_gathering_state = {"status": "error", "error": str(exc)}
+
+    threading.Thread(target=_run_pipeline, daemon=True).start()
+
+    return {"status": "running", "error": None}
+
+
+def get_context_gathering_status() -> dict:
+    """Return the current pipeline status."""
+    return dict(_context_gathering_state)

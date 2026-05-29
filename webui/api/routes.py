@@ -1905,6 +1905,8 @@ from api.onboarding import (
     probe_provider_endpoint,
     register_core_gods,
     verify_opencode_key,
+    start_context_gathering,
+    get_context_gathering_status,
 )
 from api.oauth import (
     cancel_onboarding_oauth_flow,
@@ -3422,6 +3424,9 @@ a:hover{{text-decoration:underline}}
 
     if parsed.path == "/api/onboarding/hardware":
         return j(handler, get_hardware_info())
+
+    if parsed.path == "/api/onboarding/context-gathering/status":
+        return j(handler, get_context_gathering_status())
 
     if parsed.path.startswith("/extensions/"):
         from api.extensions import serve_extension_static
@@ -6485,6 +6490,12 @@ def handle_post(handler, parsed) -> bool:
             return j(handler, install_ollama_models(models))
         except Exception as e:
             return bad(handler, str(e), 500)
+
+    if parsed.path == "/api/onboarding/context-gathering":
+        return j(handler, start_context_gathering())
+
+    if parsed.path == "/api/onboarding/context-gathering/status":
+        return j(handler, get_context_gathering_status())
 
     # ── Session pin (POST) ──
     if parsed.path == "/api/session/pin":

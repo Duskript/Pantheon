@@ -1203,11 +1203,11 @@
   1158|| **Stream B** (T8–T13) | 6/6 | ✅ Complete |
   1159|| **Stream C — Pre-Wizard** (T14–T14b, T15a–T15d) | 6/6 | ✅ Complete |
   1160|| **Stream C — Onboarding** (T15) | 1/1 | ✅ Complete |
-  1161|| **Stream C — Remaining** (T16–T17) | 0/2 | 🔲 Not started |
+  1161|| **Stream C — Remaining** (T16–T17) | 1/2 | T16 ✅, T17 🔲 |
   1162|| **Tier 5 — Polish** (T18–T20) | 1/3 | T19 ✅, T18 🔲, T20 🔲 |
   1163|| **Tier 6 — Integration Polish** (T21–T24) | 0/4 | 🔲 Not started |
   1164|
-  1165|**Build complete: 26/31 tasks (84%)**
+  1165|**Build complete: 27/31 tasks (87%)**
   1166|
   1167|### Reconciliation Notes (2026-05-28)
   1168|- **T19 (Kanban):** Tracker said 🔲 but KanbanPanel.tsx exists at 929 lines, committed `d0264cb`. Fixed → ✅.
