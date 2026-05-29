@@ -1908,6 +1908,7 @@ from api.onboarding import (
     start_context_gathering,
     get_context_gathering_status,
 )
+from api.stream import get_stream_entities, get_stream_edges, get_stream_metrics
 from api.oauth import (
     cancel_onboarding_oauth_flow,
     poll_onboarding_oauth_flow,
@@ -3427,6 +3428,15 @@ a:hover{{text-decoration:underline}}
 
     if parsed.path == "/api/onboarding/context-gathering/status":
         return j(handler, get_context_gathering_status())
+
+    if parsed.path == "/api/stream/entities":
+        return j(handler, get_stream_entities())
+
+    if parsed.path == "/api/stream/edges":
+        return j(handler, get_stream_edges())
+
+    if parsed.path == "/api/stream/metrics":
+        return j(handler, get_stream_metrics())
 
     if parsed.path.startswith("/extensions/"):
         from api.extensions import serve_extension_static
