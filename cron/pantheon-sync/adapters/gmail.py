@@ -1,85 +1,100 @@
 """
 Gmail Sync Adapter.
 
-Fetches recent emails from Gmail via the Composio BYOK OAuth flow (T14).
-Produces canonicalized Markdown records with sender, subject, body, and metadata.
-
-Stub implementation: returns realistic sample data until OAuth is wired.
+Fetches recent emails from Gmail via Composio BYOK OAuth.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
-from .base import BaseAdapter, SyncRecord, SyncResult, register_adapter
+from .base import (
+    BaseAdapter,
+    SyncRecord,
+    SyncResult,
+    register_adapter,
+    _get_composio_client,
+    _get_connected_account_id,
+    _exec_composio_tool,
+)
 
 
 @register_adapter("gmail")
 class GmailAdapter(BaseAdapter):
-    """Sync adapter for Gmail."""
+    """Sync adapter for Gmail via Composio."""
 
-    def __init__(self, api_key: str | None = None, auth_config_id: str | None = None):
-        self.api_key = api_key
-        self.auth_config_id = auth_config_id
+    def sync(
+        self, connection: dict[str, Any], cursor: str | None = None
+    ) -> SyncResult:
+        client = _get_composio_client(connection)
+        if client is None:
+            return SyncResult(
+                provider=self.provider,
+                records=[],
+                status="no_auth",
+                error="Composio API key not configured",
+            )
 
-    def sync(self, cursor: str | None = None) -> SyncResult:
-        """Fetch recent emails.
+        account_id = _get_connected_account_id(client, "gmail", connection)
+        if account_id is None:
+            return SyncResult(
+                provider=self.provider,
+                records=[],
+                status="not_connected",
+                error="No Gmail connected account. Run OAuth flow first.",
+            )
 
-        In production, this calls the Gmail API via Composio:
-            session = composio.create(user_id=..., toolkits=["gmail"])
-            emails = session.tools()["gmail"].fetch_messages(...)
-        """
-        # Stub: return sample emails
-        now = datetime.utcnow().isoformat()
-        samples = [
-            {
-                "id": "msg_001",
-                "thread_id": "thread_a",
-                "sender": "alice@example.com",
-                "subject": "Re: Q3 Planning Doc",
-                "body": "Hey team,\n\nHere are my notes from the Q3 planning session:\n\n1. Priority: launch Olympus UI by end of Q3\n2. Secondary: integrate Composio OAuth for Gmail/GitHub/Slack\n3. Stretch: onboarding wizard with context gathering\n\nLet me know if I missed anything.\n\n— Alice",
-                "timestamp": now,
-                "labels": ["INBOX", "IMPORTANT"],
-            },
-            {
-                "id": "msg_002",
-                "thread_id": "thread_b",
-                "sender": "bob@example.com",
-                "subject": "PR #42 Review Request",
-                "body": "Please review the OAuth flow PR when you get a chance.\n\nSummary of changes:\n- Added ConnectionManager component\n- Wired Composio BYOK flow\n- 15 new tests\n\nRepo: pantheon-core\nBranch: feat/oauth-flow\n\n— Bob",
-                "timestamp": now,
-                "labels": ["INBOX"],
-            },
-        ]
+        # Fetch recent unread emails
+        args: dict[str, Any] = {"maxResults": 20, "q": "is:unread"}
+        if cursor:
+            args["q"] = f"after:{cursor}"
 
-        records = [self.canonicalize(item) for item in samples]
+        data = _exec_composio_tool(
+            client, account_id, "GMAIL_FETCH_MESSAGES", args
+        )
+
+        if data is None:
+            return SyncResult(
+                provider=self.provider,
+                records=[],
+                status="error",
+                error="Failed to fetch Gmail messages via Composio",
+            )
+
+        messages = data if isinstance(data, list) else data.get("messages", [])
+        records = [self.canonicalize(msg) for msg in messages]
+
+        next_cursor = records[-1].source_id if records else cursor
+
         return SyncResult(
             provider=self.provider,
             records=records,
-            next_cursor=samples[-1]["id"] if samples else None,
+            next_cursor=next_cursor,
             status="ok" if records else "empty",
         )
 
     def canonicalize(self, raw_item: dict[str, Any]) -> SyncRecord:
-        """Convert a raw Gmail message to a canonical SyncRecord."""
-        sender = raw_item.get("sender", "unknown")
+        sender = raw_item.get("from", raw_item.get("sender", "unknown"))
         subject = raw_item.get("subject", "(no subject)")
-        body = raw_item.get("body", "")
-        labels = raw_item.get("labels", [])
+        body = raw_item.get("body", raw_item.get("snippet", ""))
+        labels = raw_item.get("labels", raw_item.get("labelIds", []))
+        msg_id = raw_item.get("id", raw_item.get("messageId", ""))
 
         content = f"# {subject}\n\n**From:** {sender}\n\n{body}"
 
         return SyncRecord(
             provider=self.provider,
-            source_id=raw_item["id"],
+            source_id=str(msg_id),
             content=content,
             metadata={
-                "sender": sender,
-                "subject": subject,
-                "thread_id": raw_item.get("thread_id"),
-                "labels": labels,
-                "timestamp": raw_item.get("timestamp"),
+                "sender": str(sender),
+                "subject": str(subject),
+                "thread_id": raw_item.get("threadId", raw_item.get("thread_id")),
+                "labels": labels if isinstance(labels, list) else [labels],
+                "timestamp": raw_item.get("internalDate", raw_item.get("timestamp")),
             },
-            tags=["email"] + [f"label:{l.lower()}" for l in labels],
+            tags=["email", "gmail"] + (
+                [f"label:{l.lower()}" for l in labels]
+                if isinstance(labels, list) else []
+            ),
         )
