@@ -1910,7 +1910,7 @@ from api.onboarding import (
     start_context_gathering,
     get_context_gathering_status,
 )
-from api.stream import get_stream_entities, get_stream_edges, get_stream_metrics
+from api.stream import get_stream_entities, get_stream_edges, get_stream_metrics, get_ichor_graph
 from api.oauth import (
     cancel_onboarding_oauth_flow,
     poll_onboarding_oauth_flow,
@@ -3454,6 +3454,9 @@ a:hover{{text-decoration:underline}}
 
     if parsed.path == "/api/stream/metrics":
         return j(handler, get_stream_metrics())
+
+    if parsed.path == "/api/stream/ichor-graph":
+        return j(handler, get_ichor_graph())
 
     if parsed.path.startswith("/extensions/"):
         from api.extensions import serve_extension_static

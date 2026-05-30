@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -141,3 +142,127 @@ def get_stream_metrics() -> dict:
     metrics["connections"] = edges["total"]
 
     return metrics
+
+
+# ── Ichor Knowledge Graph ──────────────────────────────────
+
+
+GRAPH_DB = Path(os.path.expanduser("~/.hermes/pantheon/graph.db"))
+
+# Map node types to KnowledgeGraph categories
+_NODE_TYPE_TO_CATEGORY: dict[str, str] = {
+    "tool": "technology",
+    "project": "project",
+    "person": "person",
+    "organization": "company",
+    "system": "technology",
+    "skill": "technology",
+    "event": "unknown",
+    "fact": "unknown",
+    "preference": "unknown",
+    "decision": "unknown",
+}
+
+
+def _get_graph_db() -> sqlite3.Connection | None:
+    """Open the Ichor graph database, return None if unavailable."""
+    try:
+        if GRAPH_DB.exists():
+            return sqlite3.connect(str(GRAPH_DB))
+    except Exception:
+        pass
+    return None
+
+
+def get_ichor_graph() -> dict:
+    """Query the Ichor knowledge graph for entities and relationships.
+
+    Returns:
+        {"entities": [...], "edges": [...], "total_entities": int, "total_edges": int}
+    """
+    db = _get_graph_db()
+    if db is None:
+        return {"entities": [], "edges": [], "total_entities": 0, "total_edges": 0}
+
+    try:
+        c = db.cursor()
+
+        # Entities: nodes with meaningful types, exclude sessions/codexes
+        focus_types = ('tool', 'project', 'person', 'organization', 'system',
+                        'skill', 'event', 'fact', 'preference', 'decision')
+        placeholders = ",".join("?" for _ in focus_types)
+        query = f"""
+            SELECT id, type, label, codex FROM nodes
+            WHERE type IN ({placeholders})
+              AND label != ''
+            ORDER BY updated_at DESC
+            LIMIT 200
+        """
+        c.execute(query, list(focus_types))
+        nodes = c.fetchall()
+
+        # Build entity list
+        entity_ids = set()
+        entities = []
+        for nid, ntype, label, codex in nodes:
+            entity_ids.add(nid)
+            entities.append({
+                "name": label,
+                "mentions": 1,
+                "category": _NODE_TYPE_TO_CATEGORY.get(ntype, "unknown"),
+            })
+
+        # Edges between these entities
+        if entity_ids:
+            placeholders = ",".join("?" for _ in entity_ids)
+            edge_query = f"""
+                SELECT e.source_id, e.target_id, e.type, e.weight
+                FROM edges e
+                WHERE e.source_id IN ({placeholders})
+                  AND e.target_id IN ({placeholders})
+                  AND e.source_id != e.target_id
+                ORDER BY e.weight DESC
+                LIMIT 500
+            """
+            c.execute(edge_query, list(entity_ids) + list(entity_ids))
+            edge_rows = c.fetchall()
+        else:
+            edge_rows = []
+
+        # Build edge label map — resolve source/target IDs to names
+        # (we need a reverse lookup from id → label)
+        id_to_label = {row[0]: row[2] for row in nodes}
+
+        seen_edges = set()
+        edges = []
+        for src, tgt, rtype, weight in edge_rows:
+            source_label = id_to_label.get(src, src)
+            target_label = id_to_label.get(tgt, tgt)
+            key = f"{source_label}|{target_label}"
+            if key not in seen_edges:
+                seen_edges.add(key)
+                edges.append({
+                    "source": source_label,
+                    "target": target_label,
+                    "weight": max(1, int(weight * 10)),
+                })
+
+        db.close()
+        return {
+            "entities": entities,
+            "edges": edges,
+            "total_entities": len(entities),
+            "total_edges": len(edges),
+        }
+    except Exception as exc:
+        try:
+            db.close()
+        except Exception:
+            pass
+        return {
+            "entities": [],
+            "edges": [],
+            "total_entities": 0,
+            "total_edges": 0,
+            "error": str(exc),
+        }

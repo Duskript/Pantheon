@@ -1110,10 +1110,10 @@ GIT:
 | Field | Value |
 |-------|-------|
 | **Status** | 🔲 |
-| **Depends on** | T13 (data flowing to Codex-Stream) |
-| **Files** | `~/.config/systemd/user/obsidian-stream-sync.service`, `~/.hermes/cron/obsidian-mirror/` |
+| **Depends on** | Nothing (self-contained setup — syncs entire Athenaeum) |
+| **Files** | `~/.config/systemd/user/athenaeum-obsidian-sync.service`, `~/.hermes/cron/obsidian-mirror/` |
 
-**What:** Sync `~/athenaeum/Codex-Stream/` as an Obsidian vault. Install `obsidian-headless` CLI, configure remote vault, systemd service for continuous sync. `sudo loginctl enable-linger konan` for logout survival.
+**What:** Sync the entire `~/athenaeum/` as an Obsidian vault. Install `obsidian-headless` CLI, configure remote vault, systemd service for continuous sync. `sudo loginctl enable-linger konan` for logout survival. Scope: all Codexes (Codex-Stream, Codex-Olympus, etc.), not just Codex-Stream.
 
 **🚦 QA Gate T21:**
 ```
