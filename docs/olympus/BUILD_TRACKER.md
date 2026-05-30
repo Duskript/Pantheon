@@ -1247,10 +1247,11 @@ Python wrapper for n8n REST API (363 lines). 5 endpoints verified: `GET /api/n8n
 
 | Field | Value |
 |---|---|
-| **Status** | 🔲 |
+| **Status** | ✅ |
 | **Priority** | P1 — replaces Composio in user flow |
+| **Commit** | `b6e2bb8` (Pantheon backend), `8506bde` (Olympus-UI frontend) |
 | **Depends on** | N3 |
-| **Files** | `integrations.lazy.tsx`, `ConnectionManager.tsx`, `useOAuth.ts` |
+| **Files** | `integrations.lazy.tsx`, `ConnectionManager.tsx`, `useOAuth.ts`, `onboarding-store.ts`, `feature-flag-store.ts`, `n8n_client.py`, `routes.py` |
 
 Replace Composio with n8n in onboarding Step 4 and Settings → Integrations tab. Same UI (brand icons, cards, Skip button), different backend. Flow: Connect → n8n OAuth URL → user authorizes → poll status → ✅.
 
@@ -1278,9 +1279,130 @@ Cleanup after migration verified. Keep Codex-Stream pipeline + wiki plugins.
 
 ---
 
+## Tier 7 — Backend Refactor (Post-Ship)
+
+> **Decision (2026-05-30):** The 8787 `routes.py` monolith (11,967 lines, stdlib `http.server`) is serving both static files and API — two jobs in one process with the wrong tool. This tier retires 8787 after Phase 1 ships, replacing it with purpose-built components. **Phase 1 completes first (37/37). Phase 2 runs beside live on port 8788 — no downtime.**
+
+### Problem
+
+`routes.py` is a single-file monolith with manual `if parsed.path.startswith(...)` routing for every endpoint in the system. It also serves static files (CSS, JS, favicon) — a job better done by a web server. Every new feature adds ~50 lines to the same file. The stdlib server was never designed for production API serving.
+
+### Architecture Decision
+
+```
+Before (now):                    After (Tier 7):
+                                 
+Browser → 8787 (static)          Browser → Caddy (static, HTTPS)
+Browser → 8787 (API monolith)    Browser → Caddy → Fastify/Bun (API)
+Agent   → n8n MCP                Agent   → n8n MCP (unchanged)
+8787    → n8n REST               8787    → retired
+```
+
+Each concern gets one owner:
+- **Static assets** → Caddy (4MB binary, auto-HTTPS, zero config)
+- **API** → Fastify or Bun (native async, proper routing, 10-50x throughput)
+- **Integrations + agent tools** → n8n MCP (already at `localhost:5678`)
+
+### Strategy: Build Beside, Flip Switch
+
+| Phase | What | Risk |
+|---|---|---|
+| **Phase 1** (current) | Finish 37/37 on 8787. Ship. | None — live stays live |
+| **Phase 2** (Tier 7) | New backend on port 8788. Olympus-UI proxies to 8788. Verify all endpoints. | None — runs beside, not instead of |
+| **Cutover** | Flip one config line: proxy target 8787→8788. Wait 24h. Retire 8787. | 30-second blip if we mistime |
+
+### T25 — Caddy Static Server
+
+| Field | Value |
+|---|---|
+| **Status** | 🔲 |
+| **Priority** | P0 — unblocks API refactor |
+| **Depends on** | Phase 1 complete (37/37) |
+| **Files** | `Caddyfile`, systemd unit |
+
+**What:** Install Caddy, configure to serve `~/Olympus-UI/dist/` (built React app) on port 443 with auto-HTTPS via Tailscale. Remove all `_serve_static`, `_STATIC_MIME`, file-serving logic from routes.py. Olympus-UI frontend assets never touch Python again.
+
+**🚦 QA Gate T25:**
+```
+- [ ] Caddy installed and running as systemd service
+- [ ] https://pantheon.tail164759.ts.net serves Olympus-UI
+- [ ] All static assets load (CSS, JS, fonts, favicon, manifest)
+- [ ] Auto-HTTPS certificate provisioned via Tailscale
+- [ ] ~2,000 lines cut from routes.py (static serving dead code)
+- [ ] 8787 serves API-only — no static file handling
+```
+
+### T26 — Split routes.py Into Modules
+
+| Field | Value |
+|---|---|
+| **Status** | 🔲 |
+| **Priority** | P1 — reduces tech debt |
+| **Depends on** | T25 (static gone, less to split) |
+| **Files** | `webui/api/routes/*.py` (auth, n8n, athenaeum, chat, gods, etc.) |
+
+**What:** Break the 11,967-line monolith into per-domain modules. Each module registers its own path handlers. The main `routes.py` becomes a thin dispatcher that imports and delegates. Zero performance change — pure organization. Each module ~200 lines instead of a 12K-line file.
+
+**Modules:** `auth.py`, `n8n.py`, `athenaeum.py`, `chat.py`, `gods.py`, `sessions.py`, `kanban.py`, `stream.py`, `onboarding.py`, `terminal.py`, `cron.py`, `mcp.py`, `feature_flags.py`, `workspace.py`, `users.py`, `health.py`
+
+**🚦 QA Gate T26:**
+```
+- [ ] Every existing endpoint still works (curl all /api/* paths)
+- [ ] Each module ≤500 lines
+- [ ] No circular imports
+- [ ] All 510+ existing tests pass
+- [ ] routes.py reduced to dispatcher (<200 lines)
+```
+
+### T27 — Fastify/Bun API Server
+
+| Field | Value |
+|---|---|
+| **Status** | 🔲 |
+| **Priority** | P1 — production-grade API serving |
+| **Depends on** | T26 (routes modularized, easier to port) |
+| **Files** | `~/pantheon/api-server/` (new TypeScript project) |
+
+**What:** Replace the Python `http.server` with Fastify (Node) or Bun (native TS runtime). Proper routing (`fastify.get('/api/n8n/credentials/:provider', handler)`), request validation, async/await, middleware, JSON schema responses. Same API contract — Olympus-UI and Hermes Agent don't care what language the API server is in.
+
+**Why TypeScript:** Olympus-UI is already TypeScript. One language for the whole stack. Shared types between frontend and API server. Bun serves 50K req/s vs Python's 3K. Memory footprint ~20MB vs Python's ~200MB.
+
+**🚦 QA Gate T27:**
+```
+- [ ] New server running on port 8788
+- [ ] All /api/* endpoints respond identically to 8787
+- [ ] Olympus-UI works against 8788 (proxy target flip)
+- [ ] Response times equal or faster than 8787
+- [ ] Hermes Agent internals still callable (subprocess or IPC)
+- [ ] All integration tests pass against 8788
+```
+
+### T28 — Cutover + Retire 8787
+
+| Field | Value |
+|---|---|
+| **Status** | 🔲 |
+| **Priority** | P2 — cleanup |
+| **Depends on** | T25, T26, T27 verified |
+| **Files** | Vite proxy config, systemd units |
+
+**What:** Flip Vite proxy target from 8787 to 8788. Run both for 24h to catch edge cases. If stable, stop the 8787 systemd unit. Archive the routes.py monolith for reference. Breathe.
+
+**🚦 QA Gate T28:**
+```
+- [ ] Vite proxy target: 8787 → 8788
+- [ ] Olympus-UI works for 24h with zero 8787 traffic
+- [ ] 8787 process stopped
+- [ ] No regressions reported
+- [ ] routes.py archived, not deleted
+- [ ] Commit: "feat: retire 8787 — Tier 7 complete"
+```
+
+---
+
 ## Current Status Summary
 
-> Updated: 2026-05-29 — Composio audit: 2/8 active. Stream D added (n8n migration, 6 tasks). n8n v2.22.5 verified with MCP server enabled.
+> Updated: 2026-05-30 — N4 complete (34/37, 92%). Tier 7 added (backend refactor, post-ship).
 
 | Stream / Tier | Tasks | Status |
 |---------------|-------|--------|
@@ -1293,11 +1415,13 @@ Cleanup after migration verified. Keep Codex-Stream pipeline + wiki plugins.
 | **Stream C — Pre-Wizard** (T14–T14b, T15a–T15d) | 6/6 | ✅ Complete (T14 superseded by N4) |
 | **Stream C — Onboarding** (T15) | 1/1 | ✅ Complete |
 | **Stream C — Remaining** (T16–T17) | 2/2 | ✅ Complete |
-| **Stream D — n8n Migration** (N1–N6) | 3/6 | 🔄 In progress |
+| **Stream D — n8n Migration** (N1–N6) | 4/6 | 🔄 In progress |
 | **Tier 5 — Polish** (T18–T20) | 3/3 | ✅ Complete |
 | **Tier 6 — Integration Polish** (T21–T24) | 0/4 | 🔲 Not started (n8n-native) |
+| **Tier 7 — Backend Refactor** (T25–T28) | 0/4 | 🔲 Post-ship — build beside, no downtime |
 
-**Build complete: 33/37 tasks (89%) — 3 n8n tasks + 4 Tier 6 remaining**
+**Phase 1: 34/37 tasks (92%) — 2 n8n tasks + 4 Tier 6 remaining**
+**Phase 2: 0/4 Tier 7 tasks — post-ship, runs parallel on port 8788**
 
 ### Reconciliation Notes (2026-05-29)
 - **Composio audit:** `COMPOSIO_MANAGE_CONNECTIONS` confirmed 2/8 active (Gmail, GitHub). 6 providers initiated but zero accounts. User confirmed Notion, Drive, Calendar were connected in UI but dropped.
