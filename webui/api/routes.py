@@ -4441,6 +4441,21 @@ a:hover{{text-decoration:underline}}
             return bad(handler, "Invalid provider name")
         return j(handler, get_credential(provider))
 
+    # ── Feature Flags API ────────────────────────────────────────────────────
+    if parsed.path == "/api/feature-flags":
+        from api.olympus_users import list_feature_flags, get_feature_overrides
+
+        role_overrides = list_feature_flags()
+        overrides = get_feature_overrides()
+        # Resolve effective flags for owner (most permissive)
+        flags: dict[str, bool] = {}
+        for flag_name, role_map in role_overrides.items():
+            flags[flag_name] = role_map.get("owner", False)
+        # Apply runtime overrides
+        for k, v in overrides.items():
+            flags[k] = v
+        return j(handler, {"flags": flags, "overrides": overrides})
+
     if parsed.path == "/api/profile/active":
         from api.profiles import get_active_profile_name, get_active_hermes_home, _read_god_metadata
 
@@ -4678,6 +4693,23 @@ def handle_post(handler, parsed) -> bool:
         if not path_part or "/" in path_part:
             return bad(handler, "Invalid provider name")
         return j(handler, connect_credential(path_part, data=body if body else None))
+
+    # ── Feature Flags API (PUT) ─────────────────────────────────────────────
+    if parsed.path == "/api/feature-flags" and handler.command == "PUT":
+        from api.olympus_users import set_feature_override
+
+        flags_data = body.get("flags", {}) if isinstance(body, dict) else {}
+        if not flags_data:
+            return bad(handler, "Missing 'flags' in request body")
+
+        results = {}
+        for flag_name, value in flags_data.items():
+            try:
+                set_feature_override(flag_name, bool(value), acting_role="owner")
+                results[flag_name] = "ok"
+            except ValueError as exc:
+                results[flag_name] = str(exc)
+        return j(handler, {"saved": results})
 
     if parsed.path.startswith("/api/kanban/"):
         from api.kanban_bridge import handle_kanban_post

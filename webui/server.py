@@ -171,6 +171,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         self._handle_write(handle_post)
 
+    def do_PUT(self) -> None:
+        self._handle_write(handle_post)
+
     def do_PATCH(self) -> None:
         self._handle_write(handle_patch)
 
