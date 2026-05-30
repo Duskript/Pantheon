@@ -37,6 +37,25 @@ N8N_BASE = "http://localhost:5678"
 N8N_API_BASE = f"{N8N_BASE}/api/v1"
 N8N_TIMEOUT = 10  # seconds
 
+# Public-facing n8n URL — used for links returned to the user's browser.
+# Override via N8N_PUBLIC_URL env var. Auto-detects Tailscale serve
+# (https://pantheon.tail164759.ts.net:5679/) when available.
+# Falls back to localhost for direct local access.
+_N8N_PUBLIC_URL = os.environ.get("N8N_PUBLIC_URL", "")
+if not _N8N_PUBLIC_URL:
+    try:
+        import subprocess as _sp
+        result = _sp.run(
+            ["tailscale", "serve", "status"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and "5679" in result.stdout:
+            _N8N_PUBLIC_URL = "https://pantheon.tail164759.ts.net:5679"
+    except Exception:
+        pass
+if not _N8N_PUBLIC_URL:
+    _N8N_PUBLIC_URL = N8N_BASE  # fallback to localhost
+
 
 def _load_env_file() -> dict[str, str]:
     """Load N8N_API_KEY from the webui .env file as fallback.
@@ -271,8 +290,8 @@ def connect_credential(provider: str, data: dict[str, Any] | None = None) -> dic
                 f"n8n requires a {provider_name} OAuth app (client ID + secret). "
                 f"Open the n8n UI to set this up."
             ),
-            "n8n_setup_url": f"{N8N_BASE}/credentials",
-            "n8n_new_url": f"{N8N_BASE}/home/credentials/create/{n8n_type}",
+            "n8n_setup_url": f"{_N8N_PUBLIC_URL}/credentials",
+            "n8n_new_url": f"{_N8N_PUBLIC_URL}/home/credentials/create/{n8n_type}",
             "required_fields": _required_fields_for(n8n_type),
         }
 
@@ -302,9 +321,9 @@ def connect_credential(provider: str, data: dict[str, Any] | None = None) -> dic
         "n8n_type": n8n_type,
         "message": (
             f"{provider_name} credential created. "
-            f"Complete OAuth in the n8n UI: {N8N_BASE}/credentials/{credential_id}"
+            f"Complete OAuth in the n8n UI: {_N8N_PUBLIC_URL}/credentials/{credential_id}"
         ),
-        "n8n_credential_url": f"{N8N_BASE}/credentials/{credential_id}" if credential_id else f"{N8N_BASE}/credentials",
+        "n8n_credential_url": f"{_N8N_PUBLIC_URL}/credentials/{credential_id}" if credential_id else f"{_N8N_PUBLIC_URL}/credentials",
         "next_step": "Visit the n8n credential page to authorize and connect.",
     }
 
