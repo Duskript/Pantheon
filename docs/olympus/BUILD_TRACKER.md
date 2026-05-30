@@ -1259,12 +1259,29 @@ Replace Composio with n8n in onboarding Step 4 and Settings → Integrations tab
 
 | Field | Value |
 |---|---|
-| **Status** | 🔲 |
+| **Status** | ✅ |
 | **Priority** | P1 — enables Hermes agent tools |
+| **Commit** | `8506bde`+ (Olympus-UI), n8n MCP STDIO server at `~/.hermes/mcp-servers/n8n-server.py` |
 | **Depends on** | N3 |
-| **Files** | `~/.hermes/mcp-servers/n8n.yaml`, n8n workflows (via UI) |
+| **Files** | `~/.hermes/mcp-servers/n8n-server.py`, `~/.hermes/config.yaml` (via `hermes mcp add`) |
 
-Register n8n MCP at `/mcp-server/http`. Core workflows as agent tools: `github_profile`, `gmail_search`, `calendar_today`, `notion_search`, `drive_search`. Replace `sync_scheduler.py` with n8n Schedule Trigger workflow.
+**What was built:**
+- STDIO MCP server (Python) wrapping the n8n REST API as 6 MCP tools
+- Registered via `hermes mcp add n8n` — 6/6 tools enabled
+
+**6 MCP tools discovered:**
+| Tool | Description |
+|---|---|
+| `n8n_health` | Check if n8n is running |
+| `n8n_list_workflows` | List all workflows with IDs, names, status |
+| `n8n_run_workflow` | Execute/trigger a workflow by ID |
+| `n8n_list_credentials` | List all connected credentials |
+| `n8n_credential_status` | Check specific provider credential |
+| `n8n_create_credential_url` | Get n8n URL to set up a credential |
+
+**Architecture:** Instead of n8n's HTTP MCP server (auth plane mismatch), built a local STDIO MCP subprocess that speaks MCP over stdin/stdout. Hermes launches it, discovers tools, no auth battles.
+
+**Start a new session to see them:** `mcp_n8n_health`, `mcp_n8n_list_workflows`, etc.
 
 ### N6 — Composio Deprecation
 
@@ -1415,12 +1432,12 @@ Each concern gets one owner:
 | **Stream C — Pre-Wizard** (T14–T14b, T15a–T15d) | 6/6 | ✅ Complete (T14 superseded by N4) |
 | **Stream C — Onboarding** (T15) | 1/1 | ✅ Complete |
 | **Stream C — Remaining** (T16–T17) | 2/2 | ✅ Complete |
-| **Stream D — n8n Migration** (N1–N6) | 4/6 | 🔄 In progress |
+| **Stream D — n8n Migration** (N1–N6) | 5/6 | 🔄 In progress |
 | **Tier 5 — Polish** (T18–T20) | 3/3 | ✅ Complete |
 | **Tier 6 — Integration Polish** (T21–T24) | 0/4 | 🔲 Not started (n8n-native) |
 | **Tier 7 — Backend Refactor** (T25–T28) | 0/4 | 🔲 Post-ship — build beside, no downtime |
 
-**Phase 1: 34/37 tasks (92%) — 2 n8n tasks + 4 Tier 6 remaining**
+**Phase 1: 35/37 tasks (95%) — 1 n8n task + 4 Tier 6 remaining**
 **Phase 2: 0/4 Tier 7 tasks — post-ship, runs parallel on port 8788**
 
 ### Reconciliation Notes (2026-05-29)
