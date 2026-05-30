@@ -1763,3 +1763,261 @@ def _write_profile_summary(results: list[dict]) -> None:
     (_athenaeum / "PROFILE.md").write_text("".join(_lines))
     _get_gathering_logger().info("Wrote PROFILE.md after context gathering (%d providers)", len(results))
 
+
+# ─── Automated n8n Bootstrap ─────────────────────────────────────────────────
+#
+# Called during onboarding. Starts n8n Docker, creates the initial owner,
+# generates an API key, writes it to .env, and sets up Tailscale serve.
+
+_N8N_DOCKER_IMAGE = "n8nio/n8n:latest"
+_N8N_DOCKER_NAME = "n8n"
+_N8N_PORT = 5678
+_N8N_TAILSCALE_PORT = 5679
+
+_OWNER_EMAIL = "konan@pantheon.local"
+_OWNER_PASSWORD = "Pantheon42"
+
+
+def _docker_cmd(cmd: str) -> tuple[str, int, str]:
+    """Run a Docker command via sg docker group. Returns (stdout, exit_code, stderr)."""
+    import subprocess as _sp
+
+    try:
+        r = _sp.run(
+            ["sg", "docker", "-c", cmd],
+            capture_output=True, text=True, timeout=120,
+        )
+        return r.stdout, r.returncode, r.stderr
+    except Exception as exc:
+        return "", -1, str(exc)
+
+
+def setup_n8n() -> dict:
+    """Fully automated n8n bootstrap for onboarding.
+
+    Returns:
+        dict with keys: ok, n8n_url, api_key, tailscale_url (or error)
+    """
+    import json as _json
+    import os as _os
+    import subprocess as _sp
+    import time as _time
+    import urllib.error as _urlerr
+    import urllib.request as _urlreq
+    from pathlib import Path as _Path
+
+    result: dict = {"ok": False, "n8n_url": f"http://localhost:{_N8N_PORT}", "api_key": None, "tailscale_url": None}
+
+    # ── 1. Check Docker availability ─────────────────────────────────
+    docker_avail, ec, _ = _docker_cmd("docker ps")
+    if ec != 0:
+        result["error"] = "Docker is not available. Install Docker and try again."
+        return result
+
+    # ── 2. Check if n8n is already running and configured ──────────────
+    # If we can already access the API key from .env, just skip setup
+    api_key = os.environ.get("N8N_API_KEY", "")
+    if not api_key:
+        env_path = _Path.home() / "pantheon" / "webui" / ".env"
+        try:
+            if env_path.is_file():
+                for line in env_path.read_text().splitlines():
+                    line = line.strip()
+                    if line.startswith("export "):
+                        line = line[7:]
+                    if line.startswith("N8N_API_KEY="):
+                        api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+        except Exception:
+            pass
+
+    if api_key:
+        # Already have an API key — verify it works
+        try:
+            req = _urlreq.Request(
+                f"{_N8N_API_BASE}/credentials",
+                headers={"X-N8N-API-KEY": api_key},
+            )
+            with _urlreq.urlopen(req, timeout=5) as resp:
+                result["api_key"] = api_key
+                result["n8n_url"] = f"http://localhost:{_N8N_PORT}"
+                result["already_configured"] = True
+                result["ok"] = True
+                # Still set up Tailscale if not already
+                _setup_tailscale_for_n8n()
+                result["tailscale_url"] = _detect_tailscale_url()
+                return result
+        except Exception:
+            pass  # Key is stale — proceed to full setup
+
+    # ── 3. Ensure n8n container is running ────────────────────────────
+    _docker_cmd(f"docker rm -f {_N8N_DOCKER_NAME} 2>/dev/null")
+    stdout, ec, _ = _docker_cmd(
+        f'docker run -d --name {_N8N_DOCKER_NAME} --restart unless-stopped '
+        f'-p {_N8N_PORT}:{_N8N_PORT} '
+        f'-e N8N_HOST=pantheon.tail164759.ts.net '
+        f'-e N8N_PROTOCOL=https '
+        f'-e N8N_SECURE_COOKIE=false '
+        f'-e N8N_MCP_SERVER_ENABLED=true '
+        f'-e N8N_MCP_SERVER_PATH_PREFIX=/mcp-server '
+        f'-v n8n-data:/home/node/.n8n '
+        f'{_N8N_DOCKER_IMAGE}'
+    )
+    if ec != 0:
+        result["error"] = f"Failed to start n8n Docker: {stdout}"
+        return result
+
+    # ── 3. Wait for n8n to be ready ───────────────────────────────────
+    for i in range(30):
+        try:
+            req = _urlreq.Request(f"http://localhost:{_N8N_PORT}/healthz")
+            with _urlreq.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    break
+        except Exception:
+            pass
+        if i < 5:
+            _time.sleep(2)
+        else:
+            _time.sleep(1)
+    else:
+        result["error"] = "n8n did not become ready within 60s"
+        return result
+
+    _time.sleep(3)  # extra settling time after healthz
+
+    # ── 4. Create initial owner account ───────────────────────────────
+    owner_body = _json.dumps({
+        "email": _OWNER_EMAIL,
+        "firstName": "Konan",
+        "lastName": "Admin",
+        "password": _OWNER_PASSWORD,
+    }).encode()
+    try:
+        req = _urlreq.Request(
+            f"http://localhost:{_N8N_PORT}/rest/owner/setup",
+            data=owner_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=15) as resp:
+            owner_resp = _json.loads(resp.read().decode())
+    except _urlerr.HTTPError as exc:
+        # 409 means already set up — that's fine
+        if exc.code != 409:
+            result["error"] = f"Owner setup failed: {exc}"
+            return result
+        owner_resp = {}
+    except Exception as exc:
+        result["error"] = f"Owner setup failed: {exc}"
+        return result
+
+    # ── 5. Log in to get session cookie ───────────────────────────────
+    login_body = _json.dumps({
+        "emailOrLdapLoginId": _OWNER_EMAIL,
+        "password": _OWNER_PASSWORD,
+    }).encode()
+    try:
+        req = _urlreq.Request(
+            f"http://localhost:{_N8N_PORT}/rest/login",
+            data=login_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=15) as resp:
+            set_cookie = resp.headers.get("Set-Cookie", "")
+            # Extract n8n-auth cookie value
+            for part in set_cookie.split(";"):
+                part = part.strip()
+                if part.startswith("n8n-auth="):
+                    cookie = part[len("n8n-auth="):]
+                    break
+            else:
+                result["error"] = "Login succeeded but no n8n-auth cookie"
+                return result
+    except Exception as exc:
+        result["error"] = f"Login failed: {exc}"
+        return result
+
+    # ── 6. Generate API key ───────────────────────────────────────────
+    expiry = int(_time.time()) + 365 * 86400
+    key_body = _json.dumps({
+        "label": "olympus",
+        "scopes": [
+            "credential:create", "credential:read", "credential:delete",
+            "credential:list", "credential:update",
+        ],
+        "expiresAt": expiry,
+    }).encode()
+    try:
+        req = _urlreq.Request(
+            f"http://localhost:{_N8N_PORT}/rest/api-keys",
+            data=key_body,
+            headers={
+                "Content-Type": "application/json",
+                "Cookie": f"n8n-auth={cookie}",
+            },
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=15) as resp:
+            key_resp = _json.loads(resp.read().decode())
+        api_key = (key_resp.get("data") or key_resp).get("rawApiKey", "")
+        if not api_key:
+            result["error"] = "API key generation returned no key"
+            return result
+    except Exception as exc:
+        result["error"] = f"API key generation failed: {exc}"
+        return result
+
+    result["api_key"] = api_key
+
+    # ── 7. Write API key to .env ──────────────────────────────────────
+    env_path = _Path.home() / "pantheon" / "webui" / ".env"
+    try:
+        env_text = env_path.read_text() if env_path.exists() else ""
+        lines = env_text.splitlines()
+        # Remove any existing N8N_API_KEY line
+        lines = [l for l in lines if not l.strip().startswith("N8N_API_KEY=") and not l.strip().startswith("export N8N_API_KEY=")]
+        lines.append(f"export N8N_API_KEY={api_key}")
+        env_path.write_text("\n".join(lines) + "\n")
+        result["env_updated"] = True
+    except Exception as exc:
+        result["warning"] = f"Failed to write API key to .env: {exc}"
+
+    # ── 8. Set up Tailscale serve for n8n ─────────────────────────────
+    _setup_tailscale_for_n8n()
+    result["tailscale_url"] = _detect_tailscale_url()
+
+    result["ok"] = True
+    result["n8n_url"] = f"http://localhost:{_N8N_PORT}"
+    return result
+
+
+def _setup_tailscale_for_n8n() -> None:
+    """Set up Tailscale serve for n8n if not already configured."""
+    import subprocess as _sp
+
+    try:
+        r = _sp.run(["tailscale", "serve", "status"], capture_output=True, text=True, timeout=5)
+        if str(_N8N_TAILSCALE_PORT) not in r.stdout:
+            _sp.run(
+                ["tailscale", "serve", "--bg", "--https", str(_N8N_TAILSCALE_PORT),
+                 "--set-path", "/", f"http://127.0.0.1:{_N8N_PORT}"],
+                capture_output=True, text=True, timeout=15,
+            )
+    except Exception:
+        pass
+
+
+def _detect_tailscale_url() -> str | None:
+    """Detect the Tailscale URL for n8n."""
+    import subprocess as _sp
+
+    try:
+        r = _sp.run(["tailscale", "serve", "status"], capture_output=True, text=True, timeout=5)
+        if str(_N8N_TAILSCALE_PORT) in r.stdout:
+            return f"https://pantheon.tail164759.ts.net:{_N8N_TAILSCALE_PORT}"
+    except Exception:
+        pass
+    return None
+

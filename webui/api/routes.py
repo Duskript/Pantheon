@@ -1909,6 +1909,7 @@ from api.onboarding import (
     verify_opencode_key,
     start_context_gathering,
     get_context_gathering_status,
+    setup_n8n,
 )
 from api.stream import get_stream_entities, get_stream_edges, get_stream_metrics, get_ichor_graph
 from api.oauth import (
@@ -6586,6 +6587,9 @@ def handle_post(handler, parsed) -> bool:
 
     if parsed.path == "/api/onboarding/complete":
         return j(handler, complete_onboarding())
+
+    if parsed.path == "/api/onboarding/setup-n8n":
+        return j(handler, setup_n8n())
 
     if parsed.path == "/api/onboarding/probe":
         # Probe a self-hosted provider endpoint (#1499).  Validates the
