@@ -1840,23 +1840,26 @@ def setup_n8n() -> dict:
             )
             with _urlreq.urlopen(req, timeout=5) as resp:
                 result["api_key"] = api_key
-                result["n8n_url"] = f"http://localhost:{_N8N_PORT}"
                 result["already_configured"] = True
                 result["ok"] = True
                 # Still set up Tailscale if not already
                 _setup_tailscale_for_n8n()
                 result["tailscale_url"] = _detect_tailscale_url()
+                result["n8n_url"] = result.get("tailscale_url") or f"http://localhost:{_N8N_PORT}"
                 return result
         except Exception:
             pass  # Key is stale — proceed to full setup
 
     # ── 3. Ensure n8n container is running ────────────────────────────
+    _n8n_hostname = _detect_tailscale_hostname()
+    _n8n_public_url = _detect_tailscale_url() or f"http://localhost:{_N8N_PORT}"
     _docker_cmd(f"docker rm -f {_N8N_DOCKER_NAME} 2>/dev/null")
     stdout, ec, _ = _docker_cmd(
         f'docker run -d --name {_N8N_DOCKER_NAME} --restart unless-stopped '
         f'-p {_N8N_PORT}:{_N8N_PORT} '
-        f'-e N8N_HOST=pantheon.tail164759.ts.net '
+        f'-e N8N_HOST={_n8n_hostname} '
         f'-e N8N_PROTOCOL=https '
+        f'-e N8N_PUBLIC_URL={_n8n_public_url} '
         f'-e N8N_SECURE_COOKIE=false '
         f'-e N8N_MCP_SERVER_ENABLED=true '
         f'-e N8N_MCP_SERVER_PATH_PREFIX=/mcp-server '
@@ -1989,8 +1992,24 @@ def setup_n8n() -> dict:
     result["tailscale_url"] = _detect_tailscale_url()
 
     result["ok"] = True
-    result["n8n_url"] = f"http://localhost:{_N8N_PORT}"
+    result["n8n_url"] = result.get("tailscale_url") or f"http://localhost:{_N8N_PORT}"
     return result
+
+
+def _detect_tailscale_hostname() -> str:
+    """Detect the hostname from tailscale status."""
+    import subprocess as _sp
+    try:
+        r = _sp.run(["tailscale", "status"], capture_output=True, text=True, timeout=5)
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            # Lines look like: "100.x.y.z pantheon         konan@ linux   active; ..."
+            parts = line.split()
+            if len(parts) >= 2 and not parts[0].startswith("#"):
+                return parts[1]
+    except Exception:
+        pass
+    return "pantheon.tail164759.ts.net"
 
 
 def _setup_tailscale_for_n8n() -> None:
@@ -2015,8 +2034,10 @@ def _detect_tailscale_url() -> str | None:
 
     try:
         r = _sp.run(["tailscale", "serve", "status"], capture_output=True, text=True, timeout=5)
-        if str(_N8N_TAILSCALE_PORT) in r.stdout:
-            return f"https://pantheon.tail164759.ts.net:{_N8N_TAILSCALE_PORT}"
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("https://") and str(_N8N_TAILSCALE_PORT) in line:
+                return line.split()[0]
     except Exception:
         pass
     return None

@@ -49,8 +49,13 @@ if not _N8N_PUBLIC_URL:
             ["tailscale", "serve", "status"],
             capture_output=True, text=True, timeout=5,
         )
-        if result.returncode == 0 and "5679" in result.stdout:
-            _N8N_PUBLIC_URL = "https://pantheon.tail164759.ts.net:5679"
+        if result.returncode == 0:
+            # Parse the actual Tailscale URL from serve status output
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("https://") and ":5679" in line:
+                    _N8N_PUBLIC_URL = line.split()[0]
+                    break
     except Exception:
         pass
 if not _N8N_PUBLIC_URL:
@@ -170,16 +175,16 @@ def get_status() -> dict[str, Any]:
     """Check if n8n is reachable and healthy.
 
     Returns:
-        {"healthy": bool, "version": str|None, "error": str|None}
+        {"healthy": bool, "version": str|None, "error": str|None, "url": str}
     """
     try:
         req = urllib.request.Request(f"{N8N_BASE}/healthz")
         with urllib.request.urlopen(req, timeout=5) as resp:
             if resp.status == 200:
-                return {"healthy": True, "version": None, "error": None}
-            return {"healthy": False, "version": None, "error": f"HTTP {resp.status}"}
+                return {"healthy": True, "version": None, "error": None, "url": _N8N_PUBLIC_URL}
+            return {"healthy": False, "version": None, "error": f"HTTP {resp.status}", "url": _N8N_PUBLIC_URL}
     except Exception as exc:
-        return {"healthy": False, "version": None, "error": str(exc)}
+        return {"healthy": False, "version": None, "error": str(exc), "url": _N8N_PUBLIC_URL}
 
 
 def list_credentials() -> dict[str, Any]:
