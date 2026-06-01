@@ -3434,6 +3434,48 @@ a:hover{{text-decoration:underline}}
             handler.wfile.write(err)
         return True
 
+    # ── Composio routes — proxy to Composio Bridge (:8789) ──
+    if parsed.path.startswith("/api/composio/"):
+        from urllib.request import Request as URLRequest, urlopen
+        from urllib.error import HTTPError, URLError
+        import json as _json
+
+        target_url = f"http://127.0.0.1:8789{parsed.path.replace('/api/composio', '', 1)}"
+        if parsed.query:
+            target_url += f"?{parsed.query}"
+
+        try:
+            req = URLRequest(target_url)
+            if handler.headers.get("Authorization"):
+                req.add_header("Authorization", handler.headers["Authorization"])
+            if handler.headers.get("Cookie"):
+                req.add_header("Cookie", handler.headers["Cookie"])
+
+            with urlopen(req, timeout=30) as resp:
+                body = resp.read()
+                handler.send_response(resp.status)
+                for key, val in resp.getheaders():
+                    if key.lower() not in ("transfer-encoding", "connection"):
+                        handler.send_header(key, val)
+                handler.send_header("Content-Length", str(len(body)))
+                handler.end_headers()
+                handler.wfile.write(body)
+        except HTTPError as e:
+            body = e.read()
+            handler.send_response(e.code)
+            handler.send_header("Content-Type", "application/json")
+            handler.send_header("Content-Length", str(len(body)))
+            handler.end_headers()
+            handler.wfile.write(body)
+        except URLError:
+            handler.send_response(502)
+            handler.send_header("Content-Type", "application/json")
+            err = _json.dumps({"error": "Composio bridge unreachable"}).encode()
+            handler.send_header("Content-Length", str(len(err)))
+            handler.end_headers()
+            handler.wfile.write(err)
+        return True
+
     # ── Providers (GET) ──
     if parsed.path == "/api/providers":
         return j(handler, get_providers())
@@ -4951,6 +4993,47 @@ def handle_post(handler, parsed) -> bool:
             handler.send_response(502)
             handler.send_header("Content-Type", "application/json")
             err = json.dumps({"error": "Olympus backend unreachable"}).encode()
+            handler.send_header("Content-Length", str(len(err)))
+            handler.end_headers()
+            handler.wfile.write(err)
+        return True
+
+    # ── Composio routes — proxy to Composio Bridge (:8789) ──
+    if parsed.path.startswith("/api/composio/"):
+        from urllib.request import Request as URLRequest, urlopen
+        from urllib.error import HTTPError, URLError
+
+        target_url = f"http://127.0.0.1:8789{parsed.path.replace('/api/composio', '', 1)}"
+        if parsed.query:
+            target_url += f"?{parsed.query}"
+        try:
+            data = json.dumps(body).encode("utf-8") if body else None
+            req = URLRequest(target_url, data=data, method="POST")
+            req.add_header("Content-Type", "application/json")
+            if handler.headers.get("Authorization"):
+                req.add_header("Authorization", handler.headers["Authorization"])
+            if handler.headers.get("Cookie"):
+                req.add_header("Cookie", handler.headers["Cookie"])
+            with urlopen(req, timeout=30) as resp:
+                resp_body = resp.read()
+                handler.send_response(resp.status)
+                for key, val in resp.getheaders():
+                    if key.lower() not in ("transfer-encoding", "connection"):
+                        handler.send_header(key, val)
+                handler.send_header("Content-Length", str(len(resp_body)))
+                handler.end_headers()
+                handler.wfile.write(resp_body)
+        except HTTPError as e:
+            err_body = e.read()
+            handler.send_response(e.code)
+            handler.send_header("Content-Type", "application/json")
+            handler.send_header("Content-Length", str(len(err_body)))
+            handler.end_headers()
+            handler.wfile.write(err_body)
+        except URLError:
+            handler.send_response(502)
+            handler.send_header("Content-Type", "application/json")
+            err = json.dumps({"error": "Composio bridge unreachable"}).encode()
             handler.send_header("Content-Length", str(len(err)))
             handler.end_headers()
             handler.wfile.write(err)
@@ -7635,6 +7718,89 @@ def handle_patch(handler, parsed) -> bool:
             handler.end_headers()
             handler.wfile.write(err)
         return True
+
+    # ── Composio routes — proxy to Composio Bridge (:8789) ──
+    if parsed.path.startswith("/api/composio/"):
+        from urllib.request import Request as URLRequest, urlopen
+        from urllib.error import HTTPError, URLError
+
+        target_url = f"http://127.0.0.1:8789{parsed.path.replace('/api/composio', '', 1)}"
+        if parsed.query:
+            target_url += f"?{parsed.query}"
+        try:
+            data = json.dumps(body).encode("utf-8") if body else None
+            req = URLRequest(target_url, data=data, method="PATCH")
+            req.add_header("Content-Type", "application/json")
+            if handler.headers.get("Authorization"):
+                req.add_header("Authorization", handler.headers["Authorization"])
+            if handler.headers.get("Cookie"):
+                req.add_header("Cookie", handler.headers["Cookie"])
+            with urlopen(req, timeout=30) as resp:
+                resp_body = resp.read()
+                handler.send_response(resp.status)
+                for key, val in resp.getheaders():
+                    if key.lower() not in ("transfer-encoding", "connection"):
+                        handler.send_header(key, val)
+                handler.send_header("Content-Length", str(len(resp_body)))
+                handler.end_headers()
+                handler.wfile.write(resp_body)
+        except HTTPError as e:
+            err_body = e.read()
+            handler.send_response(e.code)
+            handler.send_header("Content-Type", "application/json")
+            handler.send_header("Content-Length", str(len(err_body)))
+            handler.end_headers()
+            handler.wfile.write(err_body)
+        except URLError:
+            handler.send_response(502)
+            handler.send_header("Content-Type", "application/json")
+            err = json.dumps({"error": "Composio bridge unreachable"}).encode()
+            handler.send_header("Content-Length", str(len(err)))
+            handler.end_headers()
+            handler.wfile.write(err)
+        return True
+
+    # ── PATCH /api/auth/me — update user profile ──
+    if parsed.path == "/api/auth/me":
+        from api.auth import parse_cookie, verify_session
+        from api.olympus_users import get_session_user, get_user, update_user
+
+        session_val = None
+        cookie_val = parse_cookie(handler)
+        if cookie_val and verify_session(cookie_val):
+            session_val = cookie_val
+        auth_header = handler.headers.get("Authorization", "")
+        if not session_val and auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            if verify_session(token):
+                session_val = token
+
+        if not session_val:
+            return j(handler, {"error": "Authentication required"}, status=401)
+
+        token_part = session_val.split(".")[0] if "." in session_val else session_val
+        uid = get_session_user(token_part)
+        if not uid:
+            return j(handler, {"error": "Session not found"}, status=401)
+
+        user = get_user(uid)
+        if not user:
+            return j(handler, {"error": "User not found"}, status=404)
+
+        # Apply allowed profile updates
+        allowed = {"display_name", "color", "avatar"}
+        updates = {k: v for k, v in body.items() if k in allowed and v is not None}
+        if updates:
+            try:
+                update_user(uid, updates, acting_role=user.get("role", "user"))
+            except ValueError as e:
+                return j(handler, {"error": str(e)}, status=400)
+
+        # Return updated user
+        from api.olympus_users import build_bootstrap
+        updated = get_user(uid)
+        return j(handler, build_bootstrap(updated) if updated else build_bootstrap(user))
+
     if parsed.path.startswith("/api/kanban/"):
         from api.kanban_bridge import handle_kanban_patch
 
@@ -7724,6 +7890,46 @@ def handle_delete(handler, parsed) -> bool:
             handler.end_headers()
             handler.wfile.write(err)
         return True
+
+    # ── Composio routes — proxy to Composio Bridge (:8789) ──
+    if parsed.path.startswith("/api/composio/"):
+        from urllib.request import Request as URLRequest, urlopen
+        from urllib.error import HTTPError, URLError
+
+        target_url = f"http://127.0.0.1:8789{parsed.path.replace('/api/composio', '', 1)}"
+        if parsed.query:
+            target_url += f"?{parsed.query}"
+        try:
+            req = URLRequest(target_url, method="DELETE")
+            if handler.headers.get("Authorization"):
+                req.add_header("Authorization", handler.headers["Authorization"])
+            if handler.headers.get("Cookie"):
+                req.add_header("Cookie", handler.headers["Cookie"])
+            with urlopen(req, timeout=30) as resp:
+                resp_body = resp.read()
+                handler.send_response(resp.status)
+                for key, val in resp.getheaders():
+                    if key.lower() not in ("transfer-encoding", "connection"):
+                        handler.send_header(key, val)
+                handler.send_header("Content-Length", str(len(resp_body)))
+                handler.end_headers()
+                handler.wfile.write(resp_body)
+        except HTTPError as e:
+            err_body = e.read()
+            handler.send_response(e.code)
+            handler.send_header("Content-Type", "application/json")
+            handler.send_header("Content-Length", str(len(err_body)))
+            handler.end_headers()
+            handler.wfile.write(err_body)
+        except URLError:
+            handler.send_response(502)
+            handler.send_header("Content-Type", "application/json")
+            err = json.dumps({"error": "Composio bridge unreachable"}).encode()
+            handler.send_header("Content-Length", str(len(err)))
+            handler.end_headers()
+            handler.wfile.write(err)
+        return True
+
     if parsed.path.startswith("/api/kanban/"):
         from api.kanban_bridge import handle_kanban_delete
 
