@@ -168,28 +168,29 @@
 
 | Field | Value |
 |---|---|
-| **Status** | 🔲 |
+| **Status** | ✅ Complete |
 | **Priority** | P1 |
 | **Depends on** | Nothing |
-| **Files** | `Sidebar.tsx`, `StreamDashboard.tsx`, `stream.py`, `routes.py` |
+| **Commit** | `c7ab3ba` (Olympus-UI — nav), `6638fce` (pantheon — data) |
+| **Files** | `Sidebar.tsx`, `SettingsRoot.tsx`, `SidebarDrawer.tsx`, `StreamDashboard.tsx`, `stream.py`, `routes.py` |
 
 **Issues:**
-1. Stream shows in sidebar — user wants it in Settings
-2. Showing only 6 entities, 3 sources, 1MB — obviously stale/wrong data (Athenaeum has way more)
-3. Data source: Stream pulls from Codex-Stream hotness.json which may have stale/empty data
+1. ✅ Stream shows in sidebar — moved to Settings tab (B6.1 done)
+2. ✅ Showing only 6 entities, 3 sources, 1MB — now wired to Ichor graph DB + full Athenaeum (B6.2 done)
+3. ✅ Data source: Stream now queries Ichor graph DB (9K+ nodes, 147K+ edges) as primary source, with Codex-Stream hotness.json as fallback
 
 **Fix:**
-1. Move Stream nav from sidebar to Settings tab
-2. Wire Stream metrics to real Athenaeum stats (walk athenaeum directory tree, count files/sizes)
-3. Or wire to Ichor graph data (already done for KnowledgeGraph in T21 — apply same approach to metrics)
+1. ✅ Move Stream nav from sidebar to Settings tab (done: added `stream` tab in SettingsRoot, removed from Sidebar expanded+collapsed+drawer)
+2. ✅ Wire Stream metrics to real Athenaeum stats + Ichor graph DB (35MB, 25 codexes, 2.5K files, 7.5K entities, 147K connections)
+3. ✅ Wire Stream entities/edges to Ichor graph DB (200 entities with categories, 480 edges)
 
 **🚦 QA Gate B6:**
 ```
-- [ ] Stream no longer appears in sidebar
-- [ ] Settings → Stream tab shows accurate metrics
-- [ ] Entity count matches actual Athenaeum content
-- [ ] Storage size reflects real disk usage
-- [ ] Source count is accurate
+- [x] Stream no longer appears in sidebar
+- [x] Settings → Stream tab shows accurate metrics
+- [x] Entity count matches actual Athenaeum content
+- [x] Storage size reflects real disk usage
+- [x] Source count is accurate
 ```
 
 ---
