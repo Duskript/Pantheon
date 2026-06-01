@@ -79,8 +79,15 @@ def _normalise_board_or_raise(raw):
 
 def _conn(board=None):
     kb = _kb()
-    kb.init_db(board=board)
-    return kb.connect(board=board)
+    try:
+        kb.init_db(board=board)
+    except TypeError:
+        # Older hermes_cli without multi-board support
+        kb.init_db()
+    try:
+        return kb.connect(board=board)
+    except TypeError:
+        return kb.connect()
 
 
 def _obj_dict(value):
