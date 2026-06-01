@@ -1133,9 +1133,10 @@ GIT:
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔲 |
+| **Status** | ✅ |
+| **Commit** | `4d5c63a` (Pantheon) |
 | **Depends on** | T13 (data + entity co-occurrence in Ichor graph) |
-| **Files** | `~/.hermes/plugins/stream-retrieval/` |
+| **Files** | `~/pantheon/plugins/stream-retrieval/` |
 
 **What:** Hermes plugin exposing 6 retrieval tools: `stream_search`, `stream_filter`, `stream_entity`, `stream_trending`, `stream_connections`, `stream_fetch_chunks`. FTS5 + ChromaDB hybrid search. Entity lookups via Ichor graph.
 
@@ -1156,9 +1157,10 @@ GIT:
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔲 |
+| **Status** | ✅ |
+| **Commit** | `c384b0e` (Pantheon) |
 | **Depends on** | T13, T11 |
-| **Files** | OAuth token refresh, adapter error handling, scheduler resilience |
+| **Files** | `cron/pantheon-sync/adapters/base.py` (sync_with_retry), `cron/pantheon-sync/sync_scheduler.py` (integration) |
 
 **What:** Production hardening. OAuth token expiry auto-refresh, API rate limit exponential backoff, adapter crash isolation (never crashes scheduler), scheduler restart resumes from saved state, duplicate ingest silently caught by dedup, embedding failure handled gracefully.
 
@@ -1178,9 +1180,10 @@ GIT:
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔲 |
+| **Status** | ✅ |
+| **Commit** | `a1d8517` (Pantheon) |
 | **Depends on** | Nothing (independent) |
-| **Files** | `~/.hermes/plugins/tokenjuice/` |
+| **Files** | `~/pantheon/plugins/tokenjuice/` (symlinked to `~/.hermes/plugins/tokenjuice/`) |
 
 **What:** Transparent compression layer for tool outputs. 10 deterministic rules run before content hits LLM context — saves users money on every query. HTML→Markdown, URL shortening, JSON truncation, etc. Zero LLM calls, pure text processing. Toggleable per-god via config.
 
@@ -1485,7 +1488,7 @@ Each concern gets one owner:
 
 ## Current Status Summary
 
-|> Updated: 2026-05-30 — 🚀 Olympus UI deployed on 8787. Legacy Pantheon UI sunset. |
+|> Updated: 2026-06-01 — Phase 1 complete (41/41). T22-T24 all built. |
 
 | Stream / Tier | Tasks | Status |
 |---------------|-------|--------|
@@ -1501,11 +1504,18 @@ Each concern gets one owner:
 | **Stream D — n8n Migration** (N1–N5) | 5/5 | ✅ Complete |
 | **Stream D — Composio Remediation** (N6) | 5/5 | ✅ Complete |
 | **Tier 5 — Polish** (T18–T20) | 3/3 | ✅ Complete |
-| **Tier 6 — Integration Polish** (T21–T24) | 1/4 | 🔄 T21 done, T22-T24 remain |
+| **Tier 6 — Integration Polish** (T21–T24) | 4/4 | ✅ Complete |
 | **Tier 7 — Backend Refactor** (T25–T28) | 0/4 | 🔲 Post-ship — build beside, no downtime |
 
-**Phase 1: 38/42 tasks (90%) — T22-T24 (3 tasks) remaining**
+**Phase 1: Complete ✅ — all user-facing features built**
 **Phase 2: 0/4 Tier 7 tasks — post-ship, runs parallel on port 8788**
+
+### Reconciliation Notes (2026-06-01 — T22-T24 sprint)
+- **T24 TokenJuice:** 10 compression rules as Hermes plugin. Commit `a1d8517`. 96% reduction on JSON-heavy payloads.
+- **T22 Stream Retrieval:** 6 search tools as Hermes plugin. Commit `4d5c63a`. Filesystem + hotness + Ichor graph integration.
+- **T23 Error Handling:** Retry/backoff/OAuth refresh in sync scheduler. Commit `c384b0e`. Exponential backoff (1s→8s), n8n token refresh on 401.
+- **T6 Backend Enforcement:** Backend `permitted_gods` check added to chat endpoints. Commit `861bcfd`. Frontend filter already existed.
+- **Phase 1 complete.** All user-facing features built. Remaining: Tier 7 backend refactor (post-ship).
 
 ### Reconciliation Notes (2026-05-30)
 - **N6 fully complete:** All 5 subtasks done across 4 commits. 26 tracked files with composio refs → 2 expected docs.
