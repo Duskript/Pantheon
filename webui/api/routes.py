@@ -4168,6 +4168,15 @@ a:hover{{text-decoration:underline}}
             {"profiles": list_profiles_api(), "active": get_active_profile_name()},
         )
 
+    # ── Soulforge Concepts (GET) — list Thoth's god concepts ──
+    if parsed.path == "/api/soulforge/concepts":
+        from api.soul_forge import list_concepts
+        try:
+            concepts = list_concepts()
+            return j(handler, {"concepts": concepts})
+        except Exception as e:
+            return bad(handler, str(e))
+
     # ── Pantheon-Summons list (GET) — Server-side proxy for the summon drawer ──
     if parsed.path == "/api/gods/summon/list":
         import json as _json, urllib.request as _urllib
