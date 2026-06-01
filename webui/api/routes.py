@@ -4071,11 +4071,48 @@ a:hover{{text-decoration:underline}}
 
     # ── Skills API (GET) ──
     if parsed.path == "/api/skills":
-        from tools.skills_tool import skills_list as _skills_list
+        from tools.skills_tool import _find_all_skills as _find_all_skills, _get_disabled_skill_names
 
-        raw = _skills_list()
-        data = json.loads(raw) if isinstance(raw, str) else raw
-        return j(handler, {"skills": data.get("skills", [])})
+        skills = _find_all_skills(skip_disabled=True)
+        disabled = _get_disabled_skill_names()
+        for s in skills:
+            s["enabled"] = s["name"] not in disabled
+            s["id"] = s["name"]  # use name as stable id
+        return j(handler, {"skills": skills})
+
+    # ── Skills API (PUT toggle) ──
+    if parsed.path.startswith("/api/skills/") and parsed.path.endswith("/toggle"):
+        from hermes_cli.config import load_config, save_config
+        from urllib.parse import unquote
+
+        parts = parsed.path.split("/")
+        # path: /api/skills/{name}/toggle
+        if len(parts) < 4:
+            return bad(handler, "Invalid toggle path", 400)
+        skill_name = unquote(parts[3])
+        enabled = body.get("enabled", True)
+
+        config = load_config()
+        skills_cfg = config.setdefault("skills", {})
+        disabled_list = skills_cfg.setdefault("disabled", [])
+
+        if enabled and skill_name in disabled_list:
+            disabled_list.remove(skill_name)
+        elif not enabled and skill_name not in disabled_list:
+            disabled_list.append(skill_name)
+
+        save_config(config)
+
+        # Return the updated skill
+        from tools.skills_tool import _find_all_skills as _find_all_skills2
+        all_skills = _find_all_skills2(skip_disabled=True)
+        skill = next((s for s in all_skills if s["name"] == skill_name), None)
+        if skill:
+            from tools.skills_tool import _get_disabled_skill_names as _get_dis2
+            skill["enabled"] = skill_name not in _get_dis2()
+            skill["id"] = skill["name"]
+            return j(handler, skill)
+        return j(handler, {"name": skill_name, "enabled": enabled, "id": skill_name})
 
     if parsed.path == "/api/skills/content":
         from tools.skills_tool import skill_view as _skill_view, SKILLS_DIR
