@@ -332,13 +332,24 @@ class EventsBackend:
 
 
 class _Embedder:
-    """Thin embedding wrapper — OpenRouter first, Ollama fallback."""
+    """Thin embedding wrapper — OpenRouter first, Ollama fallback.
+
+    Ollama configuration:
+    - ``num_ctx=8192`` to use qwen3-embedding's full native context.
+    - Configurable model via ATHENAEUM_EMBED_MODEL env var
+      (default: qwen3-embedding:0.6b).
+    - Instruction prefix for retrieval-optimized embeddings.
+    """
+
+    _EMBED_COUNT = 0
 
     def __init__(self):
         import os
         self._api_key = os.environ.get("ATHENAEUM_EMBED_API_KEY", "") or os.environ.get("OPENROUTER_API_KEY", "")
         self._model = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
         self._timeout = 30.0
+        # Ollama model — configurable, defaults to qwen3-embedding:0.6b
+        self._ollama_model = os.environ.get("ATHENAEUM_EMBED_MODEL", "qwen3-embedding:0.6b")
 
     @property
     def use_openrouter(self) -> bool:
@@ -347,11 +358,17 @@ class _Embedder:
             return False
         return bool(self._api_key)
 
-    def embed(self, text: str) -> Optional[List[float]]:
+    def embed(self, text: str, prefix: str = "search_document: ") -> Optional[List[float]]:
+        """Embed text via Ollama with retrieval-optimized instruction prefix.
+
+        The ``prefix`` (default ``search_document: ``) improves retrieval quality
+        for qwen3-embedding models. Set to ``search_query: `` for query-side
+        embeddings, or empty string to disable.
+        """
         import httpx
 
-        # nomic-embed-text has a ~512-token / ~2000-char limit.
-        # Chunk at 1500 chars with overlap to stay safe.
+        # qwen3-embedding supports up to 8192 tokens natively.
+        # Chunk at 1500 chars (~375 tok) with overlap for safety.
         CHUNK_SIZE = 1500
         CHUNK_OVERLAP = 100
         MAX_CHUNKS = 20
@@ -364,6 +381,9 @@ class _Embedder:
                 else:
                     url = "http://localhost:11434/api/embeddings"
                     headers = {"Content-Type": "application/json"}
+                    # qwen3-embedding's full native context
+                    payload.setdefault("options", {})["num_ctx"] = 8192
+
                 resp = httpx.post(url, headers=headers, json=payload, timeout=self._timeout)
                 resp.raise_for_status()
                 if self.use_openrouter:
@@ -376,7 +396,7 @@ class _Embedder:
             # Short enough to embed directly
             if self.use_openrouter:
                 return _call_api({"model": self._model, "input": text})
-            return _call_api({"model": "nomic-embed-text", "prompt": text})
+            return _call_api({"model": self._ollama_model, "prompt": prefix + text})
 
         # Chunk long texts and average embeddings
         chunks = []
@@ -397,7 +417,7 @@ class _Embedder:
             if self.use_openrouter:
                 v = _call_api({"model": self._model, "input": chunk})
             else:
-                v = _call_api({"model": "nomic-embed-text", "prompt": chunk})
+                v = _call_api({"model": self._ollama_model, "prompt": prefix + chunk})
             if v:
                 vectors.append(v)
 

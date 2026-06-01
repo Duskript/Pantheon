@@ -1,0 +1,47 @@
+[
+  {
+    "number": 9,
+    "title": "[tech-debt] dead-code/commented-out \u2014 Batch: 6 findings (4 files)",
+    "url": "https://github.com/Duskript/Pantheon/issues/9"
+  },
+  {
+    "number": 10,
+    "title": "[tech-debt] dead-code/unused-import \u2014 Batch: 380 findings (200 files)",
+    "url": "https://github.com/Duskript/Pantheon/issues/10"
+  },
+  {
+    "number": 11,
+    "title": "[tech-debt] duplication/function \u2014 Batch: 32 findings (8 files)",
+    "url": "https://github.com/Duskript/Pantheon/issues/11"
+  },
+  {
+    "number": 12,
+    "title": "[tech-debt] todo/no-issue-ref \u2014 Batch: 9 findings (5 files)",
+    "url": "https://github.com/Duskript/Pantheon/issues/12"
+  },
+  {
+    "number": 13,
+    "title": "[tech-debt] untested/mcp-tool \u2014 Batch: 20 findings (1 files)",
+    "url": "https://github.com/Duskript/Pantheon/issues/13"
+  },
+  {
+    "number": 14,
+    "title": "[tech-debt] dead-code/unreachable: webui/tests/test_issue765_streaming_persistence.py:404 \u2014 unreachable code after Raise",
+    "url": "https://github.com/Duskript/Pantheon/issues/14"
+  },
+  {
+    "number": 15,
+    "title": "[tech-debt] dead-code/unreachable: webui/api/routes.py:7776 \u2014 unreachable code after Return (handle_post_connect)",
+    "url": "https://github.com/Duskript/Pantheon/issues/15"
+  },
+  {
+    "number": 16,
+    "title": "[tech-debt] dead-code/unreachable: webui/api/routes.py:7780 \u2014 unreachable code after Return (handle_post_disconnect)",
+    "url": "https://github.com/Duskript/Pantheon/issues/16"
+  },
+  {
+    "number": 17,
+    "title": "[tech-debt] deprecated/utcnow: webui/api/routes.py:6134 \u2014 Deprecated: utcnow() -> datetime.now(timezone.utc)",
+    "url": "https://github.com/Duskript/Pantheon/issues/17"
+  }
+]

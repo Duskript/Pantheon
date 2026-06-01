@@ -6123,9 +6123,10 @@ def handle_post(handler, parsed) -> bool:
                 "color": "#748FFC",  # default, user can customize later
                 "domain": domain or "Specialist",
             })
-        except Exception:
-            # Non-fatal — god will still work, just needs manual metadata
-            pass
+        except Exception as e:
+            # Log the failure — this is important for debugging summon issues
+            logger = __import__('logging').getLogger(__name__)
+            logger.warning("Failed to write god.json for summoned god '%s': %s", safe_name, e)
 
         # Bump local download count
         import json as _json

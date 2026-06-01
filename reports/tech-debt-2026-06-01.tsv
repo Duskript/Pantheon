@@ -1,0 +1,452 @@
+category	file	line	description	severity	author
+dead-code/unused-import	cron/pantheon-sync/sync_scheduler.py	24	import os unused	medium	
+dead-code/unused-import	cron/pantheon-sync/test_adapters.py	4	import pytest unused	medium	
+dead-code/unused-import	examples/morning-briefing/morning-briefing.example.py	22	import sys unused	medium	
+dead-code/unused-import	lib/forge_sweep.py	17	import sys unused	medium	
+dead-code/unused-import	lib/forge_sweep.py	19	import copy.deepcopy unused	medium	
+dead-code/unused-import	lib/forge_sweep.py	23	import typing.Optional unused	medium	
+dead-code/unused-import	lib/forge_sweep.py	23	import typing.Tuple unused	medium	
+dead-code/unused-import	lib/ichor_brief.py	29	import os unused	medium	
+dead-code/unused-import	lib/ichor_brief.py	33	import typing.Optional unused	medium	
+dead-code/unused-import	lib/ichor_forge.py	36	import pathlib.Path unused	medium	
+dead-code/unused-import	lib/ichor_forge.py	37	import typing.Optional unused	medium	
+dead-code/unused-import	lib/ichor_forge.py	37	import typing.Tuple unused	medium	
+dead-code/unused-import	lib/ichor_forge.py	538	import lib.ichor_gates.PHASE_KEYWORDS unused	medium	
+dead-code/unused-import	lib/ichor_forge.py	539	import lib.ichor_gates.PHASE_TOOLS unused	medium	
+dead-code/unused-import	lib/ichor_forge.py	540	import lib.ichor_gates.RALPHPhase unused	medium	
+dead-code/unused-import	lib/ichor_gates.py	43	import dataclasses.field unused	medium	
+dead-code/unused-import	lib/ichor_graph_query.py	34	import os unused	medium	
+dead-code/unused-import	lib/ichor_graph_query.py	37	import collections.defaultdict unused	medium	
+dead-code/unused-import	lib/ichor_graph_query.py	38	import datetime.datetime unused	medium	
+dead-code/unused-import	lib/ichor_graph_query.py	38	import datetime.timezone unused	medium	
+dead-code/unused-import	lib/ichor_hybrid.py	35	import typing.Tuple unused	medium	
+dead-code/unused-import	lib/ichor_memory_score.py	12	import datetime.datetime unused	medium	
+dead-code/unused-import	lib/ichor_memory_score.py	12	import datetime.timezone unused	medium	
+dead-code/unused-import	lib/ichor_memory_score.py	13	import pathlib.Path unused	medium	
+dead-code/unused-import	lib/ichor_memory_score.py	14	import typing.Optional unused	medium	
+dead-code/unused-import	lib/ichor_subconscious.py	24	import os unused	medium	
+dead-code/unused-import	lib/ichor_subconscious.py	28	import typing.Optional unused	medium	
+dead-code/unused-import	pantheon-core/api.py	9	import sanctuary.config.SanctuaryConfig unused	medium	
+dead-code/unused-import	pantheon-core/gods/graph_client.py	18	import time unused	medium	
+dead-code/unused-import	pantheon-core/gods/hades.py	20	import collections.defaultdict unused	medium	
+dead-code/unused-import	pantheon-core/gods/hades.py	23	import typing.Tuple unused	medium	
+dead-code/unused-import	pantheon-core/gods/hestia.py	19	import dataclasses.field unused	medium	
+dead-code/unused-import	pantheon-core/mcp_server.py	20	import typing.Any unused	medium	
+dead-code/unused-import	pantheon-core/model_router.py	19	import json unused	medium	
+dead-code/unused-import	pantheon-core/model_router.py	22	import time unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_api.py	3	import tempfile unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_api.py	4	import pytest unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_api.py	13	import importlib unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_api.py	14	import api unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_harness_loader.py	3	import harness.exceptions.HarnessCircularExtendsError unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_hestia.py	7	import pytest unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_sanctuary_config.py	3	import pytest unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_vault_writer.py	1	import os unused	medium	
+dead-code/unused-import	pantheon-core/tests/test_vault_writer.py	4	import pytest unused	medium	
+dead-code/unused-import	plugins/ichor-gates/__init__.py	38	import typing.List unused	medium	
+dead-code/unused-import	plugins/pantheon-ichor-nudge/__init__.py	33	import typing.Any unused	medium	
+dead-code/unused-import	plugins/pantheon-ichor-nudge/__init__.py	33	import typing.Optional unused	medium	
+dead-code/unused-import	plugins/pantheon-shared-facts/__init__.py	17	import json unused	medium	
+dead-code/unused-import	plugins/pantheon-shared-facts/__init__.py	21	import time unused	medium	
+dead-code/unused-import	plugins/pantheon/__init__.py	35	import re unused	medium	
+dead-code/unused-import	plugins/pantheon/__init__.py	37	import time unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/classifier.py	12	import typing.Any unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/classifier.py	12	import typing.Dict unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/classifier.py	272	import json unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	9	import json unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	11	import os unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	12	import re unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	15	import time unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	16	import dataclasses.field unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	17	import datetime.date unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	21	import yaml unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	573	import hermes_constants.get_hermes_home unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/ingest.py	582	import plugins.pantheon.PantheonMemoryProvider unused	medium	
+dead-code/unused-import	plugins/pantheon/demeter/watcher.py	15	import typing.Any unused	medium	
+dead-code/unused-import	plugins/pantheon/graph_client.py	18	import time unused	medium	
+dead-code/unused-import	scripts/backfill-embeddings.py	3	import os unused	medium	
+dead-code/unused-import	scripts/backfill-embeddings.py	3	import sys unused	medium	
+dead-code/unused-import	scripts/batch-embed-catchup.py	12	import json unused	medium	
+dead-code/unused-import	scripts/batch-embed-catchup.py	15	import sys unused	medium	
+dead-code/unused-import	scripts/demeter-watch.py	5	import os unused	medium	
+dead-code/unused-import	scripts/demeter-watch.py	45	import json unused	medium	
+dead-code/unused-import	scripts/demeter-watch.py	46	import datetime.datetime unused	medium	
+dead-code/unused-import	scripts/demeter-watch.py	46	import datetime.timezone unused	medium	
+dead-code/unused-import	scripts/embed-catchup.py	14	import json unused	medium	
+dead-code/unused-import	scripts/embed-distilled-catchup.py	9	import json unused	medium	
+dead-code/unused-import	scripts/inject-shared-context.py	13	import json unused	medium	
+dead-code/unused-import	scripts/inject-shared-context.py	15	import re unused	medium	
+dead-code/unused-import	scripts/inject-shared-context.py	17	import datetime.datetime unused	medium	
+dead-code/unused-import	scripts/inject-shared-context.py	17	import datetime.timezone unused	medium	
+dead-code/unused-import	scripts/janus-bridge-v2.py	14	import sys unused	medium	
+dead-code/unused-import	scripts/janus-bridge.py	16	import sys unused	medium	
+dead-code/unused-import	scripts/lib/claude_import.py	4	import json unused	medium	
+dead-code/unused-import	scripts/lib/claude_import.py	7	import shutil unused	medium	
+dead-code/unused-import	scripts/lib/claude_import.py	9	import zipfile unused	medium	
+dead-code/unused-import	scripts/lib/claude_import.py	11	import pathlib.Path unused	medium	
+dead-code/unused-import	scripts/lib/god_cli/init.py	25	import pathlib.Path unused	medium	
+dead-code/unused-import	scripts/lib/god_cli/init.py	36	import pantheon_sdk.print_header unused	medium	
+dead-code/unused-import	scripts/lib/god_cli/registry.py	16	import pathlib.Path unused	medium	
+dead-code/unused-import	scripts/lib/god_cli/template_engine.py	12	import os unused	medium	
+dead-code/unused-import	scripts/lib/pantheon_sdk.py	16	import pathlib.Path unused	medium	
+dead-code/unused-import	scripts/morning-briefing.py	23	import sys unused	medium	
+dead-code/unused-import	scripts/pantheon-improvement-report.py	20	import typing.List unused	medium	
+dead-code/unused-import	scripts/pantheon-improvement-report.py	20	import typing.Optional unused	medium	
+dead-code/unused-import	scripts/reembed-athenaeum.py	12	import json unused	medium	
+dead-code/unused-import	scripts/reembed-athenaeum.py	17	import typing.Any unused	medium	
+dead-code/unused-import	scripts/reembed-athenaeum.py	17	import typing.Dict unused	medium	
+dead-code/unused-import	scripts/reembed-athenaeum.py	17	import typing.Optional unused	medium	
+dead-code/unused-import	scripts/shared-context-digest.py	13	import os unused	medium	
+dead-code/unused-import	scripts/shared-context-digest.py	17	import datetime.timedelta unused	medium	
+dead-code/unused-import	scripts/the-fates.py	22	import time unused	medium	
+dead-code/unused-import	scripts/the-fates.py	25	import typing.Any unused	medium	
+dead-code/unused-import	services/olympus-backend/main.py	17	import sys unused	medium	
+dead-code/unused-import	services/olympus-backend/main.py	23	import datetime.timedelta unused	medium	
+dead-code/unused-import	services/olympus-backend/main.py	29	import fastapi.responses.JSONResponse unused	medium	
+dead-code/unused-import	services/olympus-backend/main.py	30	import pydantic.Field unused	medium	
+dead-code/unused-import	tests/test_ichor_gates.py	11	import typing.Any unused	medium	
+dead-code/unused-import	tests/test_ichor_gates.py	11	import typing.Dict unused	medium	
+dead-code/unused-import	tests/test_ichor_tier_a.py	7	import json unused	medium	
+dead-code/unused-import	tests/test_ichor_tier_a.py	12	import lib.ichor_db.IchorDB unused	medium	
+dead-code/unused-import	webui/api/athenaeum.py	13	import typing.List unused	medium	
+dead-code/unused-import	webui/api/boons.py	13	import typing.Any unused	medium	
+dead-code/unused-import	webui/api/boons.py	13	import typing.List unused	medium	
+dead-code/unused-import	webui/api/config.py	21	import traceback unused	medium	
+dead-code/unused-import	webui/api/config.py	22	import uuid unused	medium	
+dead-code/unused-import	webui/api/config.py	24	import urllib.parse.parse_qs unused	medium	
+dead-code/unused-import	webui/api/connectors.py	11	import time unused	medium	
+dead-code/unused-import	webui/api/gateway_watcher.py	12	import json unused	medium	
+dead-code/unused-import	webui/api/helpers.py	8	import api.config.IMAGE_EXTS unused	medium	
+dead-code/unused-import	webui/api/helpers.py	8	import api.config.MD_EXTS unused	medium	
+dead-code/unused-import	webui/api/models.py	2	import collections unused	medium	
+dead-code/unused-import	webui/api/models.py	14	import api.config unused	medium	
+dead-code/unused-import	webui/api/olympus_users.py	20	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/api/onboarding.py	9	import subprocess unused	medium	
+dead-code/unused-import	webui/api/onboarding.py	1802	import os unused	medium	
+dead-code/unused-import	webui/api/onboarding.py	1803	import subprocess unused	medium	
+dead-code/unused-import	webui/api/providers.py	22	import api.config._get_label_for_model unused	medium	
+dead-code/unused-import	webui/api/rollback.py	10	import json unused	medium	
+dead-code/unused-import	webui/api/rollback.py	16	import datetime.timezone unused	medium	
+dead-code/unused-import	webui/api/routes.py	563	import api.config.IMAGE_EXTS unused	medium	
+dead-code/unused-import	webui/api/routes.py	564	import api.config.MD_EXTS unused	medium	
+dead-code/unused-import	webui/api/routes.py	566	import api.config.MAX_FILE_BYTES unused	medium	
+dead-code/unused-import	webui/api/routes.py	567	import api.config.MAX_UPLOAD_BYTES unused	medium	
+dead-code/unused-import	webui/api/routes.py	1870	import api.models._write_session_index unused	medium	
+dead-code/unused-import	webui/api/routes.py	1889	import api.workspace.safe_resolve_ws unused	medium	
+dead-code/unused-import	webui/api/routes.py	1894	import api.workspace._workspace_blocked_roots unused	medium	
+dead-code/unused-import	webui/api/routes.py	3354	import api.config.HOST unused	medium	
+dead-code/unused-import	webui/api/routes.py	6219	import shlex unused	medium	
+dead-code/unused-import	webui/api/routes.py	7085	import api.olympus_users.list_users unused	medium	
+dead-code/unused-import	webui/api/routes.py	7597	import api.helpers._safe_first unused	medium	
+dead-code/unused-import	webui/api/streaming.py	11	import queue unused	medium	
+dead-code/unused-import	webui/api/streaming.py	25	import api.config.SESSION_DIR unused	medium	
+dead-code/unused-import	webui/api/streaming.py	221	import api.workspace.set_last_workspace unused	medium	
+dead-code/unused-import	webui/api/upload.py	6	import email.parser unused	medium	
+dead-code/unused-import	webui/api/upload.py	11	import api.helpers.bad unused	medium	
+dead-code/unused-import	webui/api/upload.py	110	import os unused	medium	
+dead-code/unused-import	webui/api/workspace.py	24	import api.config.IMAGE_EXTS unused	medium	
+dead-code/unused-import	webui/api/workspace.py	24	import api.config.MD_EXTS unused	medium	
+dead-code/unused-import	webui/tests/test_1038_pwa_auth_redirect.py	14	import re unused	medium	
+dead-code/unused-import	webui/tests/test_1058_adaptive_title_refresh.py	13	import types unused	medium	
+dead-code/unused-import	webui/tests/test_1058_adaptive_title_refresh.py	14	import unittest unused	medium	
+dead-code/unused-import	webui/tests/test_1079_cron_session_project.py	5	import shutil unused	medium	
+dead-code/unused-import	webui/tests/test_1079_cron_session_project.py	6	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_1079_cron_session_project.py	10	import tests.conftest.TEST_STATE_DIR unused	medium	
+dead-code/unused-import	webui/tests/test_1079_cron_session_project.py	10	import tests.conftest._post unused	medium	
+dead-code/unused-import	webui/tests/test_1079_cron_session_project.py	10	import tests.conftest.TEST_BASE unused	medium	
+dead-code/unused-import	webui/tests/test_1560_password_env_var_no_op.py	23	import os unused	medium	
+dead-code/unused-import	webui/tests/test_1560_password_env_var_no_op.py	222	import api.config.save_settings unused	medium	
+dead-code/unused-import	webui/tests/test_1695_aiagent_import_error_detail.py	23	import os unused	medium	
+dead-code/unused-import	webui/tests/test_1695_aiagent_import_error_detail.py	27	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_1710_folder_tooltip.py	10	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_745_code_block_newlines.py	9	import re unused	medium	
+dead-code/unused-import	webui/tests/test_745_code_block_newlines.py	11	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_779_html_preview.py	2	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_approval_queue.py	7	import json unused	medium	
+dead-code/unused-import	webui/tests/test_approval_queue.py	123	import threading unused	medium	
+dead-code/unused-import	webui/tests/test_approval_sse.py	14	import json unused	medium	
+dead-code/unused-import	webui/tests/test_approval_unblock.py	9	import threading unused	medium	
+dead-code/unused-import	webui/tests/test_approval_unblock.py	29	import tools.approval.submit_pending unused	medium	
+dead-code/unused-import	webui/tests/test_background_tasks.py	23	import os unused	medium	
+dead-code/unused-import	webui/tests/test_background_tasks.py	26	import time unused	medium	
+dead-code/unused-import	webui/tests/test_background_tasks.py	28	import unittest.mock.patch unused	medium	
+dead-code/unused-import	webui/tests/test_bootstrap_dotenv.py	21	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_bootstrap_dotenv.py	25	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_bootstrap_foreground.py	61	import unittest.mock.patch unused	medium	
+dead-code/unused-import	webui/tests/test_byok_model_dropdown.py	222	import urllib.parse.urlparse unused	medium	
+dead-code/unused-import	webui/tests/test_cancel_interrupt.py	5	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_clarify_sse.py	12	import textwrap unused	medium	
+dead-code/unused-import	webui/tests/test_cmd_idle_fallback.py	11	import re unused	medium	
+dead-code/unused-import	webui/tests/test_commands_endpoint.py	5	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_cron_no_agent_edit.py	5	import re unused	medium	
+dead-code/unused-import	webui/tests/test_cron_run_job_import.py	9	import inspect unused	medium	
+dead-code/unused-import	webui/tests/test_custom_providers_in_panel.py	7	import json unused	medium	
+dead-code/unused-import	webui/tests/test_custom_providers_in_panel.py	8	import os unused	medium	
+dead-code/unused-import	webui/tests/test_custom_providers_in_panel.py	14	import tests._pytest_port.BASE unused	medium	
+dead-code/unused-import	webui/tests/test_default_workspace_fallback.py	2	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_empty_session_no_disk_write.py	22	import time unused	medium	
+dead-code/unused-import	webui/tests/test_empty_session_no_disk_write.py	29	import api.models.Session unused	medium	
+dead-code/unused-import	webui/tests/test_excalidraw_inline_embed.py	2	import re unused	medium	
+dead-code/unused-import	webui/tests/test_gateway_sync.py	13	import os unused	medium	
+dead-code/unused-import	webui/tests/test_gateway_sync.py	1922	import time unused	medium	
+dead-code/unused-import	webui/tests/test_issue1095_pasted_images.py	8	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1105_ssrf_custom_providers.py	8	import os unused	medium	
+dead-code/unused-import	webui/tests/test_issue1105_ssrf_custom_providers.py	9	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1106_custom_providers_models.py	2	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1139_password_remote.py	8	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1140_cron_badge_per_job.py	11	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1144_session_time_sync.py	21	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1195_session_profile_routing.py	4	import os unused	medium	
+dead-code/unused-import	webui/tests/test_issue1195_session_profile_routing.py	5	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_issue1202_oauth_provider_status.py	17	import re unused	medium	
+dead-code/unused-import	webui/tests/test_issue1202_oauth_provider_status.py	21	import unittest.mock.MagicMock unused	medium	
+dead-code/unused-import	webui/tests/test_issue1298_cancel_and_activity.py	22	import api.streaming unused	medium	
+dead-code/unused-import	webui/tests/test_issue1361_cancel_data_loss.py	18	import re unused	medium	
+dead-code/unused-import	webui/tests/test_issue1361_cancel_data_loss.py	20	import unittest.mock.patch unused	medium	
+dead-code/unused-import	webui/tests/test_issue1361_cancel_data_loss.py	26	import api.streaming unused	medium	
+dead-code/unused-import	webui/tests/test_issue1384_local_provider.py	29	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1436_context_indicator_load_path.py	31	import json unused	medium	
+dead-code/unused-import	webui/tests/test_issue1438_fence_anchoring.py	34	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1499_keyless_onboarding.py	34	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_issue1500_lmstudio_env_var_alignment.py	30	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_issue1511_dedup_shared_reference.py	150	import importlib unused	medium	
+dead-code/unused-import	webui/tests/test_issue1539_provider_removal_dropdown_invalidation.py	35	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1579_whats_new_link_404.py	19	import os unused	medium	
+dead-code/unused-import	webui/tests/test_issue1612_renamed_root_profile.py	14	import os unused	medium	
+dead-code/unused-import	webui/tests/test_issue1612_renamed_root_profile.py	15	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_issue1612_renamed_root_profile.py	16	import unittest.mock.patch unused	medium	
+dead-code/unused-import	webui/tests/test_issue1614_project_profile_filtering.py	19	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_issue1614_project_profile_filtering.py	20	import unittest.mock.patch unused	medium	
+dead-code/unused-import	webui/tests/test_issue1624_repair_stale_pending_grace.py	18	import threading unused	medium	
+dead-code/unused-import	webui/tests/test_issue1624_repair_stale_pending_grace.py	19	import unittest.mock.patch unused	medium	
+dead-code/unused-import	webui/tests/test_issue1624_repair_stale_pending_grace.py	21	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue1633_models_cache_version_stamp.py	17	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_issue1633_models_cache_version_stamp.py	18	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_issue1823_kanban_not_found.py	7	import types.SimpleNamespace unused	medium	
+dead-code/unused-import	webui/tests/test_issue342.py	8	import re unused	medium	
+dead-code/unused-import	webui/tests/test_issue467_yolo_mode_toggle.py	15	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_issue483_inline_diff_viewer.py	2	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue484_json_tree_viewer.py	2	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue492_workspace_reorder.py	2	import json unused	medium	
+dead-code/unused-import	webui/tests/test_issue492_workspace_reorder.py	2	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue492_workspace_reorder.py	3	import unittest.mock.call unused	medium	
+dead-code/unused-import	webui/tests/test_issue538_mcp_management.py	2	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue538_mcp_management.py	3	import unittest.mock.call unused	medium	
+dead-code/unused-import	webui/tests/test_issue569_579.py	11	import re unused	medium	
+dead-code/unused-import	webui/tests/test_issue570_permission.py	11	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue572.py	20	import os unused	medium	
+dead-code/unused-import	webui/tests/test_issue572.py	26	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue572.py	99	import api.onboarding._SUPPORTED_PROVIDER_SETUPS unused	medium	
+dead-code/unused-import	webui/tests/test_issue603_provider_categories.py	14	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue607.py	2	import re unused	medium	
+dead-code/unused-import	webui/tests/test_issue607.py	4	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue609.py	14	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_issue634.py	14	import re unused	medium	
+dead-code/unused-import	webui/tests/test_issue646.py	2	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue673.py	17	import re unused	medium	
+dead-code/unused-import	webui/tests/test_issue739_652_653.py	9	import ast unused	medium	
+dead-code/unused-import	webui/tests/test_issue798.py	20	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue803.py	18	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_issue803.py	21	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_issue893_cancel_preserves_partial.py	18	import time unused	medium	
+dead-code/unused-import	webui/tests/test_issue893_cancel_preserves_partial.py	23	import api.streaming unused	medium	
+dead-code/unused-import	webui/tests/test_issue895_894_nous_prefix.py	5	import threading unused	medium	
+dead-code/unused-import	webui/tests/test_issues_373_374_375.py	9	import re unused	medium	
+dead-code/unused-import	webui/tests/test_media_inline.py	15	import os unused	medium	
+dead-code/unused-import	webui/tests/test_media_inline.py	22	import tests._pytest_port.TEST_STATE_DIR unused	medium	
+dead-code/unused-import	webui/tests/test_metadata_save_wipe_1558.py	21	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_metadata_save_wipe_1558.py	22	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_minimax_provider.py	10	import os unused	medium	
+dead-code/unused-import	webui/tests/test_minimax_provider.py	155	import ast unused	medium	
+dead-code/unused-import	webui/tests/test_minimax_provider.py	155	import textwrap unused	medium	
+dead-code/unused-import	webui/tests/test_native_image_attachments.py	10	import struct unused	medium	
+dead-code/unused-import	webui/tests/test_native_image_attachments.py	14	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_nous_portal_routing.py	15	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_nous_portal_routing.py	16	import types unused	medium	
+dead-code/unused-import	webui/tests/test_onboarding_existing_config.py	25	import yaml unused	medium	
+dead-code/unused-import	webui/tests/test_onboarding_existing_config.py	38	import importlib unused	medium	
+dead-code/unused-import	webui/tests/test_onboarding_mvp.py	10	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_onboarding_mvp.py	20	import yaml unused	medium	
+dead-code/unused-import	webui/tests/test_onboarding_network.py	17	import os unused	medium	
+dead-code/unused-import	webui/tests/test_onboarding_network.py	19	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_onboarding_network.py	20	import unittest.mock unused	medium	
+dead-code/unused-import	webui/tests/test_opencode_providers.py	6	import os unused	medium	
+dead-code/unused-import	webui/tests/test_pdf_html_preview.py	9	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_pr1318_context_length_fallback.py	20	import re unused	medium	
+dead-code/unused-import	webui/tests/test_pr1339_fallback_providers_list.py	11	import re unused	medium	
+dead-code/unused-import	webui/tests/test_pr1350_sse_notify_correctness.py	30	import queue unused	medium	
+dead-code/unused-import	webui/tests/test_pr1350_sse_notify_correctness.py	32	import time unused	medium	
+dead-code/unused-import	webui/tests/test_pr1370_lineage_metadata_perf_and_orphan.py	16	import os unused	medium	
+dead-code/unused-import	webui/tests/test_pr1370_lineage_metadata_perf_and_orphan.py	20	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_pr1375_partial_tool_calls_sanitize.py	23	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_pr1445_opus_followups.py	11	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_profile_env_isolation.py	4	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_profile_switch_1200.py	14	import json unused	medium	
+dead-code/unused-import	webui/tests/test_profile_switch_1200.py	15	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_profile_switch_1200.py	16	import textwrap unused	medium	
+dead-code/unused-import	webui/tests/test_profile_switch_1200.py	206	import re unused	medium	
+dead-code/unused-import	webui/tests/test_profile_terminal_env.py	1	import os unused	medium	
+dead-code/unused-import	webui/tests/test_real_steer.py	19	import unittest unused	medium	
+dead-code/unused-import	webui/tests/test_reasoning_chip_js_behaviour.py	13	import os unused	medium	
+dead-code/unused-import	webui/tests/test_regressions.py	10	import time unused	medium	
+dead-code/unused-import	webui/tests/test_regressions.py	211	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_regressions.py	223	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_renderer_js_behaviour.py	15	import os unused	medium	
+dead-code/unused-import	webui/tests/test_renderer_js_behaviour.py	19	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_scheduled_jobs_profile_isolation.py	17	import unittest.mock unused	medium	
+dead-code/unused-import	webui/tests/test_security_redaction.py	303	import os unused	medium	
+dead-code/unused-import	webui/tests/test_session_batch_select.py	2	import re unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	11	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	12	import shutil unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	13	import subprocess unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	14	import time unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	17	import uuid unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	18	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	20	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	22	import tests.conftest.TEST_STATE_DIR unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	22	import tests.conftest.TEST_WORKSPACE unused	medium	
+dead-code/unused-import	webui/tests/test_session_duplicate.py	22	import tests.conftest._wait_for_server unused	medium	
+dead-code/unused-import	webui/tests/test_session_index.py	16	import time unused	medium	
+dead-code/unused-import	webui/tests/test_session_sidecar_repair.py	4	import os unused	medium	
+dead-code/unused-import	webui/tests/test_session_sidecar_repair.py	19	import api.models._active_stream_ids unused	medium	
+dead-code/unused-import	webui/tests/test_simplified_tool_calling_setting.py	3	import importlib unused	medium	
+dead-code/unused-import	webui/tests/test_skills_category_collapse.py	8	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_sprint1.py	17	import os unused	medium	
+dead-code/unused-import	webui/tests/test_sprint1.py	24	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_sprint12.py	4	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint14.py	4	import os unused	medium	
+dead-code/unused-import	webui/tests/test_sprint14.py	4	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint14.py	4	import shutil unused	medium	
+dead-code/unused-import	webui/tests/test_sprint14.py	4	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_sprint2.py	2	import io unused	medium	
+dead-code/unused-import	webui/tests/test_sprint2.py	2	import uuid unused	medium	
+dead-code/unused-import	webui/tests/test_sprint2.py	2	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint20.py	10	import json unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	18	import importlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	28	import conftest.TEST_STATE_DIR unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	318	import api.auth._login_attempts unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	318	import api.auth._LOGIN_WINDOW unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	324	import time unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	370	import api.models.SESSION_DIR unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	540	import urllib.error unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	550	import api.routes._handle_file_raw unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	557	import ast unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	654	import json unused	medium	
+dead-code/unused-import	webui/tests/test_sprint29.py	724	import importlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint3.py	2	import uuid unused	medium	
+dead-code/unused-import	webui/tests/test_sprint32.py	1	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_sprint32.py	5	import api.startup._trusted_agent_dir unused	medium	
+dead-code/unused-import	webui/tests/test_sprint34.py	19	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_sprint34.py	20	import unittest.mock unused	medium	
+dead-code/unused-import	webui/tests/test_sprint34.py	22	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_sprint34.py	272	import os unused	medium	
+dead-code/unused-import	webui/tests/test_sprint35.py	16	import re unused	medium	
+dead-code/unused-import	webui/tests/test_sprint37.py	5	import re unused	medium	
+dead-code/unused-import	webui/tests/test_sprint4.py	2	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint40.py	12	import re unused	medium	
+dead-code/unused-import	webui/tests/test_sprint40_ui_polish.py	8	import os unused	medium	
+dead-code/unused-import	webui/tests/test_sprint40_ui_polish.py	10	import re unused	medium	
+dead-code/unused-import	webui/tests/test_sprint40_ui_polish.py	13	import unittest.mock unused	medium	
+dead-code/unused-import	webui/tests/test_sprint42.py	13	import re unused	medium	
+dead-code/unused-import	webui/tests/test_sprint43.py	14	import ast unused	medium	
+dead-code/unused-import	webui/tests/test_sprint43.py	16	import re unused	medium	
+dead-code/unused-import	webui/tests/test_sprint43.py	17	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_sprint46.py	14	import tests._pytest_port.BASE unused	medium	
+dead-code/unused-import	webui/tests/test_sprint48.py	30	import importlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint49.py	13	import re unused	medium	
+dead-code/unused-import	webui/tests/test_sprint51.py	14	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_sprint51.py	17	import unittest.mock.MagicMock unused	medium	
+dead-code/unused-import	webui/tests/test_sprint51.py	20	import api.config.STREAMS_LOCK unused	medium	
+dead-code/unused-import	webui/tests/test_sprint8.py	4	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint9.py	5	import pathlib unused	medium	
+dead-code/unused-import	webui/tests/test_sprint9.py	102	import re unused	medium	
+dead-code/unused-import	webui/tests/test_streaming_session_sidebar.py	16	import api.models.Session unused	medium	
+dead-code/unused-import	webui/tests/test_symlink_cycle_detection.py	15	import os unused	medium	
+dead-code/unused-import	webui/tests/test_symlink_cycle_detection.py	19	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_tls_support.py	203	import fcntl unused	medium	
+dead-code/unused-import	webui/tests/test_update_banner_fixes.py	17	import threading unused	medium	
+dead-code/unused-import	webui/tests/test_update_banner_fixes.py	19	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_update_checker.py	11	import pathlib.Path unused	medium	
+dead-code/unused-import	webui/tests/test_update_checker.py	12	import unittest.mock.call unused	medium	
+dead-code/unused-import	webui/tests/test_update_checker.py	13	import subprocess unused	medium	
+dead-code/unused-import	webui/tests/test_update_checker.py	15	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_v050255_opus_followups.py	29	import re unused	medium	
+dead-code/unused-import	webui/tests/test_v050257_opus_followups.py	37	import tempfile unused	medium	
+dead-code/unused-import	webui/tests/test_v050257_opus_followups.py	40	import pytest unused	medium	
+dead-code/unused-import	webui/tests/test_v050258_opus_followups.py	32	import re unused	medium	
+dead-code/unused-import	webui/tests/test_v050259_sessiondb_fd_leak.py	20	import os unused	medium	
+dead-code/unused-import	webui/tests/test_version_badge.py	13	import importlib unused	medium	
+dead-code/unused-import	webui/tests/test_version_badge.py	14	import sys unused	medium	
+dead-code/unused-import	webui/tests/test_version_badge.py	15	import types unused	medium	
+dead-code/unused-import	webui/tests/test_workspace_add_quote_strip.py	15	import pytest unused	medium	
+dead-code/commented-out	webui/tests/test_issue1438_fence_anchoring.py	264	5-line commented-out code block	low	
+dead-code/commented-out	webui/api/kanban_bridge.py	902	5-line commented-out code block	low	
+dead-code/commented-out	webui/api/updates.py	276	5-line commented-out code block	low	
+dead-code/commented-out	webui/api/config.py	165	5-line commented-out code block	low	
+dead-code/commented-out	webui/api/config.py	2600	9-line commented-out code block	low	
+dead-code/commented-out	webui/api/config.py	2784	5-line commented-out code block	low	
+dead-code/unreachable	webui/tests/test_issue765_streaming_persistence.py	404	unreachable code after Raise	high	
+dead-code/unreachable	webui/api/routes.py	7776	unreachable code after Return (handle_post_connect)	high	
+dead-code/unreachable	webui/api/routes.py	7780	unreachable code after Return (handle_post_disconnect)	high	
+todo/no-issue-ref	lib/ichor_gates.py	452	TODO: # TODO/FIXME markers	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	lib/ichor_gates.py	740	TODO: 3. TODOS_RESOLVED — no open TODO/FIXME markers	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	scripts/shared-context-digest.py	10	TODO: TODO: Disable this cron job when the auto-inject plugin is ready.	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	tests/test_ichor_gates.py	237	TODO: content = "# TODO: fix this later\nx = 1\n"	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	tests/test_ichor_gates.py	245	TODO: assert "TODO" in result.recovery_hint	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	tests/test_ichor_gates.py	248	FIXME: content = "# FIXME: this is broken\ny = 2\n"	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	tests/test_ichor_gates.py	255	FIXME: assert "FIXME" in result.recovery_hint	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	tests/test_ichor_tier_a.py	130	TODO: "TODO: refactor the auth module before the next release.",	medium	<hephaestus@pantheon.local>
+todo/no-issue-ref	webui/static/assets/index.lazy-PiMIqOed.js	34	TODO: ]`,m={scope:`string`,variants:[u,l,d,f]},h={scope:`number`,variants:[{begin:`\\b0[bB][01]+(?:_	medium	webui/static/assets/index.lazy-BKmNsSPb.js
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool athenaeum_search() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool athenaeum_read() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool athenaeum_walk() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool athenaeum_write() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool athenaeum_list_codexes() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool messaging_send() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool messaging_check_inbox() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool ichor_brief() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool hades_get_report() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool god_list() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool ichor_retrieve() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool ichor_store() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool ichor_forget() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool ichor_health() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool ichor_graph_query() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool system_current_model() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool skill_list() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool skill_info() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool skill_run() has no test	medium	
+untested/mcp-tool	pantheon-core/mcp_server.py	268	MCP tool athenaeum_graph_search() has no test	medium	
+duplication/function	lib/ichor_hybrid.py	344	Duplicate function body (1aa2a0d3) found in 2 files: lib/ichor_hybrid.py, pantheon-core/mcp_server.py	medium	
+duplication/function	lib/ichor_graph_query.py	766	Duplicate function body (02698392) found in 3 files: lib/ichor_graph_query.py, pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	lib/ichor_subconscious.py	59	Duplicate function body (5a8b9bf3) found in 2 files: lib/ichor_subconscious.py, lib/ichor_brief.py	medium	
+duplication/function	scripts/morning-briefing.py	80	Duplicate function body (1cf4fc38) found in 2 files: examples/morning-briefing/morning-briefing.example.py, scripts/morning-briefing.py	medium	
+duplication/function	cron/pantheon-sync/adapters/base.py	88	Duplicate function body (cfc82c3c) found in 2 files: cron/pantheon-sync/adapters/base.py, webui/api/onboarding.py	medium	
+duplication/function	webui/api/system_health.py	22	Duplicate function body (582378eb) found in 2 files: webui/api/agent_health.py, webui/api/system_health.py	medium	
+duplication/function	webui/api/athenaeum.py	220	Duplicate function body (d4fcbfea) found in 2 files: webui/api/athenaeum.py, pantheon-core/mcp_server.py	medium	
+duplication/function	webui/api/athenaeum.py	225	Duplicate function body (4a04c5ce) found in 2 files: webui/api/athenaeum.py, pantheon-core/mcp_server.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	169	Duplicate function body (51105a92) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	177	Duplicate function body (a5e1aa66) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	191	Duplicate function body (287f443f) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	247	Duplicate function body (414c225d) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	250	Duplicate function body (654e8e15) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	253	Duplicate function body (c290da75) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	293	Duplicate function body (d79b71e6) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	317	Duplicate function body (44dea497) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	348	Duplicate function body (233fb586) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	367	Duplicate function body (4aeff51e) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	395	Duplicate function body (216d68cf) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	449	Duplicate function body (16813463) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	461	Duplicate function body (a0b8d101) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	504	Duplicate function body (68cfbca2) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	520	Duplicate function body (ed6b8d31) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	544	Duplicate function body (6f4af33d) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	572	Duplicate function body (a53639e8) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	630	Duplicate function body (02aa219b) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	650	Duplicate function body (9507bc94) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	662	Duplicate function body (070e8585) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	674	Duplicate function body (d3d65b66) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	681	Duplicate function body (894d9235) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	691	Duplicate function body (df19db61) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+duplication/function	plugins/pantheon/graph_client.py	733	Duplicate function body (1be87267) found in 2 files: pantheon-core/gods/graph_client.py, plugins/pantheon/graph_client.py	medium	
+deprecated/utcnow	./webui/api/routes.py	6134	Deprecated: utcnow\(\) -> datetime.now(timezone.utc)	high|	

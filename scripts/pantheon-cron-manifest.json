@@ -27,7 +27,7 @@
       "schedule": "0 0 * * *",
       "deliver": "local",
       "skills": ["pantheon-operations"],
-      "prompt": "Run the Hades nightly consolidation pipeline. python3 ~/pantheon/pantheon-core/hades/main.py --full",
+      "prompt": "Run the Hades nightly consolidation pipeline (includes session prune as final step). python3 ~/pantheon/pantheon-core/hades/main.py --full\n\nLAST STEP: hermes session prune --agent-id hermes-agent --days 14",
       "enabled_toolsets": ["terminal", "file"]
     },
     {
@@ -68,6 +68,12 @@
       "schedule": "0 7 * * *",
       "command": "cd ~/pantheon && scripts/hades --save \"~/athenaeum/Codex-Pantheon/reports/hades-$(date +\\%Y-\\%m-\\%d).md\" >> ~/pantheon/logs/hades.log 2>&1",
       "description": "Hades daily report at 7 AM"
+    }
+  ],
+  "merged_jobs": [
+    {
+      "name": "Session Prune (cron + old)",
+      "status": "REMOVED — merged into Hades Nightly Consolidation as last step (2026-05-31)"
     }
   ]
 }

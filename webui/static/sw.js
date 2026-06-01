@@ -1,7 +1,7 @@
 // ─── Olympus UI — Service Worker ─────────────────────────────
 // Handles push notifications and basic offline caching.
 
-const CACHE_NAME = 'olympus-v2'
+const CACHE_NAME = 'olympus-v1'
 const ASSETS_TO_CACHE = [
   '/',
   '/olympus/',

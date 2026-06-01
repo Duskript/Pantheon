@@ -731,6 +731,116 @@ def _embed_raw_file(codex_name: str, file_path: Path) -> bool:
         return False
 
 
+def _recheck_embedded_counts(report: HadesReport) -> None:
+    """Re-read ChromaDB state after embed catch-up and update report health.
+
+    Fixes two bugs in the original Phase-1b flow:
+    1. 'embedded' counts were overwritten with partial (just-embedded) counts
+       instead of showing total embedded per codex.
+    2. 'fs_unembedded' list was computed pre-embed and never refreshed.
+    """
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    except ImportError:
+        logger.warning("  → ChromaDB not available — skipping recount")
+        return
+
+    # Build current chroma_paths (same logic as run_health_checks)
+    chroma_paths: dict = {}
+    for col in client.list_collections():
+        try:
+            name = col.name
+            parts = name.split("_", 2)
+            if len(parts) >= 3:
+                parsed = "Codex-" + parts[2].replace("_", "-")
+                matched = next((c for c in KNOWN_CODEXES if c.lower() == parsed.lower()), None)
+                codex_key = matched or parsed
+                if col.count() == 0:
+                    chroma_paths[codex_key] = set()
+                    continue
+                r = col.get(include=["metadatas"])
+                sources: set = set()
+                if r and r.get("metadatas"):
+                    for m in r["metadatas"]:
+                        if m and "source" in m:
+                            src = m["source"]
+                            if src in ("distilled", "raw", "text"):
+                                continue
+                            sources.add(src)
+                chroma_paths[codex_key] = sources
+        except Exception:
+            pass
+
+    total_missing = 0
+    new_unembedded: list = []
+    for codex_name in KNOWN_CODEXES:
+        codex_dir = ATHENAEUM_ROOT / codex_name
+        if not codex_dir.is_dir():
+            continue
+        info = _walk_codex_files(codex_dir)
+
+        # Build disk-file set (same scope as health check — root embeddable + distilled)
+        disk_files: set = set()
+        for f in info["embeddable"] + info["distilled"]:
+            disk_files.add(str(f.absolute()))
+
+        chroma_sources = chroma_paths.get(codex_name, set())
+
+        # Root-level embedded count (matches health check definition)
+        root_set = set(str(f.absolute()) for f in info["embeddable"])
+        if codex_name in report.health.get("codexes", {}):
+            report.health["codexes"][codex_name]["embedded"] = len(root_set & chroma_sources)
+
+        # Rebuild missing list
+        missing = disk_files - chroma_sources
+        for f in sorted(list(missing))[:50]:
+            rel = Path(f).relative_to(ATHENAEUM_ROOT)
+            new_unembedded.append(str(rel))
+        total_missing += len(missing)
+
+    report.health["orphans"]["fs_unembedded"] = new_unembedded
+    logger.info("  → Post-embed recount: %d files still missing across all codexes",
+                total_missing)
+
+
+def _launch_bg_embed() -> None:
+    """Launch embed_missing_files() as a detached subprocess.
+
+    Returns immediately; the child process embeds files in the background
+    so it doesn't delay Hades report generation (avoids the 600s cron timeout).
+    """
+    import subprocess
+    gods_path = _REAL_HOME + "/pantheon/pantheon-core/gods"
+    env_file = _REAL_HOME + "/.hermes/.env"
+    embed_script = (
+        "import sys, json, logging, os\n"
+        # Load .env so ATHENAEUM_EMBED_MODEL is picked up
+        + "_ef = " + repr(env_file) + "\n"
+        + "if os.path.isfile(_ef):\n"
+        + "    for _l in open(_ef):\n"
+        + "        _l = _l.strip()\n"
+        + "        if _l and not _l.startswith('#') and '=' in _l:\n"
+        + "            _k, _v = _l.split('=', 1)\n"
+        + "            os.environ.setdefault(_k.strip(), _v.strip())\n"
+        + "sys.path.insert(0, " + repr(_LIB_PATH) + ")\n"
+        + "sys.path.insert(0, " + repr(gods_path) + ")\n"
+        + "logging.basicConfig(level=logging.INFO, format='%(levelname)s | %(message)s')\n"
+        + "from hades import embed_missing_files\n"
+        + "r = embed_missing_files()\n"
+        + "print('Background embed: {} embedded, {} failed'.format(r.get('embedded',0), r.get('failed',0)))\n"
+    )
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-c", embed_script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info("  → Embed catch-up launched in background (PID %d)", proc.pid)
+    except Exception as exc:
+        logger.warning("  → Failed to launch background embed: %s", exc)
+
+
 def embed_missing_files() -> Dict[str, Any]:
     """Catch-up phase: embed any files on disk missing from ChromaDB.
 
@@ -1488,25 +1598,19 @@ def run_hades() -> HadesReport:
             report.errors.append(f"Health checks failed: {exc}")
             logger.exception("Hades health check error")
 
-        # Phase 1b: Catch-up embed — embed any files missing from ChromaDB
-        logger.info("Hades: Embedding catch-up...")
+        # Phase 1b: Background embed catch-up + post-embed recount
+        logger.info("Hades: Launching background embed catch-up...")
         try:
-            embed_result = embed_missing_files()
-            if embed_result.get("embedded", 0) > 0 or embed_result.get("failed", 0) > 0:
-                logger.info("  → %d embedded, %d failed (disk: %d, chroma: %d)",
-                             embed_result["embedded"], embed_result["failed"],
-                             embed_result.get("total_on_disk", 0),
-                             embed_result.get("total_in_chroma", 0))
-                # Update health check stats with new embed counts
-                for codex, stats in embed_result.get("by_codex", {}).items():
-                    if codex in report.health.get("codexes", {}):
-                        report.health["codexes"][codex]["embedded"] = stats.get("embedded", 0)
-            elif embed_result.get("error"):
-                logger.warning("  → Embed catch-up error: %s", embed_result["error"])
-            else:
-                logger.info("  → No missing files to embed")
+            _launch_bg_embed()
+            # Re-read ChromaDB and refresh report numbers immediately
+            # (don't wait for the background process — use whatever's embedded so far)
+            _recheck_embedded_counts(report)
+            # Log current state from the refreshed numbers
+            orphans_fs = report.health.get("orphans", {}).get("fs_unembedded", [])
+            logger.info("  → Background embed launched. Current gap: %d files not embedded",
+                        len(orphans_fs))
         except Exception as exc:
-            report.errors.append(f"Embed catch-up failed: {exc}")
+            report.errors.append(f"Background embed / recount failed: {exc}")
             logger.exception("Hades embed catch-up error")
 
         # Phase 2: Distillation

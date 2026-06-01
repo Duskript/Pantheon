@@ -1,0 +1,33 @@
+repository: Duskript/Pantheon
+workspace: /home/konan/pantheon
+exclude_dirs:
+  - hermes-agent
+  - .venv
+  - __pycache__
+  - node_modules
+  - .git
+scan_passes:
+  dead_code: true
+  todos: true
+  test_coverage: true
+  duplication: true
+  deprecation: true
+issue_filing:
+  dry_run: true
+  batch_threshold: 5
+  max_per_run: 50
+  labels:
+    - tech-debt
+severity:
+  dead-code/unreachable: high
+  dead-code/commented-out: low
+  dead-code/unused-import: medium
+  todo/no-issue-ref: medium
+  todo/stale: high
+  untested/api: high
+  untested/mcp-tool: medium
+  duplication/function: medium
+  deprecated/pkg_resources: high
+  deprecated/utcnow: high
+  deprecated/warn: medium
+  deprecated/typing: low
