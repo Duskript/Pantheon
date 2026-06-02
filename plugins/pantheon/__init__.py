@@ -41,8 +41,18 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from agent.memory_provider import MemoryProvider
 
-# GraphClient for entity-relationship tracking
-from .graph_client import GraphClient as _GraphClient
+# GraphClient for entity-relationship tracking.
+# Canonical implementation lives in gods/graph_client.py; we re-export
+# so existing consumers using `from plugins.pantheon import GraphClient`
+# keep working. The plugin's own copy of this file was a near-duplicate
+# (739 lines) and was removed in the N8 dedup — see commit history.
+import sys as _sys
+import os as _os
+_pantheon_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+_gods_path = _os.path.join(_pantheon_root, "pantheon-core")
+if _gods_path not in _sys.path:
+    _sys.path.insert(0, _gods_path)
+from gods.graph_client import GraphClient as _GraphClient
 
 logger = logging.getLogger(__name__)
 

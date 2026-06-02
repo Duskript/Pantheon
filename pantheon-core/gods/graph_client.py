@@ -307,7 +307,10 @@ class GraphClient:
         if not self._conn:
             raise RuntimeError("GraphClient not connected")
 
-        # Edges are cascade-deleted by FK; FTS5 content-sync handles the FTS cleanup
+        # Edges are cascade-deleted by FK. FTS5 content-sync does NOT
+        # auto-delete FTS rows on source-row delete (content-sync is
+        # read-only on the source side), so we manually clear FTS too.
+        self._conn.execute("DELETE FROM nodes_fts WHERE node_id = ?", (node_id,))
         self._conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
         self._conn.commit()
         return self._conn.total_changes > 0
