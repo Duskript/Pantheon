@@ -625,16 +625,24 @@ def _launch_worker():
                 stdout=f, stderr=subprocess.STDOUT,
             )
 
-        # Step 4: Start Hermes gateway
+        # Step 4: Start Hermes gateway and dashboard
         with _launch_lock:
             _launch_step = "starting_gateway"
-            _launch_msg = "Starting Pantheon gateway..."
+            _launch_msg = "Starting Pantheon gateway and dashboard..."
         subprocess.run(["pkill", "-f", "hermes.*gateway"], capture_output=True, timeout=5)
+        subprocess.run(["pkill", "-f", "hermes.*dashboard"], capture_output=True, timeout=5)
         time.sleep(0.5)
         gateway_log = "/tmp/pantheon-gateway.log"
         with open(gateway_log, "w") as f:
             subprocess.Popen(
                 ["hermes", "gateway"],
+                stdout=f, stderr=subprocess.STDOUT,
+            )
+
+        dashboard_log = "/tmp/pantheon-dashboard.log"
+        with open(dashboard_log, "w") as f:
+            subprocess.Popen(
+                ["hermes", "dashboard", "--host", "127.0.0.1", "--port", "8787", "--no-open"],
                 stdout=f, stderr=subprocess.STDOUT,
             )
 
