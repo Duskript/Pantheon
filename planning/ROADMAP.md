@@ -1,5 +1,14 @@
 # Pantheon — Build Phases
 
+> **SUPERSEDED 2026-06-02:** This document describes the pre-Olympus Pantheon
+> build phases and does not reference Olympus UI. The canonical current
+> roadmap is `~/athenaeum/Codex-Olympus/OLYMPUS_UI_ROADMAP.md` (458 lines,
+> Now/Next/Later/Maybe + Project Ideas sourced additions). The content
+> below this line is preserved for historical reference only and is NOT
+> a source of truth.
+>
+> ---
+
 > Source: Constitution Section 11
 > Read this document when: starting any build session, determining what to build next, or verifying phase completion. Check STATE.md first to know current phase status before reading this document.
 

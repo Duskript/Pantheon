@@ -49,8 +49,18 @@
       "name": "Morning Briefing",
       "schedule": "0 6 * * *",
       "deliver": "local",
+      "skills": ["pantheon-operations"],
       "prompt": "Compose an energetic morning briefing for Konan delivered in fast-talking Hermes style.",
       "script": "morning-briefing.py"
+    },
+    {
+      "name": "Thoth Dawn Patrol",
+      "schedule": "0 0 * * *",
+      "deliver": "local",
+      "skills": ["pantheon-operations"],
+      "prompt": "You are Thoth, Pantheon's intelligence analyst. Synthesize the raw dawn patrol findings above into a structured intelligence briefing. Group by category (Papers, GitHub Projects, MCP Servers, Model News). For each item, note relevance to Pantheon: HIGH (directly useful), MEDIUM (influence or idea), or LOW (interesting context). Flag anything that could be a threat or risk (vendor deprecation, security advisory). Write the final briefing to ~/athenaeum/reports/dawn-patrol/$(date +%Y-%m-%d).md",
+      "script": "dawn-patrol.py",
+      "enabled_toolsets": ["terminal", "file"]
     }
   ],
   "system_crontab_entries": [

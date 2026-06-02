@@ -17,7 +17,8 @@ gods:
   studios: none
   type: conversational
 - author: Konan
-  description: "Lyric-writing, poetry, and song creation god — creative work in your established voice"
+  description: "Lyric-writing, poetry, and song creation god \u2014 creative work\
+    \ in your established voice"
   harness: god-apollo-base.yaml
   id: god-apollo
   name: Apollo
@@ -29,7 +30,8 @@ gods:
   type: conversational
   version: 1.0.0
 - author: Konan
-  description: "Knowledge synthesis, research, and idea capture — the ever-curious second brain that weaves scattered explorations into coherent insight"
+  description: "Knowledge synthesis, research, and idea capture \u2014 the ever-curious\
+    \ second brain that weaves scattered explorations into coherent insight"
   harness: thoth-base.yaml
   id: thoth
   name: Thoth
@@ -39,7 +41,8 @@ gods:
   type: conversational
   version: 1.0.0
 - author: Konan
-  description: "Medicine, medication management, health research, and healing rhythms — a calm, collaborative guide through health complexity"
+  description: "Medicine, medication management, health research, and healing rhythms\
+    \ \u2014 a calm, collaborative guide through health complexity"
   harness: caduceus-base.yaml
   id: caduceus
   name: Caduceus
@@ -48,3 +51,10 @@ gods:
   studios: none
   type: conversational
   version: 1.0.0
+- name: Marvin
+  id: marvin
+  harness: marvin-base.yaml
+  type: conversational
+  version: 1.0.0
+  description: A conversational god of Master Coder
+  author: Hephaestus (Pantheon-Core)

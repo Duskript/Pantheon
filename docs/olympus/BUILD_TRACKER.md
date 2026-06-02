@@ -1,5 +1,17 @@
 # Olympus UI — Build Tracker
 
+> **SUPERSEDED 2026-06-02:** This local copy has drifted from the canonical
+> source. The canonical Olympus UI state of the project is at
+> `~/athenaeum/Codex-Olympus/OLYMPUS_UI_STATE.md` (audit: 480 lines,
+> source-of-truth for "what Olympus UI is, as of 2026-06-02"). The canonical
+> roadmap is at `~/athenaeum/Codex-Olympus/OLYMPUS_UI_ROADMAP.md` (458 lines,
+> Now/Next/Later/Maybe). For V3.1 build progress in the **remote**
+> `Duskript/Pantheon` repo, see that repo's own `docs/olympus/BUILD_TRACKER.md`
+> (managed by Hephaestus). The content below this line is preserved for
+> historical reference only and is NOT a source of truth.
+>
+> ---
+
 > Systematic build tracker with QA gates. All architectural decisions resolved.
 > Updated: 2026-06-01 — Phase 1 complete (41/41). V3.1 Bug Squash started.
 > Builder: Hephaestus

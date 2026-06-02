@@ -58,11 +58,30 @@ You are currently forging a new god named **{god_name}** whose domain is **{god_
 
 Guide the user through a structured interview to create this god's SOUL.md. Follow these phases in order. Ask ONE question at a time.
 
-### Phase 1 — Deepen the Domain
-Explore what specific problem this god solves. What gap do they fill that existing gods don't? What knowledge do they need? What are their primary workflows?
+**CRITICAL RULES:**
+- You MUST walk through all 5 phases before producing a SOUL.md draft. Do not skip ahead.
+- If the user says "just write it" or "skip to the draft", acknowledge but still ask at least the 5 mandatory questions below before drafting.
+- A `markdown` code block in your response signals "I have a draft ready for review." Do NOT include a code block until Phase 5.
+- If the user provides a concept document, treat it as research notes for Phase 1 (Domain) only — still walk through Phases 2-4 interactively.
 
-### Phase 2 — Voice and Dynamic
-Ask how it should feel to talk to this god. Are they a collaborative partner (like Hephaestus), an autonomous executor, a mentor, or a playful muse?
+### Mandatory questions (ask each one before drafting)
+
+Each question below is a separate turn. Do NOT combine questions. Do NOT move on until the user answers.
+
+1. **Personality / Voice** (Phase 2) — How should this god feel to talk to? (collaborative partner, autonomous executor, mentor, playful muse, terse, etc.)
+2. **Filesystem boundaries** (Phase 3) — Confirm allowed/off-limits paths. Defaults: `~/pantheon/` + `~/athenaeum/` allowed; system commands + other paths off-limits.
+3. **Model** (Phase 4) — Which model should this god primarily use? (default: `opencode/deepseek-v4-flash`; alternative: `gpt-5`, `claude-sonnet-4.6`, `minimax/MiniMax-M3` — recommend one and explain why)
+4. **Knowledge bases** (Phase 4) — Should this god read any codex in `~/athenaeum/`? (default: own `Codex-God-{{name}}/` only; the user can opt into others)
+5. **Skills** (Phase 4) — What skills should this god load? (default: `auto-compact-topic-shift`, `pantheon-bridge`; user can add domain-specific ones like `plan`, `github-code-review`, `systematic-debugging`)
+6. **Schedule** (Phase 4) — When should this god run? (default: on-demand; user can opt into cron)
+
+After all 6 questions are answered (or the user explicitly says "draft it now"), present the complete SOUL.md draft inside a `markdown` code block (Phase 5).
+
+### Phase 1 — Confirm the Domain (one quick sentence)
+Acknowledge the god's name and stated domain in one sentence, then move to Phase 2. Do NOT explore the domain in depth here — the user already gave you the domain, and you have a research document if a concept was provided.
+
+### Phase 2 — Personality / Voice (FIRST mandatory question)
+Ask how it should feel to talk to this god. Are they a collaborative partner (like Hephaestus), an autonomous executor, a mentor, or a playful muse? Wait for the user's answer before moving on.
 
 ### Phase 3 — Boundaries and Guardrails
 Propose sensible defaults for filesystem access, then ask what to change.
@@ -70,12 +89,12 @@ Propose sensible defaults for filesystem access, then ask what to change.
 - Default off limits: system-level commands, paths outside those
 - Codex-God-{{name}}/ is excluded from Hades archival (standard for all gods)
 
-### Phase 4 — Operational Quick-Hits
-Propose defaults as a batch and let the user override by exception:
-- Model: `opencode/deepseek-v4-flash` via LiteLLM (fast, cheap, solid generalist)
-- Platform: Web UI only
-- Skills: `auto-compact-topic-shift`, `pantheon-bridge` (standard for all gods)
-- Schedule: On-demand (no cron job)
+### Phase 4 — Operational Quick-Hits (one at a time)
+Ask these four questions in order, one turn each. Do NOT bundle them as a "propose defaults" batch — each is its own mandatory question:
+- **Model:** which model should this god use? (default: `opencode/deepseek-v4-flash` via LiteLLM)
+- **Knowledge bases:** which codex(es) in `~/athenaeum/` should this god read? (default: own `Codex-God-{{name}}/` only)
+- **Skills:** which skills should this god load? (default: `auto-compact-topic-shift`, `pantheon-bridge`)
+- **Schedule:** when should this god run? (default: on-demand; alternative: cron)
 
 ### Phase 5 — Synthesis and Review
 Present the complete SOUL.md draft inside a ```markdown code block. Ask the user what needs to change. Iterate until they're satisfied.
@@ -186,8 +205,13 @@ def _extract_soul(text: str) -> str | None:
     return None
 
 
-def _call_llm(messages: list[dict], max_tokens: int = 2048) -> str | None:
-    """Make a chat completion call to the LLM via litellm proxy."""
+def _call_llm(messages: list[dict], max_tokens: int = 8192) -> str | None:
+    """Make a chat completion call to the LLM via OpenCode Go API.
+
+    Uses increased max_tokens (8192) because the forge model (deepseek-v4-pro)
+    is a reasoning model whose internal reasoning counts against the output
+    limit. Large concept documents need headroom for both reasoning + reply.
+    """
     try:
         client = _get_client()
         response = client.chat.completions.create(
@@ -196,7 +220,19 @@ def _call_llm(messages: list[dict], max_tokens: int = 2048) -> str | None:
             temperature=0.7,
             max_tokens=max_tokens,
         )
-        return response.choices[0].message.content
+        msg = response.choices[0].message
+        # Reasoning models may return empty content when reasoning consumes
+        # all available output tokens. Fall back to reasoning_content.
+        content = msg.content or ""
+        if not content.strip():
+            reasoning = getattr(msg, "reasoning_content", None)
+            if reasoning and reasoning.strip():
+                # Use the last paragraph of reasoning as a fallback reply
+                content = reasoning.strip()
+            else:
+                logger.warning("Forge LLM returned empty content and no reasoning_content")
+                return None
+        return content
     except Exception as e:
         logger.error("Forge LLM call failed: %s", e)
         return None
@@ -334,13 +370,20 @@ def forge_start(god_name: str, god_domain: str, concept_name: str | None = None)
     concept_loaded = bool(concept_text)
 
     if concept_text:
-        # Concept exists — skip the full interview, use it as context
+        # Concept exists — use it for Phase 1 (Domain), then walk Phases 2-4
+        # (Voice, Boundaries, Operational). The user still gets the full
+        # interview, just with Phase 1's answers pre-filled by Thoth.
         initial_msg = (
-            f"I'm forging a god named **{god_name}** whose domain is **{god_domain}**."
-            f"\n\nThoth has already researched this god and written a concept document. "
-            f"I'll include it below. Please review the concept, then produce a "
-            f"SOUL.md draft based on it. Ask me only for clarifications or gaps "
-            f"you find in the concept.\n\n"
+            f"I'm forging a god named **{god_name}** whose domain is **{god_domain}**.\n\n"
+            f"Thoth has already researched this god and written a concept document "
+            f"for Phase 1 (Domain). I'll include it below for your reference.\n\n"
+            f"**Important:** Even with the concept, you MUST still walk me through "
+            f"the 5 mandatory questions (Personality, Model, Knowledge bases, "
+            f"Skills, Schedule) before producing a SOUL.md draft. The concept only "
+            f"covers Phase 1 — Phases 2-4 still need my answers. Treat any "
+            f"personality, model, or skills info in the concept as a starting "
+            f"point to confirm, not a final answer.\n\n"
+            f"Begin with the Personality / Voice question (Phase 2).\n\n"
             f"## Concept Document (from Thoth)\n\n{concept_text}"
         )
         if handoff_text:
@@ -349,7 +392,9 @@ def forge_start(god_name: str, god_domain: str, concept_name: str | None = None)
         # No concept — start the full interview
         initial_msg = (
             f"Let's forge a new god named **{god_name}** whose domain is "
-            f"**{god_domain}**. Begin the interview."
+            f"**{god_domain}**. Begin the interview — start with the "
+            f"Personality / Voice question (Phase 2 of 5). Do NOT skip ahead "
+            f"to a draft."
         )
 
     messages = _build_messages(god_name, god_domain, [], initial_msg)

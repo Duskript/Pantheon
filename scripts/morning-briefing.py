@@ -22,6 +22,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone, timedelta, date
+from pathlib import Path
 
 # ── Config ───────────────────────────────────────────────────────────
 PANTHEON_DIR = os.environ.get("PANTHEON_DIR", os.path.expanduser("~/pantheon"))
@@ -84,6 +85,28 @@ def collect_triage() -> str:
     return _sh(f"python3 {script}", timeout=30)
 
 
+def collect_dawn_patrol() -> str:
+    """Read the most recent Thoth dawn patrol briefing."""
+    patrol_dir = Path(ATHENAEUM_DIR) / "reports" / "dawn-patrol"
+    if not patrol_dir.exists():
+        return "[No dawn patrol directory — intelligence scan not yet set up]"
+    files = sorted(patrol_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].md"), reverse=True)
+    if not files:
+        return "[No dawn patrol briefings found yet — first scan runs at midnight]"
+    latest = files[0]
+    content = latest.read_text().strip()
+    if not content:
+        return f"[Dawn patrol report {latest.name} is empty]"
+    lines = content.splitlines()
+    # Extract the key sections with headings — limit to ~3000 chars
+    key_lines = [l for l in lines if l.startswith("## ") or l.startswith("### ") or 
+                 any(t in l for t in ("HIGH", "MEDIUM", "LOW", "⚠️", "❌", "✅", "🔴"))]
+    preview = "\n".join(key_lines[:30])
+    if len(content) > 3000:
+        preview += f"\n\n[... full report at {latest.name} — {len(content)} chars]"
+    return preview or content[:3000]
+
+
 def collect_project_ideas() -> str:
     c = _read(PROJECT_IDEAS)
     return c or "[No project ideas file — skipping]"
@@ -114,6 +137,7 @@ def main() -> None:
     collectors = [
         ("TIMESTAMP", collect_timestamp),
         ("HADES_REPORT", collect_hades),
+        ("DAWN_PATROL", collect_dawn_patrol),
         ("ATHENAEUM_TRIAGE", collect_triage),
         ("PROJECT_IDEAS", collect_project_ideas),
         ("HERMES_UPDATE", collect_update_check),

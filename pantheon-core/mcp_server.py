@@ -58,12 +58,21 @@ logger = logging.getLogger("pantheon-mcp")
 
 
 class _Embedder:
-    """Thin embedding wrapper — OpenRouter first, Ollama fallback."""
+    """Thin embedding wrapper — OpenRouter first, Ollama fallback.
+
+    Ollama configuration:
+    - Configurable model via ATHENAEUM_EMBED_MODEL env var
+      (default: nomic-embed-text:v1.5).
+    - ``num_ctx=2048`` to keep memory usage low on this hardware.
+    - ``search_document: `` instruction prefix for retrieval-optimized embeddings.
+    """
 
     def __init__(self):
         self._api_key = os.environ.get("ATHENAEUM_EMBED_API_KEY", "") or os.environ.get("OPENROUTER_API_KEY", "")
         self._model = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
         self._timeout = 30.0
+        # Ollama model — configurable, defaults to qwen3-embedding:0.6b
+        self._ollama_model = os.environ.get("ATHENAEUM_EMBED_MODEL", "nomic-embed-text:v1.5")
 
     @property
     def use_openrouter(self) -> bool:
@@ -91,6 +100,8 @@ class _Embedder:
             else:
                 url = "http://localhost:11434/api/embeddings"
                 headers = {"Content-Type": "application/json"}
+                # nomic-embed-text supports ~2048 tokens — lower context saves RAM
+                payload.setdefault("options", {})["num_ctx"] = 2048
             resp = httpx.post(url, headers=headers, json=payload, timeout=self._timeout)
             resp.raise_for_status()
             if self.use_openrouter:
@@ -100,7 +111,7 @@ class _Embedder:
         if len(text) <= CHUNK_SIZE:
             if self.use_openrouter:
                 return _call_api({"model": self._model, "input": text})
-            return _call_api({"model": "nomic-embed-text", "prompt": text})
+            return _call_api({"model": self._ollama_model, "prompt": "search_document: " + text})
 
         # Chunk long texts and average
         chunks = []
@@ -119,7 +130,7 @@ class _Embedder:
             if self.use_openrouter:
                 v = _call_api({"model": self._model, "input": chunk})
             else:
-                v = _call_api({"model": "nomic-embed-text", "prompt": chunk})
+                v = _call_api({"model": self._ollama_model, "prompt": "search_document: " + chunk})
             vectors.append(v)
 
         if not vectors:
