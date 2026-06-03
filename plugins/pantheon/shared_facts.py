@@ -1,5 +1,6 @@
-"""Pantheon Shared Facts — memory provider.
+"""Pantheon Shared Facts — consolidated into the pantheon plugin (2026-06-02).
 
+Was previously a standalone plugin at plugins/pantheon-shared-facts/.
 Hooks into on_pre_compress to extract decisions, facts, and preferences
 from messages about to be compressed and writes them to
 ~/pantheon/shared/decisions/{user_id}/ as timestamped markdown files.
@@ -25,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 from agent.memory_provider import MemoryProvider
 
-logger = logging.getLogger("pantheon-shared-facts")
+logger = logging.getLogger("pantheon.shared_facts")
 
 # ── paths ──────────────────────────────────────────────────────────────
 

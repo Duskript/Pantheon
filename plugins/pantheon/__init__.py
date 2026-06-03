@@ -1212,3 +1212,10 @@ Current conversations are auto-logged to {vault_codex}/sessions/ and become sear
 def register(ctx):
     """Register the Pantheon memory provider with Hermes."""
     ctx.register_memory_provider(PantheonMemoryProvider())
+    # Also register the shared-facts provider (consolidated from the
+    # standalone pantheon-shared-facts plugin on 2026-06-02). Hermes
+    # supports multiple memory providers — the one selected by config
+    # (memory.provider) is the one used; the others are available for
+    # explicit selection.
+    from .shared_facts import PantheonSharedFactsProvider
+    ctx.register_memory_provider(PantheonSharedFactsProvider())
