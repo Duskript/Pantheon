@@ -27,7 +27,8 @@ HOME = os.path.expanduser("~")
 ATH = Path(f"{HOME}/athenaeum")
 CHROMA_DIR = f"{HOME}/.hermes/pantheon/chroma"
 MODEL = os.environ.get("ATHENAEUM_EMBED_MODEL", "nomic-embed-text:v1.5")
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/embeddings")
+OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
+OLLAMA_URL = f"{OLLAMA_BASE}/api/embed"
 WORKERS = int(os.environ.get("EMBED_WORKERS", "4"))
 EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
 GOD_PREFIX = "Codex-God-"
@@ -71,10 +72,15 @@ def get_embedding(text: str):
     try:
         resp = _http.post(
             OLLAMA_URL,
-            json={"model": MODEL, "prompt": "search_document: " + truncated},
+            json={
+                "model": MODEL,
+                "input": ["search_document: " + truncated],
+                "options": {"num_ctx": 8192},
+            },
         )
         resp.raise_for_status()
-        return resp.json()["embedding"]
+        embeddings = resp.json().get("embeddings", [])
+        return embeddings[0] if embeddings else None
     except Exception as exc:
         log.warning("Embedding failed (%d chars -> %d truncated): %s",
                      len(text), len(truncated), exc)
