@@ -42,17 +42,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from agent.memory_provider import MemoryProvider
 
 # GraphClient for entity-relationship tracking.
-# Canonical implementation lives in gods/graph_client.py; we re-export
-# so existing consumers using `from plugins.pantheon import GraphClient`
-# keep working. The plugin's own copy of this file was a near-duplicate
-# (739 lines) and was removed in the N8 dedup — see commit history.
-import sys as _sys
-import os as _os
-_pantheon_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-_gods_path = _os.path.join(_pantheon_root, "pantheon-core")
-if _gods_path not in _sys.path:
-    _sys.path.insert(0, _gods_path)
-from gods.graph_client import GraphClient as _GraphClient
+# Now lives as a sibling module of this __init__.py at
+# plugins/pantheon/graph_client.py (consolidated from the deleted
+# pantheon-core/gods/graph_client.py on 2026-06-02). Re-exported so
+# existing consumers using `from plugins.pantheon import GraphClient`
+# keep working.
+from .graph_client import GraphClient as _GraphClient
 
 logger = logging.getLogger(__name__)
 
@@ -1219,3 +1214,12 @@ def register(ctx):
     # explicit selection.
     from .shared_facts import PantheonSharedFactsProvider
     ctx.register_memory_provider(PantheonSharedFactsProvider())
+    # Activate the ichor nudge (consolidated from the standalone
+    # pantheon-ichor-nudge plugin on 2026-06-02). The nudge patches the
+    # AIAgent memory-review prompt + summarizer to piggyback structured
+    # Ichor event extraction onto the existing memory-review LLM call,
+    # and starts the 30-min inactivity monitor for Tier A regex fallback.
+    from .ichor_nudge import _patch_prompts, _patch_summarize, _start_inactivity_monitor
+    _patch_prompts()
+    _patch_summarize()
+    _start_inactivity_monitor()
