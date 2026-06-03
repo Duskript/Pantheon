@@ -325,6 +325,8 @@ phase_8_god_profiles() {
     if [[ ! -f "$hermes_named/god.json" ]]; then
         cp "$PANTHEON_HOME/install/assets/env/hermes-god.json" "$hermes_named/god.json"
         ok "wrote $hermes_named/god.json (named profile, fixes wizard gap)"
+    else
+        log "  $hermes_named/god.json exists; keeping"
     fi
 
     # Hephaestus profile
@@ -333,14 +335,20 @@ phase_8_god_profiles() {
     if [[ ! -f "$heph_home/SOUL.md" ]]; then
         cp "$HEPHAESTUS_ASSETS/SOUL.md" "$heph_home/SOUL.md"
         ok "wrote $heph_home/SOUL.md"
+    else
+        log "  $heph_home/SOUL.md exists; keeping"
     fi
     if [[ ! -f "$heph_home/persona.md" ]]; then
         cp "$HEPHAESTUS_ASSETS/persona.md" "$heph_home/persona.md"
         ok "wrote $heph_home/persona.md"
+    else
+        log "  $heph_home/persona.md exists; keeping"
     fi
     if [[ ! -f "$heph_home/god.json" ]]; then
         cp "$HEPHAESTUS_ASSETS/god.json" "$heph_home/god.json"
         ok "wrote $heph_home/god.json"
+    else
+        log "  $heph_home/god.json exists; keeping"
     fi
 
     phase_done 8
