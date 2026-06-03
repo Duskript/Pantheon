@@ -115,22 +115,95 @@ class GraphClient:
             CREATE INDEX IF NOT EXISTS idx_nodes_label ON nodes(label);
         """)
 
-        # FTS5 for full-text search on node labels + metadata
+        # FTS5 for full-text search on node labels + metadata.
+        # This is a regular (not contentless) FTS5 table — the
+        # source `nodes` table is maintained separately, and we
+        # sync it via _sync_fts() on upsert and explicit DELETE
+        # in delete_node(). The earlier schema used contentless
+        # mode (content='nodes', content_rowid='rowid'), which
+        # is broken in SQLite 3.46.1+ for tables with multiple
+        # FTS5 columns: any query on the FTS table raises
+        # "no such column: T.node_id". This migration detects
+        # the broken schema and recreates the FTS tables.
+        self._migrate_fts_if_needed()
         try:
             self._conn.executescript("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS nodes_fts USING fts5(
-                    node_id UNINDEXED,
+                    node_id,
                     label,
-                    metadata_text,
-                    content='nodes',
-                    content_rowid='rowid'
+                    metadata_text
                 );
             """)
         except sqlite3.OperationalError as exc:
-            if "already exists" not in str(exc):
-                logger.debug("FTS5 setup: %s", exc)
+            logger.debug("FTS5 setup: %s", exc)
+
+        # If migration queued a re-sync, run it now that the new
+        # FTS table exists.
+        for node_id in getattr(self, "_pending_fts_resync", []):
+            self._sync_fts(node_id)
+        self._pending_fts_resync = []
 
         self._conn.commit()
+
+    def _migrate_fts_if_needed(self) -> None:
+        """Detect the broken contentless FTS5 schema and recreate it.
+
+        The earlier schema (pre-2026-06-02) used:
+            CREATE VIRTUAL TABLE nodes_fts USING fts5(
+                node_id UNINDEXED,
+                label,
+                metadata_text,
+                content='nodes',
+                content_rowid='rowid'
+            );
+        which is broken in SQLite 3.46.1: any query on the table
+        raises "no such column: T.node_id". The replacement schema
+        drops the contentless options and maintains the FTS index
+        manually via _sync_fts() and the DELETE in delete_node().
+
+        The migration is a DROP+CREATE + re-sync of all existing
+        nodes — the old FTS index had no usable data (every query
+        on it errored out, and the try/except in search_nodes()
+        was falling back to find_nodes() the whole time), so we
+        rebuild from the source `nodes` table.
+        """
+        if not self._conn:
+            return
+        try:
+            row = self._conn.execute(
+                "SELECT sql FROM sqlite_master WHERE name = 'nodes_fts'"
+            ).fetchone()
+            if row and "content=" in (row[0] or ""):
+                logger.info(
+                    "Migrating nodes_fts from broken contentless schema to "
+                    "regular FTS5 (DROP+CREATE + re-sync of all nodes)"
+                )
+                # Capture node IDs BEFORE dropping the FTS tables
+                # (the source `nodes` table is preserved)
+                node_ids = [
+                    r[0] for r in self._conn.execute("SELECT id FROM nodes").fetchall()
+                ]
+                # Drop all the FTS5 shadow tables
+                self._conn.executescript("""
+                    DROP TABLE IF EXISTS nodes_fts;
+                    DROP TABLE IF EXISTS nodes_fts_data;
+                    DROP TABLE IF EXISTS nodes_fts_idx;
+                    DROP TABLE IF EXISTS nodes_fts_docsize;
+                    DROP TABLE IF EXISTS nodes_fts_config;
+                """)
+                logger.info(
+                    "FTS migration: %d existing node(s) will be re-synced",
+                    len(node_ids),
+                )
+                # Note: the new nodes_fts table will be created by
+                # the CREATE VIRTUAL TABLE IF NOT EXISTS below in
+                # _ensure_schema, AFTER this method returns. We
+                # queue the re-sync by storing the IDs on self.
+                self._pending_fts_resync = node_ids
+                return
+        except sqlite3.OperationalError as exc:
+            logger.debug("FTS5 migration check: %s", exc)
+        self._pending_fts_resync = []
 
     # ------------------------------------------------------------------
     # Node operations
@@ -200,11 +273,20 @@ class GraphClient:
         if not self._conn:
             raise RuntimeError("GraphClient not connected")
 
-        # Edges are cascade-deleted by FK
-        self._conn.execute("DELETE FROM nodes_fts WHERE node_id = ?", (node_id,))
-        self._conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+        # Edges are cascade-deleted by FK. The FTS5 index is maintained
+        # manually (regular, not contentless FTS5) — see _ensure_schema.
+        self._conn.execute(
+            "DELETE FROM nodes_fts WHERE node_id = ?", (node_id,)
+        )
+        cursor = self._conn.execute(
+            "DELETE FROM nodes WHERE id = ?", (node_id,)
+        )
         self._conn.commit()
-        return self._conn.total_changes > 0
+        # cursor.rowcount is the number of rows the DELETE actually
+        # affected (0 if the node didn't exist, 1 if it did). This
+        # is more reliable than total_changes, which is a cumulative
+        # counter across the whole connection.
+        return cursor.rowcount > 0
 
     def find_nodes(
         self,
@@ -339,12 +421,13 @@ class GraphClient:
         if not self._conn:
             raise RuntimeError("GraphClient not connected")
 
-        self._conn.execute(
+        cursor = self._conn.execute(
             "DELETE FROM edges WHERE source_id = ? AND target_id = ? AND type = ?",
             (source_id, target_id, type_),
         )
         self._conn.commit()
-        return self._conn.total_changes > 0
+        # cursor.rowcount, not total_changes — see delete_node()
+        return cursor.rowcount > 0
 
     def get_edges(
         self,
