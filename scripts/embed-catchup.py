@@ -55,6 +55,20 @@ HERE = Path(__file__).resolve().parent
 PANTHEON_GODS = HERE.parent / "pantheon-core" / "gods"
 sys.path.insert(0, str(PANTHEON_GODS))
 
+# Load ~/.hermes/.env so the embedder picks up ATHENAEUM_EMBED_MODEL
+# and friends (same pattern as scripts/hades). This means if the user
+# changes the embedder model in the env file, both the nightly and
+# the catchup see the change — no out-of-sync hardcoded defaults.
+_REAL_HOME = os.path.expanduser("~")
+_ENV_FILE = os.path.join(_REAL_HOME, ".hermes", ".env")
+if os.path.isfile(_ENV_FILE):
+    with open(_ENV_FILE) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 from hades import embed as hades_embed  # noqa: E402
 from hades.paths import (  # noqa: E402
     ATHENAEUM_ROOT,
@@ -67,10 +81,15 @@ import httpx  # noqa: E402
 # Sentinel for background monitoring
 EMBED_CATCHUP_SENTINEL = Path(f"{REAL_HOME}/.hermes/pantheon/embed-catchup-last.json")
 
-# Force the embedder model. Hardcoded because the ChromaDB collections
-# were created with nomic-embed-text:v1.5 (768-dim). Override with
-# EMBED_CATCHUP_MODEL env var only if you've re-created the collections.
-EMBED_MODEL = os.environ.get("EMBED_CATCHUP_MODEL", "nomic-embed-text:v1.5")
+# Embedder model: prefer the env-set value (loaded above from
+# ~/.hermes/.env), fall back to the explicit override env var, fall
+# back to the hardcoded default. This three-level precedence matches
+# how the rest of the codebase handles config.
+EMBED_MODEL = (
+    os.environ.get("ATHENAEUM_EMBED_MODEL")
+    or os.environ.get("EMBED_CATCHUP_MODEL")
+    or "nomic-embed-text:v1.5"
+)
 
 # Per-request timeout for the embed API. Higher than the default
 # `_Embedder._timeout = 30.0` because background catchup runs hit
