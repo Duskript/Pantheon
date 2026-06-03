@@ -1,16 +1,17 @@
-# Harness YAMLs — ☠️ DEPRECATED
+# harnesses/ — DEPRECATED
 
-> **These files are legacy and NOT referenced by any active code.**
-> They are kept on disk for historical reference only.
+This directory's YAML harness definitions are no longer maintained.
 
-**Replaced by:** Per-god profiles at `~/.hermes/profiles/<god>/` with `config.yaml` + `god.json`
-**Canonical architecture:** `~/pantheon/ARCHITECTURE.md`
-**Active god system:** `GET /api/gods` via `~/pantheon/webui/api/routes.py`
+The active Hephaestus identity lives at `~/.hermes/profiles/hephaestus/SOUL.md`
+after install. Non-core god harnesses (Apollo, Caduceus, Thoth) live in each
+god's profile directory on the system, not in the public repo.
 
-### What was this?
-An early attempt at defining god roles through YAML "harnesses." Each file defined an agent identity, routing rules, and model config. The harness concept was never wired into the actual runtime — it stayed as aspirational architecture.
+For new god creation, see `docs/HOW_TO_CREATE_A_GOD.md` (TODO: write this doc).
 
-### What to do with these?
-- They are safe to archive or delete
-- If any config values here are useful, they've already been migrated to the profile config
-- Do NOT create new harness files
+## History
+
+The `harnesses/` directory saw oscillation between "delete" / "gitignore" / "untrack"
+in commits `8b655c8`, `20ad3c6`, `ee3ca6d`, `f5b36ed`, `f3a0597`. The YAMLs
+were never load-bearing: the only `load_harness` callers are the loader
+itself (`pantheon-core/harness/loader.py`, since pruned) and planning docs
+that mention them in prose. Runtime never touched `harnesses/`.
