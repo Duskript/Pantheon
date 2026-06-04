@@ -35,14 +35,60 @@ HERE = Path(__file__).resolve().parent
 SHIM = HERE / "scripts" / "hades"
 
 
+def _venv_python() -> str:
+    """Path to the hermes-agent venv python (has chromadb installed).
+
+    The nightly Hades cron calls `python3 consolidate.py` from the
+    cron subshell, which resolves `python3` to /usr/bin/python3
+    (system Python, no third-party packages). The embed phase then
+    fails silently with `ModuleNotFoundError: No module named
+    'chromadb'`, the orchestrator catches the exception, and the
+    9:15am notif rubber-stamps success. Self-heal by re-execing
+    under the venv interpreter that has chromadb available.
+    """
+    venv = Path("/home/konan/.hermes/hermes-agent/venv/bin/python3")
+    if venv.is_file():
+        return str(venv)
+    return sys.executable
+
+
+def _has_chromadb() -> bool:
+    """Best-effort check that the current interpreter can import chromadb.
+
+    Returns True if importable, False otherwise. Used to decide
+    whether to re-exec under the venv python.
+    """
+    try:
+        import chromadb  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def main() -> int:
     if not SHIM.exists():
         print(f"ERROR: {SHIM} not found — was the package refactored?", file=sys.stderr)
         return 1
 
+    # Self-heal: if the current interpreter can't import chromadb,
+    # re-exec under the hermes-agent venv python. The nightly cron
+    # resolves bare `python3` to /usr/bin/python3, which lacks
+    # chromadb. The venv at ~/.hermes/hermes-agent/venv has it.
+    interpreter = sys.executable
+    if not _has_chromadb():
+        venv_py = _venv_python()
+        if venv_py != sys.executable and Path(venv_py).is_file():
+            print(
+                f"[consolidate.py] chromadb not importable in "
+                f"{sys.executable}; re-execing under {venv_py}",
+                file=sys.stderr,
+            )
+            cmd = [venv_py, str(Path(__file__).resolve())] + sys.argv[1:]
+            return subprocess.run(cmd).returncode
+
     # Default behavior: full sweep. If the cron ever needs
     # granular control, pass flags through.
-    cmd = [sys.executable, str(SHIM)]
+    cmd = [interpreter, str(SHIM)]
 
     # Pass through any flags the caller provided
     cmd.extend(sys.argv[1:])
