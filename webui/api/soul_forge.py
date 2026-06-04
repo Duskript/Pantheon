@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import json
+
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
@@ -167,8 +169,110 @@ A personal multi-agent AI system...
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
+def _resolve_global_auth_path() -> Path:
+    """Locate the GLOBAL ~/.hermes/auth.json (not the per-profile copy).
+
+    The gateway scopes HERMES_HOME to a per-profile directory
+    (e.g. .../profiles/marvin) so each profile has its own auth.json. But
+    the credential pool that holds user-added fallback keys is written to
+    the GLOBAL auth.json by `hermes auth add`. When the gateway reads the
+    pool, it gets the per-profile file (often missing the manual entries),
+    so fallback keys are invisible. Walk up to the global ~/.hermes/ root.
+    """
+    from hermes_cli.config import get_hermes_home
+    p = Path(get_hermes_home()) / "auth.json"
+    # If the resolved path is at .../profiles/<name>/auth.json, climb two
+    # levels to get .../auth.json. Otherwise return as-is.
+    if p.parent.name and p.parent.parent.name == "profiles":
+        return p.parent.parent.parent / "auth.json"
+    return p
+
+
+def _resolve_credential_from_pool(provider: str = "opencode-go") -> tuple[str, str] | None:
+    """Pick a working (api_key, base_url) from the credential pool.
+
+    Reads from the GLOBAL auth.json, not the per-profile copy, so manual
+    fallback entries added via `hermes auth add` are visible. Returns None
+    if the pool is empty, the module is unavailable, or every entry has a
+    recent auth/credit error. Callers should fall back to .env.
+    """
+    try:
+        from agent.credential_pool import CredentialPool, PooledCredential
+        from hermes_cli.auth import read_credential_pool as _read_pool
+    except Exception as e:
+        logger.debug("credential_pool import failed: %s", e)
+        return None
+    try:
+        global_auth_path = _resolve_global_auth_path()
+        if not global_auth_path.is_file():
+            return None
+        # Load raw dicts from the global auth.json (bypass the per-profile
+        # resolution that load_pool() would do under the gateway).
+        auth_store = json.loads(global_auth_path.read_text(encoding="utf-8"))
+        raw_entries = (auth_store.get("credential_pool") or {}).get(provider) or []
+        entries = [PooledCredential.from_dict(provider, p) for p in raw_entries]
+        pool = CredentialPool(provider, entries)
+    except Exception as e:
+        logger.warning("Failed to load credential pool for %s: %s", provider, e)
+        return None
+
+    # Skip entries with recent auth/credit/forbidden errors (4xx in {401,402,403}).
+    # last_error_code == None means the entry has never errored; treat as fresh.
+    _SKIP_CODES = {401, 402, 403}
+
+    def _is_healthy(entry) -> bool:
+        code = getattr(entry, "last_error_code", None)
+        return code not in _SKIP_CODES
+
+    # Prefer the pool's currently-active entry, then fall back to highest-priority
+    # healthy entry. Sorting: lower priority number = higher precedence.
+    candidates: list = []
+    current = pool.current()
+    if current is not None:
+        candidates.append(current)
+    candidates.extend(
+        e for e in sorted(pool.entries(), key=lambda x: getattr(x, "priority", 0))
+        if e is not current
+    )
+    for entry in candidates:
+        if not _is_healthy(entry):
+            continue
+        api_key = (getattr(entry, "access_token", "") or "").strip()
+        base_url = (getattr(entry, "base_url", None) or getattr(entry, "inference_base_url", None) or "").strip()
+        if not api_key:
+            continue
+        return (api_key, base_url or _BASE_URL)
+    return None
+
+
+# Process-level cache: once we pick a credential, stick with it for the rest
+# of the run. The pool handles its own failover across long-lived sessions.
+_resolved_client_key: tuple[str, str] | None = None
+
+
 def _get_client() -> OpenAI:
-    return OpenAI(base_url=_BASE_URL, api_key=_API_KEY, timeout=60)
+    """Return an OpenAI client for the forge LLM.
+
+    Credential resolution order:
+      1. The credential pool (live, working set, supports failover)
+      2. ~/.hermes/.env OPENCODE_GO_API_KEY (fallback)
+    """
+    global _resolved_client_key
+    if _resolved_client_key is not None:
+        api_key, base_url = _resolved_client_key
+        return OpenAI(base_url=base_url, api_key=api_key, timeout=60)
+    resolved = _resolve_credential_from_pool("opencode-go")
+    if resolved is not None:
+        api_key, base_url = resolved
+        logger.info("Forge using credential pool entry for opencode-go")
+    elif _API_KEY:
+        api_key, base_url = _API_KEY, _BASE_URL
+        logger.info("Forge using ~/.hermes/.env OPENCODE_GO_API_KEY (pool empty/unavailable)")
+    else:
+        api_key, base_url = "", _BASE_URL
+        logger.warning("Forge has no opencode-go credentials — calls will fail with auth error")
+    _resolved_client_key = (api_key, base_url)
+    return OpenAI(base_url=base_url, api_key=api_key, timeout=60)
 
 
 def _clean_expired_sessions() -> None:
