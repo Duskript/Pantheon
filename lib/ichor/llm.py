@@ -217,7 +217,14 @@ def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
              "content": "You are a careful analyst. Output ONLY valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": 800,
+        "max_tokens": 4000,
+        # Disable reasoning mode for thinking models (deepseek-v4-flash, kimi-k2
+        # thinking, etc.). Without this, the model uses its entire token budget
+        # for hidden chain-of-thought reasoning and emits 0 chars of visible
+        # content, leaving the L2 extractor with empty responses. Per deepseek
+        # API docs: api-docs.deepseek.com/guides/thinking_mode. Discovered
+        # 2026-06-12 during the L2 full-corpus run.
+        "thinking": {"type": "disabled"},
         "temperature": 0.2,
     }).encode("utf-8")
 
