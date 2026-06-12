@@ -217,7 +217,7 @@ def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
              "content": "You are a careful analyst. Output ONLY valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": 4000,
+        "max_tokens": 8000,
         # Disable reasoning mode for thinking models (deepseek-v4-flash, kimi-k2
         # thinking, etc.). Without this, the model uses its entire token budget
         # for hidden chain-of-thought reasoning and emits 0 chars of visible
