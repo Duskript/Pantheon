@@ -193,11 +193,17 @@ def _load_provider_config(provider_name: str) -> Optional[Dict[str, Any]]:
 
 def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
               model: Optional[str] = None,
-              timeout: float = 30.0) -> str:
+              timeout: float = 180.0) -> str:
     """Single LLM call. Returns the raw text response.
 
     Uses the OpenAI-compatible chat completions endpoint that most
-    providers expose. Times out after 30s.
+    providers expose. Times out after 180s.
+
+    180s (3 min) is the floor for deepseek-v4-flash on dense batches at
+    max_tokens=8000. The model can legitimately take 60-130s to respond
+    on a 25-event prompt; 30s was a leftover from when max_tokens=800
+    and the model finished in <10s. Bumped 2026-06-12 after the L2
+    full-corpus loop timed out on 3/3 retries at the 30s default.
     """
     api_base = provider_cfg.get("api", "").rstrip("/")
     if not api_base:
