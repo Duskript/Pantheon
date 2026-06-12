@@ -1333,33 +1333,134 @@ def ichor_forge(
 # ═══════════════════════════════════════════════════════════════════════════
 
 @mcp.tool(
-    description="[P4b STUB] Replaced by athenaeum_graph_search (WARM table). Returns a stub response — graph.db deleted in P4b, multi-hop NL queries need to be reimplemented on the new 5-tier schema.",
+    description="Multi-hop graph query against the Ichor entity-relationship layer (ER-P3). Resolves `query` to a known entity, then returns its neighborhood subgraph (nodes, edges, stats) using the new 5-tier schema. Replaces the P4b stub — the entity-relationship layer is now live."
 )
 def ichor_graph_query(
     query: str,
-    hops: int = 0,
+    hops: int = 2,
     max_results: int = 30,
     output_markdown: bool = False,
 ) -> str:
-    """ichor_graph_query stub — graph.db removed in P4b.
+    """Multi-hop graph query via lib.ichor.entities.traversal.
 
-    The natural-language multi-hop graph query engine lived in
-    lib/ichor_graph_query.py, which was deleted. Replacement should:
-      1. Parse NL queries to extract entity names + relation types
-      2. Look up entities in warm_entities by name LIKE
-      3. Walk related_to (1-hop, since we have no graph edges)
-      4. Optionally cross-reference cold_events for the same name
+    Resolves the free-form `query` to a known entity name using
+    athenaeum_graph_search, then walks the entity-relationship graph
+    via the new 5-tier schema (entities / relationships / warm_entities).
+    The entity layer was added in 2026-06-12's Ichor refactor and was
+    latent until this tool was wired in.
 
-    For now, this returns a stub. Use:
-      - athenaeum_graph_search for entity/relationship lookup
-      - athenaeum_search for content search (FTS5)
+    Args:
+        query: Entity name or free-form phrase. Resolved to the top
+            athenaeum_graph_search hit (best-effort fuzzy match).
+        hops: Traversal depth (1..7). Clamped to 7. Default 2.
+        max_results: Cap on returned nodes/edges in markdown mode.
+        output_markdown: If True, render as human-readable text instead
+            of JSON.
+
+    Returns:
+        JSON or markdown rendering of:
+          {nodes: [...], edges: [...], stats: {...}, resolved_from: query}
     """
-    return json.dumps({
-        "error": "ichor_graph_query is a stub in P4b",
-        "reason": "lib/ichor_graph_query.py deleted with graph.db",
-        "fallback": ["athenaeum_graph_search", "athenaeum_search"],
-        "note": f"Original query: {query!r}",
-    }, indent=2)
+    # Lazy import — the entities package is heavy (loads 7 submodules)
+    # and we don't want to pay the cost on every mcp_server startup.
+    try:
+        import sqlite3 as _sqlite3
+        from lib.ichor.entities import graph_query as _er_graph_query  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _er_get_conn  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+            "fallback": "athenaeum_graph_search",
+        }, indent=2)
+
+    # Resolve query → entity name via the existing WARM-table search.
+    # This is a best-effort fuzzy match; if it fails we still try the
+    # raw query against the ER layer, then give up cleanly.
+    resolved_name = None
+    resolution_source = None
+    try:
+        import urllib.request as _urlreq
+        import urllib.parse as _urlparse
+        params = _urlparse.urlencode({"query": query, "limit": 5})
+        # The MCP server itself listens on 127.0.0.1:8010 — but calling
+        # ourselves over HTTP would loop. Instead, replicate the lookup
+        # inline using the same WARM table the search tool uses.
+        from lib.ichor.entities.schema import get_conn as _resolve_conn  # type: ignore[import-untyped]
+        _rc = _resolve_conn()
+        try:
+            # warm_entities columns: name, importance, trust, related_to
+            # (no `confidence` column — the package spec used different naming)
+            _row = _rc.execute(
+                "SELECT name FROM warm_entities WHERE name LIKE ? "
+                "ORDER BY importance DESC, trust DESC LIMIT 1",
+                (f"%{query}%",),
+            ).fetchone()
+            if _row:
+                resolved_name = _row[0]
+                resolution_source = "warm_entities_like"
+        finally:
+            _rc.close()
+    except Exception as exc:
+        resolution_source = f"resolve_failed: {exc!r}"
+
+    if not resolved_name:
+        return json.dumps({
+            "error": "entity_not_found",
+            "query": query,
+            "suggestion": "Use athenaeum_graph_search to discover entity names first.",
+        }, indent=2)
+
+    # Clamp depth to the package's absolute max.
+    depth = max(1, min(int(hops or 2), 7))
+    # min_confidence defaults to 0.1 inside the package; we let it.
+
+    try:
+        conn = _er_get_conn()
+        try:
+            result = _er_graph_query(conn, resolved_name, depth=depth)
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "graph_query_failed",
+            "entity": resolved_name,
+            "depth": depth,
+            "detail": str(exc),
+        }, indent=2)
+
+    # Add resolution provenance so callers can see what we matched.
+    if isinstance(result, dict):
+        result = dict(result)
+        result["resolved_from"] = query
+        result["resolved_entity"] = resolved_name
+        result["resolution_source"] = resolution_source
+
+    if output_markdown:
+        # Render compact markdown — caller asked for human-readable.
+        nodes = result.get("nodes", []) if isinstance(result, dict) else []
+        edges = result.get("edges", []) if isinstance(result, dict) else []
+        stats = result.get("stats", {}) if isinstance(result, dict) else {}
+        lines = [
+            f"# Graph neighborhood: {resolved_name}",
+            f"_resolved from: {query!r} (depth={depth}, source={resolution_source})_",
+            "",
+            f"**Stats:** {stats}",
+            "",
+            f"## Nodes ({len(nodes)})",
+        ]
+        for n in nodes[:max_results]:
+            lines.append(f"- {n.get('name', n.get('id', '?'))} ({n.get('type', '?')})")
+        lines.append("")
+        lines.append(f"## Edges ({len(edges)})")
+        for e in edges[:max_results]:
+            lines.append(
+                f"- {e.get('source', '?')} —[{e.get('type', '?')}]→ "
+                f"{e.get('target', '?')} (conf={e.get('confidence', '?')})"
+            )
+        return "\n".join(lines)
+
+    return json.dumps(result, indent=2, default=str)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
