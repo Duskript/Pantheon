@@ -140,8 +140,7 @@ class ClawforgeProxy:
         logger.info("Connecting to %s", url)
         self.nc = await nats.connect(
             servers=[url],
-            user=self.config["instance"]["id"],
-            password=self.token,
+            token=self.token,
             connect_timeout=10,
             max_reconnect_attempts=60,
             reconnect_time_wait=2,

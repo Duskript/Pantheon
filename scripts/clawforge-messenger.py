@@ -381,7 +381,7 @@ async def run_daemon(args: argparse.Namespace) -> int:
 
     log.info(f"connecting to {nats_url} as instance={my_instance!r}")
     token = _load_token()
-    nc = await nats.connect(nats_url, user=my_instance, password=token, connect_timeout=5)
+    nc = await nats.connect(nats_url, token=token, connect_timeout=5)
     log.info(f"connected; subscribing to {NATS_REQ_SUBJECT}")
     log.info(f"only acting on requests where target_instance={my_instance!r}")
 
@@ -424,7 +424,7 @@ async def run_dispatch(args: argparse.Namespace) -> int:
     my_instance = instance.get("id", "unknown")
     log.info(f"connecting to {nats_url} as instance={my_instance!r} (one-shot)")
     token = _load_token()
-    nc = await nats.connect(nats_url, user=my_instance, password=token, connect_timeout=5)
+    nc = await nats.connect(nats_url, token=token, connect_timeout=5)
 
     # v0.4.0: audit the outbound ask
     audit = AuditWriter("ask")
