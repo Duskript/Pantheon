@@ -110,9 +110,24 @@ n8n-data/.8n/
 n8n-data/database.sqlite
 n8n-data/n8nEventLog*.log
 
+# n8n top-level runtime state (DB, config) — local instance only
+n8n-data/config
+n8n-data/database.sqlite
+n8n-data/
+
+# n8n host install (npm/node_modules) — instance-specific
+n8n-host/
+n8n-host/package.json
+n8n-host/node_modules/
+
+# n8n migration workflows — user-personal landing-page work, not Pantheon infra
+n8n-migration/
+
 # WebUI build outputs (Vite emits content-hashed JS/CSS, not source)
 webui/static/assets/
 
 # Local backup files (e.g. `something.py.bak.pre-xxx-20260608-173641`)
 # These are local-only safety nets; never push.
 *.bak
+*.bak.*
+*.bak-*

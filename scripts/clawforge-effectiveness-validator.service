@@ -1,0 +1,14 @@
+[Unit]
+Description=Clawforge Effectiveness Validator (one-shot)
+After=network-online.target clawforge-registry.service nats.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/bin/clawforge-effectiveness-validator.py
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+# Validator runs as a one-shot triggered by the matching .timer.
+# No Restart= — failures are visible in journalctl.
