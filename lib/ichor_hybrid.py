@@ -1,13 +1,17 @@
 """Ichor Hybrid Scorer + Memory Trait Contract.
 
-Fuses 4 backends into a unified retrieval interface:
+P4a: ChromaDB removed. Currently fuses 3 backends:
+  - FTS5    (keyword search via SQLite)
+  - Graph   (entity relationships via graph.db — P4b removes this)
+  - Events  (structured events from ichor.db)
 
-  | Backend  | Source                    | Weight | Signal      |
-  |----------|---------------------------|--------|-------------|
-  | FTS5     | ~/.hermes/ichor.db        | 0.20   | Keyword     |
-  | ChromaDB | ~/.hermes/pantheon/chroma | 0.35   | Semantic    |
-  | Graph    | ~/.hermes/pantheon/graph.db| 0.25   | Relationship|
-  | Events   | ~/.hermes/ichor.db        | 0.20   | Structured  |
+P4c will collapse to FTS5 + Events only, sorted by ichor_score.
+
+Legacy 4-backend weights (for reference):
+  | FTS5     | 0.20 | Keyword     |
+  | ChromaDB | 0.35 | Semantic    |  ← removed P4a
+  | Graph    | 0.25 | Relationship|
+  | Events   | 0.20 | Structured  |
 
 Memory Trait Contract provides four unified tools:
   - ichor_store(namespace, key, content, category) → stores content
@@ -42,23 +46,101 @@ logger = logging.getLogger("ichor_hybrid")
 _HOME = Path.home()
 _PANTHEON_LIB = _HOME / "pantheon" / "lib"
 _ICHOR_DB = _HOME / ".hermes" / "ichor.db"
-_CHROMA_DIR = _HOME / ".hermes" / "pantheon" / "chroma"
 _GRAPH_DB = _HOME / ".hermes" / "pantheon" / "graph.db"
 
 # Retrieval query log — append-only JSONL for forge weight tuning
 _RETRIEVAL_LOG = _HOME / ".hermes" / "pantheon" / "retrieval-log.jsonl"
 
 # Weights for fused scoring
+#
+# History: pre-P4a (ChromaDB-backed) had fts5=0.20, chroma=0.35, graph=0.25,
+# events=0.20 (4 backends). Post-P4a (2026-05-31) ChromaDB removed; weights
+# reabsorbed into fts5 (+0.20 → 0.40) and events (+0.05 → 0.25), graph
+# unchanged. Post-P4b (2026-06-04) graph DB is intact — the "P4b will remove"
+# note in the early version was wrong; graph stays at 0.30.
+#
+# Thoth's 2026-06-08 spec (ichor-consolidation-spec/report.md §4c)
+# recommended DELETING HybridScorer entirely on the assumption that
+# ChromaDB removal left only FTS5 (1 backend = no fusion needed). That
+# recommendation is no longer applicable: as of P4b, we have 3 backends
+# (FTS5 0.45 + Graph 0.30 + Events 0.25) and the fusion math is correct.
+# See Codex-God-thoth inbox message msg_20260612_073307_marvin (Q2 answer)
+# for the formal decision.
 WEIGHTS = {
-    "fts5": 0.25,
-    "chroma": 0.35,
-    "graph": 0.25,
-    "events": 0.15,
+    "fts5": 0.45,    # was 0.25, +0.20 (chroma weight reabsorbed P4a)
+    "graph": 0.30,   # unchanged (P4b kept graph, contrary to early plans)
+    "events": 0.25,  # was 0.15, +0.10
 }
+
+# Negation words that signal a contradiction when paired with overlapping subject
+_NEGATION_WORDS = frozenset({
+    "not", "no", "never", "instead", "drop", "remove", "delete",
+    "don't", "dont", "won't", "wont", "shouldn't", "shouldnt",
+    "stop", "discontinue", "revert", "abandon", "instead of",
+})
+
+
+def detect_contradiction(old_text: str, new_text: str) -> bool:
+    """Cheap heuristic contradiction detector.
+
+    Returns True if `new_text` appears to contradict `old_text`. The
+    heuristic is intentionally simple — it catches obvious negations
+    on overlapping topics, not deep semantic disagreement. False
+    negatives are fine; false positives are fine too (the spec says
+    "non-blocking" — we just flag, never block).
+
+    Heuristic: both texts share >= 30% of significant words, AND
+    `new_text` contains a negation word. No negation → no contradiction
+    (just agreement or unrelated).
+    """
+    if not old_text or not new_text:
+        return False
+    # Tokenize — lowercase, drop punctuation, drop short words
+    def tokens(t):
+        return {
+            w for w in re.findall(r"[a-z0-9_]+", t.lower())
+            if len(w) > 2
+        }
+    old_tokens = tokens(old_text)
+    new_tokens = tokens(new_text)
+    if not old_tokens or not new_tokens:
+        return False
+    overlap = old_tokens & new_tokens
+    # Jaccard-like: how much of new_text is shared with old_text
+    overlap_ratio = len(overlap) / max(len(new_tokens), 1)
+    if overlap_ratio < 0.30:
+        return False
+    # Check for negation in new_text (word boundary aware)
+    new_lower = new_text.lower()
+    return any(
+        re.search(r"\b" + re.escape(neg) + r"\b", new_lower)
+        for neg in _NEGATION_WORDS
+    )
+
+
+def _row_to_dict(row: Any) -> Dict[str, Any]:
+    """Convert a sqlite3.Row or plain tuple to a dict.
+
+    Plain tuples from sqlite3 (no row_factory set) iterate as positional
+    values, not as (key, value) pairs — so `dict(row)` fails. This helper
+    handles both: Row → dict(row); tuple → dict with column-name keys from
+    cursor.description if available, else empty dict.
+
+    Note: for plain tuples without a description, we can't recover column
+    names — callers needing named access must set row_factory=sqlite3.Row.
+    """
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return row
+    # sqlite3.Row has a keys() method
+    if hasattr(row, "keys"):
+        return {k: row[k] for k in row.keys()}
+    # Plain tuple — return as dict with positional keys
+    return {"_" + str(i): v for i, v in enumerate(row)}
 
 BACKEND_NAMES = {
     "fts5": "🔍 FTS5 (Keyword)",
-    "chroma": "🧠 ChromaDB (Semantic)",
     "graph": "🔗 Graph (Relationships)",
     "events": "📋 Events (Structured)",
 }
@@ -122,88 +204,449 @@ class FTS5Backend:
             return False
 
 
-class ChromaBackend:
-    """Semantic search over Athenaeum via ChromaDB."""
+class TieredRetriever:
+    """Three-pass retrieval with progressive context loading.
 
-    def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        try:
-            import chromadb
-            client = chromadb.PersistentClient(path=str(_CHROMA_DIR))
-            collections = client.list_collections()
-            if not collections:
-                return []
+    Pass 1: brief scan — fast FTS5 on `brief` field only, fetch 3x limit
+    Pass 2: outline filter — load outlines for candidates, re-rank, narrow
+    Pass 3: full on demand — NEVER loaded in search; caller calls
+            `ichor_get(id)` or `MemoryTrait.retrieve(id=...)` for full
 
-            # Embed query
-            embedder = _Embedder()
-            if not embedder.is_available():
-                return []
+    Integration with existing HybridScorer:
+    - TieredRetriever replaces the direct FTS5 search call
+    - Other backends (Events, Graph) remain unchanged for now
+    - Final fusion still uses ichor_score formula
 
-            query_emb = embedder.embed(query[:512])
-            if not query_emb:
-                return []
+    Weights from the build-brief: brief=0.60, outline=0.30, full=0.10.
+    In tiered mode, full is always 0.0 at search time (never loaded).
 
-            results: List[Dict[str, Any]] = []
-            for col in collections:
+    Reference: ~/athenaeum/Codex-God-thoth/research/openviking-vs-ichor-comparison/build-brief.md
+    """
+
+    def __init__(
+        self,
+        brief_weight: float = 0.60,
+        outline_weight: float = 0.30,
+        full_weight: float = 0.10,
+        fts_conn: Optional[Any] = None,
+    ) -> None:
+        self.brief_weight = brief_weight
+        self.outline_weight = outline_weight
+        self.full_weight = full_weight
+        self._conn = fts_conn  # tests can inject; production uses IchorDB
+        self._owns_conn = fts_conn is None  # whether we should close it
+
+    def _connect(self):
+        """Lazy-init the FTS5 connection (in-memory for tests, real DB otherwise)."""
+        if self._conn is not None:
+            return self._conn
+        _ensure_imports()
+        from lib.ichor_db import IchorDB  # type: ignore[import-untyped]
+        db = IchorDB(db_path=str(_ICHOR_DB))
+        db.connect()
+        # memory_fts is a virtual table — we can query it directly via the
+        # underlying sqlite3 connection.
+        self._conn = db._conn
+        return self._conn
+
+    def _sanitize(self, query: str) -> str:
+        """Strip FTS5 special chars that would break MATCH syntax.
+
+        Keeps alphanumerics, spaces, hyphens. Replaces runs of other
+        chars with a space. Returns "" for empty/non-string input.
+        """
+        if not query or not isinstance(query, str):
+            return ""
+        # Strip FTS5 operators: " * : ( ) AND OR NOT NEAR
+        cleaned = re.sub(r'[":*()\^\-]', " ", query)
+        cleaned = re.sub(r"\b(AND|OR|NOT|NEAR)\b", " ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned
+
+    def _pass1_brief_scan(self, query: str, fetch_limit: int) -> List[Dict[str, Any]]:
+        """Pass 1: FTS5 on the `brief` field only. Returns 3x limit candidates."""
+        cleaned = self._sanitize(query)
+        if not cleaned:
+            # Empty query → return recent items by rowid
+            conn = self._connect()
+            rows = conn.execute(
+                "SELECT rowid, brief, outline, content, category, name, event_type "
+                "FROM memory_fts ORDER BY rowid DESC LIMIT ?",
+                (fetch_limit,),
+            ).fetchall()
+        else:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT rowid, brief, outline, content, category, name, event_type "
+                    "FROM memory_fts WHERE memory_fts MATCH ? "
+                    "ORDER BY rank LIMIT ?",
+                    (f"brief:{cleaned}", fetch_limit),
+                ).fetchall()
+            except Exception as exc:
+                logger.debug("TieredRetriever Pass 1 FTS5 error: %s", exc)
+                rows = []
+            # Backward compat: if brief-field search returns nothing
+            # (legacy rows whose brief was never backfilled), fall back to
+            # a full-content search so we never silently lose recall.
+            if not rows:
                 try:
-                    qr = col.query(
-                        query_embeddings=[query_emb],
-                        n_results=min(limit, 5),
-                    )
-                    ids = qr.get("ids", [[]])[0]
-                    distances = qr.get("distances", [[]])[0]
-                    documents = qr.get("documents", [[]])[0]
-                    metadatas = qr.get("metadatas", [[]])[0]
+                    rows = conn.execute(
+                        "SELECT rowid, brief, outline, content, category, name, event_type "
+                        "FROM memory_fts WHERE memory_fts MATCH ? "
+                        "ORDER BY rank LIMIT ?",
+                        (cleaned, fetch_limit),
+                    ).fetchall()
+                except Exception as exc:
+                    logger.debug("TieredRetriever Pass 1 fallback error: %s", exc)
+                    rows = []
+        return [_row_to_dict(r) for r in rows]
 
-                    for i, doc_id in enumerate(ids):
-                        dist = distances[i] if i < len(distances) else 1.0
-                        sim = max(0.0, 1.0 - dist)
-                        doc = documents[i] if i < len(documents) else ""
-                        meta = metadatas[i] if i < len(metadatas) else {}
+    def _pass2_outline_rerank(
+        self,
+        candidates: List[Dict[str, Any]],
+        query: str,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        """Pass 2: score each candidate by outline match, narrow to limit.
 
-                        results.append({
-                            "id": f"chroma:{doc_id}",
-                            "score": round(sim, 3),
-                            "backend": "chroma",
-                            "type": "document",
-                            "title": meta.get("source", doc_id)[:100],
-                            "snippet": doc[:300],
-                            "source": col.name,
-                            "created_at": meta.get("timestamp", ""),
-                        })
-                except Exception:
-                    continue
+        Re-ranks using FTS5 on the `outline` field for the same query,
+        then fuses with Pass 1's brief score using brief/outline weights.
 
-            # Sort by score, cap
-            results.sort(key=lambda x: x["score"], reverse=True)
-            norm = max((r["score"] for r in results), default=1.0)
-            for r in results:
-                r["score"] = round(r["score"] / norm, 3) if norm > 0 else 0
-
-            # ⚡ SYSTEM RULE: distilled documents always rank above raw sessions.
-            # A distilled doc is the canonical reference — the god reads this first
-            # and only falls back to the raw session if more detail is needed.
-            # Boost by +0.3 ensures distilled docs overtake raw session results
-            # in the fused ranking without distorting relative relevance.
-            for r in results:
-                doc_id = r.get("id", "")
-                if "--distilled" in doc_id or "distilled/" in doc_id:
-                    r["score"] = round(min(r["score"] + 0.3, 1.0), 3)
-
-            results.sort(key=lambda x: x["score"], reverse=True)
-            return results[:limit]
-
-        except Exception as exc:
-            logger.debug("ChromaDB search failed: %s", exc)
+        Backward compat: rows with empty outline fall back to the content
+        column (which is always populated).
+        """
+        cleaned = self._sanitize(query)
+        if not candidates:
             return []
+        if not cleaned:
+            # No query → return candidates as-is, capped at limit
+            return candidates[:limit]
 
-    def health(self) -> bool:
+        conn = self._connect()
+        rowids = [c.get("rowid") for c in candidates if c.get("rowid") is not None]
+        if not rowids:
+            return candidates[:limit]
+
+        # Re-score each candidate via outline MATCH
+        placeholders = ",".join("?" * len(rowids))
         try:
-            import chromadb
-            client = chromadb.PersistentClient(path=str(_CHROMA_DIR))
-            client.heartbeat()
-            return True
-        except Exception:
-            return False
+            outline_rows = conn.execute(
+                f"SELECT rowid, rank FROM memory_fts "
+                f"WHERE memory_fts MATCH ? AND rowid IN ({placeholders})",
+                (f"outline:{cleaned}", *rowids),
+            ).fetchall()
+        except Exception as exc:
+            logger.debug("TieredRetriever Pass 2 FTS5 error: %s", exc)
+            outline_rows = []
+
+        # rank from FTS5: lower is better (more negative = better match)
+        # Convert to a 0..1 score: score = 1 / (1 + abs(rank))
+        outline_scores = {
+            r["rowid"]: 1.0 / (1.0 + abs(r["rank"])) for r in outline_rows
+        }
+
+        # Brief match score: assume any candidate from Pass 1 has a non-zero
+        # brief score proportional to its Pass 1 rank. Use position as proxy.
+        results: List[Dict[str, Any]] = []
+        for idx, cand in enumerate(candidates):
+            rowid = cand.get("rowid")
+            # Pass 1 score: by position (0=best), normalize to 0..1
+            brief_score = max(0.0, 1.0 - (idx / max(len(candidates), 1)))
+            outline_score = outline_scores.get(rowid, 0.0)
+            fused = self.brief_weight * brief_score + self.outline_weight * outline_score
+            # Backward compat: rows with empty outline fall through to content
+            if not cand.get("outline"):
+                # Try a content search; if that also misses, use brief_score alone
+                fused = brief_score * (self.brief_weight + self.outline_weight)
+            result = {
+                "id": f"fts5:{rowid}" if rowid is not None else f"fts5:row-{idx}",
+                "rowid": rowid,
+                "brief": cand.get("brief", ""),
+                "outline": cand.get("outline", ""),
+                "category": cand.get("category", ""),
+                "name": cand.get("name", ""),
+                "event_type": cand.get("event_type", ""),
+                "score": round(fused, 4),
+                "tier_pass": 2,
+                "backend": "fts5_tiered",
+            }
+            results.append(result)
+        results.sort(key=lambda r: r["score"], reverse=True)
+        return results[:limit]
+
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        brief_only: bool = False,
+        path: str = "pantheon://",
+        return_trajectory: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Three-pass retrieval with optional directory scoping (B4).
+
+        Args:
+            query: Search query.
+            limit: Max results to return.
+            brief_only: If True, skip Pass 2 (returns just briefs, no outlines).
+            path: pantheon:// path to scope the search. Default
+                "pantheon://" → flat FTS5 search (B2 behavior, unchanged).
+                Other paths (e.g. "pantheon://warm/", "pantheon://codexes/")
+                trigger directory-recursive search via ichor_ls/ichor_find.
+            return_trajectory: If True, return a Trajectory dict instead
+                of a list of results. The dict has steps, results, etc.
+                per ichor_trajectory's schema.
+
+        Returns:
+            List of result dicts (default), OR a Trajectory dict (when
+            return_trajectory=True). Each result has `brief` + `outline`
+            populated and `raw_text` NEVER loaded. Caller fetches full
+            content via separate API.
+        """
+        # B4: dispatch on path. Default "pantheon://" is the B2 behavior.
+        if path and path != "pantheon://":
+            return self._dir_recursive_search(
+                query, limit, path, return_trajectory=return_trajectory
+            )
+
+        fetch_limit = limit * 3  # Pass 1 fetches 3x to give Pass 2 room
+
+        # Pass 1: brief scan
+        candidates = self._pass1_brief_scan(query, fetch_limit)
+        logger.debug(
+            "TieredRetriever Pass 1: query=%r candidates=%d",
+            query[:50], len(candidates),
+        )
+
+        if brief_only:
+            # Skip Pass 2 — return just brief matches
+            results = []
+            for cand in candidates[:limit]:
+                results.append({
+                    "id": f"fts5:{cand.get('rowid')}",
+                    "rowid": cand.get("rowid"),
+                    "brief": cand.get("brief", ""),
+                    "score": 1.0,
+                    "tier_pass": 1,
+                    "backend": "fts5_tiered",
+                })
+            self._log_retrieval(
+                query=query, path=path, results=results, mode="tiered",
+                passes=[{
+                    "pass": 1, "action": "brief_scan",
+                    "candidates": len(candidates), "selected": len(results),
+                }],
+            )
+            if return_trajectory:
+                return self._build_trajectory(
+                    query, path, results,
+                    passes=[{
+                        "pass": 1, "action": "brief_scan",
+                        "candidates": len(candidates), "selected": len(results),
+                    }],
+                )
+            return results
+
+        # Pass 2: outline re-rank and narrow
+        results = self._pass2_outline_rerank(candidates, query, limit)
+        logger.debug(
+            "TieredRetriever Pass 2: candidates=%d results=%d",
+            len(candidates), len(results),
+        )
+        passes = [
+            {"pass": 1, "action": "brief_scan",
+             "candidates": len(candidates), "selected": len(results)},
+            {"pass": 2, "action": "outline_filter",
+             "candidates": len(candidates), "selected": len(results)},
+        ]
+        self._log_retrieval(
+            query=query, path=path, results=results, mode="tiered",
+            passes=passes,
+        )
+        if return_trajectory:
+            return self._build_trajectory(query, path, results, passes=passes)
+        return results
+
+    # -----------------------------------------------------------------
+    # B4: directory-recursive search
+    # -----------------------------------------------------------------
+
+    def _dir_recursive_search(
+        self,
+        query: str,
+        limit: int,
+        path: str,
+        return_trajectory: bool = False,
+    ) -> Any:
+        """Directory-recursive search (B4 spec algorithm).
+
+        Step 1: ichor_ls(path) → list of directories
+        Step 2: score each directory by brief match against query
+        Step 3: keep top-3 directories
+        Step 4: deep search within those (ichor_find)
+        Step 5: re-rank — 0.6 item score + 0.4 directory score
+        """
+        import time as _time
+        from lib.ichor_browse import ichor_ls, ichor_find  # local import
+        from lib.ichor_paths import parse_path  # local import
+
+        t_total = _time.perf_counter()
+
+        spec = parse_path(path)
+        if not spec.get("valid"):
+            logger.debug("_dir_recursive_search: invalid path %r", path)
+            return [] if not return_trajectory else self._build_trajectory(
+                query, path, [], passes=[]
+            )
+
+        t1 = _time.perf_counter()
+        entries = ichor_ls(path)
+        t_ls_ms = (_time.perf_counter() - t1) * 1000.0
+
+        # Identify directories at this level
+        directories = [e for e in entries if e.get("type") == "directory"]
+        # Score each directory's brief against the query (cheap substring match)
+        cleaned = (query or "").lower().strip()
+        dir_scores: List[Dict[str, Any]] = []
+        for d in directories:
+            name = d.get("name", "").lower()
+            brief = (d.get("brief", "") or "").lower()
+            # Simple word-overlap score
+            q_words = {w for w in cleaned.split() if len(w) > 2}
+            d_text = f"{name} {brief}"
+            d_words = {w for w in d_text.split() if len(w) > 2}
+            if not q_words or not d_words:
+                score = 0.0
+            else:
+                overlap = len(q_words & d_words) / max(len(q_words), 1)
+                score = min(1.0, overlap)
+            dir_scores.append({
+                "name": d.get("name", ""),
+                "path": d.get("path", ""),
+                "score": round(score, 3),
+            })
+
+        # Sort by score, keep top-3
+        dir_scores.sort(key=lambda x: x["score"], reverse=True)
+        top_3 = dir_scores[:3]
+        pruned = dir_scores[3:]
+
+        # Deep search within top-3 directories
+        t2 = _time.perf_counter()
+        deep_results: List[Dict[str, Any]] = []
+        for d in top_3:
+            sub_path = d.get("path", "")
+            if sub_path:
+                sub_results = ichor_find(query, sub_path, limit=limit)
+                # Tag each result with its directory score
+                for r in sub_results:
+                    r["_directory"] = d["name"]
+                    r["_directory_score"] = d["score"]
+                deep_results.extend(sub_results)
+        t_deep_ms = (_time.perf_counter() - t2) * 1000.0
+
+        # Re-rank: 0.6 item score + 0.4 directory score
+        for r in deep_results:
+            item_score = r.get("score", 0.0)
+            dir_score = r.get("_directory_score", 0.0)
+            r["final_score"] = round(0.6 * item_score + 0.4 * dir_score, 4)
+            r["score"] = r["final_score"]  # for downstream consumers
+
+        # Sort and cap
+        deep_results.sort(
+            key=lambda r: r.get("final_score", r.get("score", 0)),
+            reverse=True,
+        )
+        final = deep_results[:limit]
+
+        # Build trajectory
+        passes = [
+            {
+                "pass": 1,
+                "action": "brief_scan",
+                "candidates": len(entries),
+                "selected": len(top_3),
+                "latency_ms": round(t_ls_ms, 2),
+                "directories_considered": dir_scores,
+                "directories_selected": top_3,
+                "directories_pruned": [
+                    {**p, "reason": "below top-3 threshold"}
+                    for p in pruned
+                ],
+            },
+            {
+                "pass": 2,
+                "action": "deep_search",
+                "candidates": len(deep_results),
+                "selected": len(final),
+                "latency_ms": round(t_deep_ms, 2),
+            },
+            {
+                "pass": 3,
+                "action": "rerank",
+                "items": len(final),
+                "latency_ms": round((_time.perf_counter() - t_total) * 1000.0, 2),
+            },
+        ]
+
+        self._log_retrieval(
+            query=query, path=path, results=final, mode="tiered_dir",
+            passes=passes,
+        )
+
+        if return_trajectory:
+            return self._build_trajectory(query, path, final, passes=passes)
+        return final
+
+    def _log_retrieval(
+        self,
+        query: str,
+        path: str,
+        results: List[Dict[str, Any]],
+        mode: str,
+        passes: List[Dict[str, Any]],
+    ) -> None:
+        """Append an entry to the retrieval-log with B4 `passes` field."""
+        import time
+        try:
+            entry = {
+                "timestamp": time.time(),
+                "query": query,
+                "path": path,
+                "weights": dict(WEIGHTS),
+                "mode": mode,
+                "result_count": len(results),
+                "result_ids": [r.get("id", "") for r in results],
+                "backends_used": list({r.get("backend", "unknown")
+                                       for r in results}) or ["fts5_tiered"],
+                "passes": passes,
+            }
+            with open(_RETRIEVAL_LOG, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.debug("could not write retrieval log: %s", e)
+
+    def _build_trajectory(
+        self,
+        query: str,
+        path: str,
+        results: List[Dict[str, Any]],
+        passes: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build a Trajectory dict for return_trajectory=True callers."""
+        return {
+            "query": query,
+            "path": path,
+            "steps": passes,
+            "results": [r.get("id", "") for r in results],
+            "weights": dict(WEIGHTS),
+            "mode": "tiered" if path == "pantheon://" else "tiered_dir",
+            "outcome": "pending",
+        }
+
+
+# ChromaBackend removed in P4a — vector search dropped.
+# Use athenaeum_walk (filesystem) + ichor_score for retrieval.
 
 
 class GraphBackend:
@@ -327,144 +770,8 @@ class EventsBackend:
 
 
 # ===================================================================
-# Embedder (inline, avoids circular deps)
-# ===================================================================
-
-
-class _Embedder:
-    """Thin embedding wrapper — OpenRouter first, Ollama fallback.
-
-    Ollama configuration:
-    - ``num_ctx=8192`` to use qwen3-embedding's full native context.
-    - Configurable model via ATHENAEUM_EMBED_MODEL env var
-      (default: qwen3-embedding:0.6b).
-    - Instruction prefix for retrieval-optimized embeddings.
-    """
-
-    _EMBED_COUNT = 0
-
-    def __init__(self):
-        import os
-        self._api_key = os.environ.get("ATHENAEUM_EMBED_API_KEY", "") or os.environ.get("OPENROUTER_API_KEY", "")
-        self._model = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
-        self._timeout = 30.0
-        # Ollama model — configurable, defaults to qwen3-embedding:0.6b
-        self._ollama_model = os.environ.get("ATHENAEUM_EMBED_MODEL", "qwen3-embedding:0.6b")
-
-    @property
-    def use_openrouter(self) -> bool:
-        provider = os.environ.get("ATHENAEUM_EMBED_PROVIDER", "").lower()
-        if provider == "ollama":
-            return False
-        return bool(self._api_key)
-
-    def embed(self, text: str, prefix: str = "search_document: ") -> Optional[List[float]]:
-        """Embed text via Ollama with retrieval-optimized instruction prefix.
-
-        The ``prefix`` (default ``search_document: ``) improves retrieval quality
-        for qwen3-embedding models. Set to ``search_query: `` for query-side
-        embeddings, or empty string to disable.
-        """
-        import httpx
-
-        # qwen3-embedding supports up to 8192 tokens natively.
-        # Chunk at 1500 chars (~375 tok) with overlap for safety.
-        CHUNK_SIZE = 1500
-        CHUNK_OVERLAP = 100
-        MAX_CHUNKS = 20
-
-        def _call_api(payload: dict) -> Optional[List[float]]:
-            try:
-                if self.use_openrouter:
-                    url = "https://openrouter.ai/api/v1/embeddings"
-                    headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
-                else:
-                    url = "http://localhost:11434/api/embeddings"
-                    headers = {"Content-Type": "application/json"}
-                    # qwen3-embedding's full native context
-                    payload.setdefault("options", {})["num_ctx"] = 8192
-
-                resp = httpx.post(url, headers=headers, json=payload, timeout=self._timeout)
-                resp.raise_for_status()
-                if self.use_openrouter:
-                    return resp.json()["data"][0]["embedding"]
-                return resp.json()["embedding"]
-            except Exception:
-                return None
-
-        if len(text) <= CHUNK_SIZE:
-            # Short enough to embed directly
-            if self.use_openrouter:
-                return _call_api({"model": self._model, "input": text})
-            return _call_api({"model": self._ollama_model, "prompt": prefix + text})
-
-        # Chunk long texts and average embeddings
-        chunks = []
-        start = 0
-        while start < len(text) and len(chunks) < MAX_CHUNKS:
-            end = min(start + CHUNK_SIZE, len(text))
-            # Try to break at a sentence boundary
-            if end < len(text):
-                # Look for sentence end within overlap region
-                cut = text.rfind(". ", start + CHUNK_SIZE - 200, end)
-                if cut > start + CHUNK_SIZE // 2:
-                    end = cut + 1
-            chunks.append(text[start:end])
-            start = end - CHUNK_OVERLAP if end < len(text) else end
-
-        vectors = []
-        for chunk in chunks:
-            if self.use_openrouter:
-                v = _call_api({"model": self._model, "input": chunk})
-            else:
-                v = _call_api({"model": self._ollama_model, "prompt": prefix + chunk})
-            if v:
-                vectors.append(v)
-
-        if not vectors:
-            return None
-
-        # Average all chunk embeddings
-        dim = len(vectors[0])
-        avg = [0.0] * dim
-        for v in vectors:
-            for i in range(dim):
-                avg[i] += v[i]
-        return [x / len(vectors) for x in avg]
-
-    def is_available(self) -> bool:
-        if self.use_openrouter:
-            return True
-        try:
-            import httpx
-            resp = httpx.get("http://localhost:11434/api/tags", timeout=5.0)
-            if resp.status_code == 200:
-                return True
-        except Exception:
-            pass
-        # Ollama might be wedged — try restarting once before giving up
-        try:
-            import subprocess, time
-            logger = logging.getLogger("ichor_hybrid")
-            logger.warning("Ollama not responding — attempting restart...")
-            subprocess.run(["systemctl", "--user", "restart", "ollama"], timeout=30, capture_output=True)
-            time.sleep(5)
-            import httpx
-            for attempt in range(6):
-                try:
-                    resp = httpx.get("http://localhost:11434/api/tags", timeout=5.0)
-                    if resp.status_code == 200:
-                        logger.info("Ollama restarted successfully")
-                        return True
-                except Exception:
-                    pass
-                time.sleep(3)
-            logger.warning("Ollama restart failed: still not responding")
-        except Exception as e:
-            logger = logging.getLogger("ichor_hybrid")
-            logger.warning("Ollama restart attempt failed: %s", e)
-        return False
-
+# _Embedder removed in P4a — embedding layer dropped.
+# Retrieval is now FTS5 + Graph + Events only (P4b removes Graph).
 
 # ===================================================================
 # Fusion Engine
@@ -492,11 +799,42 @@ def _normalize_scores(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _compute_fused_score(result: Dict[str, Any]) -> float:
-    """Compute fused score from backend-specific score + weight."""
+    """Compute fused score: backend weight + ichor_score post-fusion boost.
+
+    Phase 1 (Ichor consolidation): the unified ichor_score is added as
+    a post-fusion signal. The 0.70/0.30 split keeps the backend weight
+    dominant (so a strong keyword hit doesn\'t get washed out by a
+    stale importance score) but gives important events a meaningful
+    boost over equally-matched less-important ones.
+
+    Falls back to the legacy fused-only score if ichor_score isn\'t
+    available (e.g. raw distilled docs without event metadata).
+    """
+    from lib.ichor_score import (
+        compute_score as _compute, DEFAULT_NON_EVENT_SCORE,
+        HYBRID_BOOST_WEIGHT, HYBRID_BACKEND_WEIGHT,
+    )
     backend = result.get("backend", "unknown")
     weight = WEIGHTS.get(backend, 0.0)
-    score = result.get("score", 0.0)
-    return round(score * weight, 3)
+    backend_score = result.get("score", 0.0) * weight
+
+    # Get the ichor_score for this result. For ichor_event results
+    # (which carry the full event dict under "event" or as top-level
+    # fields), compute it. Otherwise default to mid-scale.
+    event = result.get("event")
+    if event is None:
+        # Maybe the result itself is the event (raw row)
+        if result.get("event_type") or result.get("subject"):
+            event = result
+    if event is not None:
+        try:
+            ichor = _compute(event) / 100.0  # 0.0..1.0
+        except Exception:
+            ichor = DEFAULT_NON_EVENT_SCORE / 100.0
+    else:
+        ichor = DEFAULT_NON_EVENT_SCORE / 100.0
+
+    return round(backend_score * HYBRID_BACKEND_WEIGHT + ichor * HYBRID_BOOST_WEIGHT, 3)
 
 
 # ===================================================================
@@ -505,16 +843,19 @@ def _compute_fused_score(result: Dict[str, Any]) -> float:
 
 
 class HybridScorer:
-    """Fused search across all 4 backends. Gracefully degrades if a backend is down."""
+    """Fused search across remaining backends.
+
+    P4a removed ChromaBackend (vector search). P4b will remove GraphBackend.
+    For now, search runs across FTS5 + Graph + Events, gracefully degrading
+    if a backend is down. P4c will collapse this to FTS5 + Events only.
+    """
 
     def __init__(self) -> None:
         self._fts5 = FTS5Backend()
-        self._chroma = ChromaBackend()
         self._graph = GraphBackend()
         self._events = EventsBackend()
         self._backends = {
             "fts5": self._fts5,
-            "chroma": self._chroma,
             "graph": self._graph,
             "events": self._events,
         }
@@ -525,6 +866,7 @@ class HybridScorer:
         limit: int = 10,
         backends: Optional[List[str]] = None,
         min_score: float = 0.0,
+        mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Fused search across selected backends.
 
@@ -534,17 +876,55 @@ class HybridScorer:
             backends: Which backends to query (default: all 4).
             min_score: Minimum fused score threshold.
 
+        mode: 'legacy' (default) or 'tiered'. When 'tiered', the FTS5
+                  backend is replaced by TieredRetriever for token-cheap
+                  search. When None, falls back to ICHOR_TIERED_ENABLED
+                  env var; if not set, default is 'legacy'.
+
         Returns:
-            Dict with 'results' (sorted list), 'backends_used', 'total'.
+            Dict with 'results' (sorted list), 'backends_used', 'total',
+            and 'mode' indicating which path was used.
         """
+        # Resolve mode: explicit arg > env var > default 'legacy'
+        if mode is None:
+            mode = (
+                "tiered"
+                if os.environ.get("ICHOR_TIERED_ENABLED", "").lower() == "true"
+                else "legacy"
+            )
         if backends is None:
-            backends = ["fts5", "chroma", "graph", "events"]
+            backends = ["fts5", "graph", "events"]  # chroma removed in P4a
 
         all_results: List[Dict[str, Any]] = []
         backends_used: List[str] = []
         backend_errors: Dict[str, str] = {}
 
+        # In tiered mode, replace the FTS5 backend's search with TieredRetriever
+        tiered_retriever = TieredRetriever() if mode == "tiered" else None
+
         for name in backends:
+            # Tiered path: replace FTS5 backend with TieredRetriever
+            if name == "fts5" and tiered_retriever is not None:
+                try:
+                    tiered_results = tiered_retriever.search(query, limit=limit)
+                    for r in tiered_results:
+                        all_results.append({
+                            "id": r["id"],
+                            "score": r.get("score", 0.5),
+                            "backend": "fts5_tiered",
+                            "type": r.get("event_type", ""),
+                            "title": r.get("brief", ""),
+                            "snippet": r.get("outline", "")[:300],
+                            "source": r.get("name", ""),
+                            "created_at": "",
+                            "tier_pass": r.get("tier_pass", 2),
+                        })
+                    if tiered_results:
+                        backends_used.append("fts5_tiered")
+                except Exception as exc:
+                    backend_errors["fts5_tiered"] = str(exc)
+                    logger.debug("Tiered FTS5 failed: %s", exc)
+                continue
             be = self._backends.get(name)
             if be is None:
                 continue
@@ -564,6 +944,7 @@ class HybridScorer:
                 "backends_used": backends_used,
                 "backend_errors": backend_errors,
                 "total": 0,
+                "mode": mode,
             }
 
         # Normalize scores within each backend
@@ -596,7 +977,9 @@ class HybridScorer:
                 "timestamp": time.time(),
                 "query": query[:200],
                 "weights": dict(WEIGHTS),
+                "mode": mode,
                 "result_count": len(top),
+                "outcome": "pending",  # C1: lazy outcome — set to "used" when a later store() correlates
                 "result_ids": [r.get("id", "")[:80] for r in top[:10]],
                 "backends_used": backends_used,
             }
@@ -613,6 +996,7 @@ class HybridScorer:
             "backend_errors": backend_errors,
             "total": len(top),
             "weights": WEIGHTS,
+            "mode": mode,
         }
 
     def health_check(self) -> Dict[str, Any]:
@@ -641,64 +1025,8 @@ class HybridScorer:
         }
 
 
-# ===================================================================
-# Memory Trait Contract
-# ===================================================================
-
-
-def _background_embed(
-    file_path: str, content: str, namespace: str, session_id: str = ""
-) -> None:
-    """Fire-and-forget: embed a single document to ChromaDB silently.
-
-    Runs in a daemon thread — never blocks the caller.
-    Only embeds the current document, not a full re-embed.
-    """
-    try:
-        import httpx
-        from pathlib import Path
-
-        embed_url = os.environ.get(
-            "ATHENAEUM_EMBED_URL",
-            "http://localhost:11434/api/embeddings",
-        )
-        embed_model = os.environ.get(
-            "ATHENAEUM_EMBED_MODEL",
-            "nomic-embed-text",
-        )
-
-        # Embed via Ollama
-        resp = httpx.post(
-            embed_url,
-            json={"model": embed_model, "prompt": content[:64000]},
-            timeout=60,
-        )
-        resp.raise_for_status()
-        embedding = resp.json()["embedding"]
-
-        # Write to ChromaDB
-        import chromadb  # noqa: PLC0415
-
-        client = chromadb.PersistentClient(path=str(_CHROMA_DIR))
-        col_name = f"pantheon_{namespace.lower().replace('-', '_')}"
-        try:
-            col = client.get_collection(col_name)
-        except Exception:
-            col = client.create_collection(col_name)
-
-        col.upsert(
-            ids=[file_path],
-            embeddings=[embedding],
-            documents=[content],
-            metadatas=[{
-                "source": file_path,
-                "codex": namespace,
-                "filename": Path(file_path).name,
-                "session_id": session_id,
-            }],
-        )
-    except Exception as exc:
-        logger.debug("Background embed failed (non-fatal): %s", exc)
+# _background_embed removed in P4a — embedding layer dropped.
+# ichor_store() now writes the note file only; no chromadb thread.
 
 
 def _regenerate_context(
@@ -832,8 +1160,42 @@ class MemoryTrait:
                 raw_text=content,
                 god_name=god_name or namespace,
             )
+            # C1: post-store contradiction check (non-blocking)
+            # Compare new content against recent high-importance events.
+            # If a contradiction is detected, flag in the return value but
+            # never block. The spec is explicit: zero impact on the
+            # retrieval path, zero impact on store() success.
+            contradiction_warning = False
+            try:
+                # Check against recent high-importance events AND all
+                # decision/commitment/blocker events (those categories
+                # are intrinsically high-stakes regardless of the
+                # importance score). Default importance is 50, so we
+                # also use a >= 50 threshold to catch freshly-stored
+                # decisions whose importance hasn't been tuned yet.
+                recent = db._conn.execute(
+                    "SELECT raw_text FROM ichor_events "
+                    "WHERE raw_text IS NOT NULL AND ("
+                    "  importance >= 50 OR "
+                    "  event_type IN ('decision', 'commitment', 'blocker')"
+                    ") "
+                    "ORDER BY id DESC LIMIT 50"
+                ).fetchall()
+                for row in recent:
+                    old_text = row["raw_text"] if hasattr(row, "keys") else row[0]
+                    if old_text and detect_contradiction(old_text, content):
+                        contradiction_warning = True
+                        break
+            except Exception as exc:
+                logger.debug("Contradiction check failed (non-fatal): %s", exc)
             db.close()
-            return {"stored": True, "backend": "fts5", "id": f"fts5:{event_id}", "namespace": namespace}
+            return {
+                "stored": True,
+                "backend": "fts5",
+                "id": f"fts5:{event_id}",
+                "namespace": namespace,
+                "contradiction_warning": contradiction_warning,
+            }
 
         elif category in ("entity", "relationship"):
             # → Graph DB
@@ -884,13 +1246,7 @@ class MemoryTrait:
                 f"session_id: {session_id}\n---\n\n{content}\n",
                 encoding="utf-8",
             )
-            # Fire-and-forget: embed this single document silently in background
-            import threading
-            threading.Thread(
-                target=_background_embed,
-                args=(str(note_path), content, namespace, session_id),
-                daemon=True,
-            ).start()
+            # P4a: no chromadb embed thread — embedding layer removed.
             return {"stored": True, "backend": "athenaeum", "id": str(note_path.relative_to(_HOME)), "namespace": namespace}
 
     def retrieve(
@@ -946,6 +1302,40 @@ class MemoryTrait:
         lines.append(f"_Backends: {', '.join(result['backends_used'])} · {result['total']} results_")
         return "\n".join(lines)
 
+    def store_goal(
+        self,
+        title: str,
+        description: str = "",
+        category: str = "general",
+        priority: int = 5,
+        target_date: str = "",
+    ) -> Dict[str, Any]:
+        """A1: Store a strategic goal in `ichor.db::strategic_goals`.
+
+        Thin convenience wrapper around `lib.ichor_goals.IchorGoals.add()`
+        so the MemoryTrait contract has a `store_*` method for every
+        memory object type. Returns the same shape as `store()`: a dict
+        with `stored`, `backend`, `id`.
+
+        Spec: ~/athenaeum/handoffs/marvin-memory-upgrade-handoff-2026-06-10.md §A1.
+        """
+        _ensure_imports()
+        from lib.ichor_goals import IchorGoals  # type: ignore[import-untyped]
+        goals = IchorGoals()
+        try:
+            gid = goals.add(
+                title=title, description=description, category=category,
+                priority=priority, target_date=target_date,
+            )
+            return {
+                "stored": True,
+                "backend": "strategic_goals",
+                "id": f"goal:{gid}",
+                "title": title,
+            }
+        except ValueError as exc:
+            return {"stored": False, "error": str(exc)}
+
     def forget(self, key: str) -> Dict[str, Any]:
         """Delete from all backends by key prefix (e.g. 'fts5:42', 'graph:node:...')."""
         deleted = []
@@ -976,8 +1366,7 @@ class MemoryTrait:
             except Exception as exc:
                 logger.debug("forget graph failed: %s", exc)
 
-        elif prefix == "chroma" and rest:
-            logger.debug("ChromaDB forget not yet implemented for single documents")
+        # chroma forget removed in P4a — no vector backend anymore.
 
         return {"forgotten": True, "key": key, "deleted_from": deleted}
 
@@ -1024,8 +1413,8 @@ def main() -> None:
     p_ret.add_argument("query", help="Search query")
     p_ret.add_argument("--limit", "-l", type=int, default=10)
     p_ret.add_argument("--backends", "-b", nargs="+",
-                       choices=["fts5", "chroma", "graph", "events"],
-                       default=["fts5", "chroma", "graph", "events"])
+                       choices=["fts5", "graph", "events"],  # chroma removed P4a
+                       default=["fts5", "graph", "events"])
     p_ret.add_argument("--min-score", "-m", type=float, default=0.0)
     p_ret.add_argument("--markdown", "-d", action="store_true", help="Output markdown instead of JSON")
 

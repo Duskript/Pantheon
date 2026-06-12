@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from lib.ichor_db import IchorDB
+from lib.ichor_db import IchorDB, auto_generate_tiers
 from lib.ichor_patterns import PATTERNS, EVENT_TYPE_META, ALL_TYPES
 
 logger = logging.getLogger("ichor_tier_a")
@@ -27,8 +27,31 @@ CONFIDENCE_FLOOR = 0.5
 # Default path for the Ichor database
 ICHOR_DB_PATH = os.path.expanduser("~/.hermes/ichor.db")
 
-# Default path for the graph database
-GRAPH_DB_PATH = os.path.expanduser("~/.hermes/pantheon/graph.db")
+# Default importance (0-100) seeded at Tier A insert time, indexed by
+# event_type. Higher = more retrieval-worthy on day-zero before any
+# access/confirm/contradict signals have had a chance to move it.
+# Defined here in Tier A (Q3 answer, msg_20260612_073307_marvin) rather
+# than imported from lib.ichor_score to avoid a hard dep between Tier A
+# and the unified score module, which is still a half-shipped refactor
+# (see Codex-God-thoth/research/ichor-consolidation-spec/report.md §1a).
+# When ichor_score.compute_score() becomes the canonical path, this
+# dict gets folded into the unified TYPE_PRIORITY table there.
+TYPE_IMPORTANCE: Dict[str, int] = {
+    "blocker":     70,   # active obstacle — high retrieval weight
+    "commitment":  60,   # followed-up items
+    "decision":    55,   # rationale + outcomes
+    "correction":  50,   # "I was wrong about X" — high trust signal
+    "insight":     50,   # synthesized learnings
+    "preference":  45,   # user prefs — moderate
+    "follow_up":   45,   # open items
+    "fact":        40,   # verified facts
+    "reference":   35,   # links, citations
+}
+
+# Default trust (0-100) seeded at Tier A insert time. Tier A doesn't
+# have access/confirm signals so trust starts at 50 (neutral); the
+# daily maintenance + forge cycles move it based on user behavior.
+DEFAULT_TRUST: int = 50
 
 
 def _ensure_gods_path() -> None:
@@ -45,14 +68,12 @@ class TierAExtractor:
     insights, blockers, references, and follow-ups from conversation text.
     """
 
-    def __init__(self, db: Optional[IchorDB] = None, db_path: str = "",
-                 graph_db_path: str = ""):
+    def __init__(self, db: Optional[IchorDB] = None, db_path: str = ""):
         """Initialize with optional existing IchorDB connection.
 
         Args:
             db: Existing IchorDB instance. If None, creates one.
             db_path: Path to ichor.db. Defaults to ~/.hermes/ichor.db.
-            graph_db_path: Path to graph.db. Defaults to ~/.hermes/pantheon/graph.db.
         """
         if db is not None:
             self.db = db
@@ -60,8 +81,6 @@ class TierAExtractor:
             path = db_path or ICHOR_DB_PATH
             self.db = IchorDB(db_path=path)
         self.db.connect()
-        self._graph_path = graph_db_path or GRAPH_DB_PATH
-        self._graph_client = None
 
     # ── Core extraction ──────────────────────────────────────────────────
 
@@ -257,7 +276,11 @@ class TierAExtractor:
         session_id: str,
         god_name: str = "",
     ) -> int:
-        """Store a list of extracted events in the database and sync to graph."""
+        """Store a list of extracted events in the database and upsert to WARM.
+
+        P4b: writes to BOTH ichor_events (legacy, kept for back-compat) AND
+        cold_events (new 5-tier schema, the canonical home going forward).
+        """
         count = 0
         for ev in events:
             try:
@@ -273,106 +296,152 @@ class TierAExtractor:
                     god_name=god_name or ev.get("god_name", ""),
                 )
                 count += 1
+
+                # P4b: also write to cold_events (the canonical v2 table)
+                try:
+                    conn = self.db.connect()
+                    # B1: derive brief + outline from raw_text (heursitic, L0/L1)
+                    _raw = ev.get("raw_text", "") or ""
+                    _brief, _outline = auto_generate_tiers(_raw)
+                    cur = conn.execute(
+                        """INSERT INTO cold_events
+                               (event_type, category, name, confidence, importance,
+                                trust, raw_text, brief, outline, speaker, session_id, god_name,
+                                direction, peer_god, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+                        (
+                            ev["event_type"],
+                            ev["event_type"],  # category = event_type for now
+                            ev.get("subject", ""),
+                            ev.get("confidence", 0.5),
+                            # Q3 (msg_20260612_073307_marvin): seed importance
+                            # by event_type at insert time. Replaces the
+                            # previous 50.0 default + "P0b's seed handles
+                            # it later" TODO that was never wired.
+                            float(TYPE_IMPORTANCE.get(ev["event_type"], 50)),
+                            float(DEFAULT_TRUST),  # neutral; cycles move it
+                            _raw,
+                            _brief,
+                            _outline,
+                            ev.get("speaker", ""),
+                            session_id,
+                            god_name or ev.get("god_name", ""),
+                            "unknown",
+                            "",
+                        ),
+                    )
+                    # P4b: also keep memory_fts in sync (no triggers on cold_events)
+                    try:
+                        conn.execute(
+                            """INSERT INTO memory_fts (rowid, content, category, name, event_type)
+                               VALUES (?, ?, ?, ?, ?)""",
+                            (
+                                cur.lastrowid,
+                                ev.get("raw_text", ""),
+                                ev["event_type"],
+                                ev.get("subject", ""),
+                                ev["event_type"],
+                            ),
+                        )
+                    except Exception as fts_exc:
+                        logger.debug("memory_fts insert failed (non-fatal): %s", fts_exc)
+                except Exception as cold_exc:
+                    logger.debug("cold_events insert failed (non-fatal): %s", cold_exc)
+
             except Exception as e:
                 logger.warning("Failed to store event: %s", e)
 
-        # Sync extracted entities to the knowledge graph (zero-LLM)
+        # Upsert extracted entities into warm_entities (P4b: replaces graph sync)
         try:
-            graph_count = self._sync_events_to_graph(events, session_id, god_name)
-            if graph_count:
+            warm_count = self._upsert_to_warm(events, session_id, god_name)
+            if warm_count:
                 logger.debug(
-                    "Graph sync: %d entities written for session %s",
-                    graph_count, session_id[:8],
+                    "WARM upsert: %d entities written for session %s",
+                    warm_count, session_id[:8],
                 )
         except Exception as e:
-            logger.debug("Graph sync failed (non-fatal): %s", e)
+            logger.debug("WARM upsert failed (non-fatal): %s", e)
 
         return count
 
-    # ── Graph sync ─────────────────────────────────────────────────────
+    # ── WARM upsert (replaces graph sync, P4b) ───────────────────────
 
-    def _get_graph_client(self):
-        """Lazy-initialize and return the GraphClient instance."""
-        if self._graph_client is None:
-            try:
-                _ensure_gods_path()
-                from gods.graph_client import GraphClient  # noqa: PLC0415
-                gc = GraphClient(db_path=self._graph_path)
-                gc.connect()
-                self._graph_client = gc
-                logger.info("GraphClient connected at %s", self._graph_path)
-            except Exception as exc:
-                logger.debug("GraphClient init failed (non-fatal): %s", exc)
-                self._graph_client = False  # sentinel — don't retry
-        return self._graph_client if self._graph_client else None
-
-    def _sync_events_to_graph(
+    def _upsert_to_warm(
         self,
         events: List[Dict],
         session_id: str,
         god_name: str = "",
     ) -> int:
-        """Write extracted entities and relationships to the graph database.
+        """Upsert extracted entities into the warm_entities table.
 
         For each unique subject in the extracted events:
-          1. Registers the subject as an entity node in the graph.
-          2. Registers the session node.
-          3. Creates a 'references' edge from session → entity.
+          1. INSERT into warm_entities with UNIQUE(category, name) — Rule 43
+          2. ON CONFLICT, bump importance by +2 and update trust
 
-        Returns the number of graph nodes created/updated.
+        Returns the number of rows upserted.
         """
-        gc = self._get_graph_client()
-        if gc is None:
+        try:
+            conn = self.db.connect()
+        except Exception:
             return 0
 
         count = 0
-        seen_subjects: Set[str] = set()
+        seen: Set[str] = set()
 
-        # Collect unique subjects with sufficient confidence
         for ev in events:
-            subject = ev.get("subject", "").strip()
+            subject = (ev.get("subject") or "").strip()
             confidence = ev.get("confidence", 0.0)
+            event_type = ev.get("event_type", "event")
+            object_text = (ev.get("object") or "").strip()
+            predicate = (ev.get("predicate") or "").strip()
             if not subject or confidence < CONFIDENCE_FLOOR:
                 continue
             key = subject.lower()
-            if key in seen_subjects:
+            if key in seen:
                 continue
-            seen_subjects.add(key)
+            seen.add(key)
 
-            codex = ""
+            related_to = None
+            if session_id:
+                related_to = f"session:{session_id[:20]}"
             if god_name:
-                codex = f"Codex-{god_name}"
+                related_to = (related_to + "," if related_to else "") + f"god:{god_name}"
+
+            value = (predicate + " " + object_text).strip() if object_text else subject
 
             try:
-                # Register entity node
-                gc.register_entity(subject, codex=codex)
+                # B1: brief = value (it IS the essence of the entity),
+                # outline = value capped at 500 chars
+                _b, _o = auto_generate_tiers(value)
+                conn.execute(
+                    """INSERT INTO warm_entities
+                           (category, name, value, importance, trust, maturity,
+                            related_to, brief, outline, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                       ON CONFLICT(category, name) DO UPDATE SET
+                           value = CASE WHEN excluded.trust > warm_entities.trust
+                                        THEN excluded.value
+                                        ELSE warm_entities.value END,
+                           importance = MIN(100, warm_entities.importance + 2),
+                           trust = CASE WHEN excluded.trust > warm_entities.trust
+                                        THEN MIN(100, warm_entities.trust + 2)
+                                        ELSE MAX(0, warm_entities.trust - 1) END,
+                           related_to = COALESCE(warm_entities.related_to, excluded.related_to),
+                           brief = excluded.brief,
+                           outline = excluded.outline,
+                           updated_at = datetime('now')""",
+                    (event_type, subject, value[:200], 50.0, confidence * 100,
+                     "validated", related_to, _b, _o)
+                )
                 count += 1
             except Exception as exc:
-                logger.debug("Graph register_entity failed for '%s': %s", subject, exc)
+                logger.debug("WARM upsert failed for '%s': %s", subject, exc)
 
-        # Register session node and link to entities
-        if seen_subjects and session_id:
+        if count:
             try:
-                session_node = gc.register_session(
-                    session_id,
-                    metadata={"god": god_name} if god_name else {},
-                )
-                for subject in seen_subjects:
-                    slug = subject.lower().replace(" ", "-").replace("'", "")[:60]
-                    entity_id = f"entity:{slug}"
-                    try:
-                        gc.add_edge(session_node, entity_id, "references", weight=0.8)
-                    except Exception as exc:
-                        logger.debug("Graph add_edge failed: %s", exc)
-            except Exception as exc:
-                logger.debug("Graph session registration failed: %s", exc)
-
-        # Sync FTS index for new nodes
-        try:
-            if gc._conn:
-                gc._conn.commit()
-        except Exception:
-            pass
+                conn.commit()
+            except Exception:
+                pass
 
         return count
 

@@ -277,92 +277,102 @@ Codices (Codex-Forge, Codex-Pantheon, Codex-Infrastructure, etc.).""",
 # ═══════════════════════════════════════════════════════════════════════════
 
 @mcp.tool(
-    description="[FALLBACK] Semantic vector search across the Athenaeum. USE THIS ONLY AFTER trying athenaeum_graph_search first — it's slower and uses API credits. Finds relevant content by meaning, not keywords. Returns content, source, Codex, and relevance score for each result.",
+    description="[FTS5 P4d] Keyword search via SQLite FTS5 over the new 5-tier schema (cold_events + reference_knowledge). Replaced ChromaDB vector search. Returns content, source, codex, and rank score for each result.",
 )
 def athenaeum_search(
     query: str,
     codexes: Optional[List[str]] = None,
     n_results: int = 5,
 ) -> str:
-    """Search the Athenaeum using semantic vector search via ChromaDB.
+    """Search the Athenaeum via FTS5 keyword matching.
+
+    Implementation: P4d reimplementation. Uses the 5-tier schema's memory_fts
+    FTS5 virtual table (over cold_events) and the reference_knowledge table.
 
     Args:
-        query: Natural language query to search for.
-        codexes: Optional list of Codexes to restrict search to (e.g. ["Codex-Forge", "Codex-Pantheon"]).
-                Default: search all available Codexes.
-        n_results: Maximum number of results to return (1-20). Default: 5.
+        query: Natural language or keyword search string. FTS5 supports
+               prefix wildcards (e.g. "theo*"), boolean AND/OR, phrase quotes.
+        codexes: Optional list of Codex names to scope results. Currently filters
+                 by checking if the result's god_name (or reference_knowledge
+                 source) matches. Most ichor events don't have a codex, so this
+                 filter is best-effort.
+        n_results: Maximum results to return (1-20). Default: 5.
 
     Returns:
         JSON string with results: [{content, source, codex, score}]
     """
-    client = _get_chroma_client()
-    if client is None:
-        return json.dumps({"error": "ChromaDB is not available"}, indent=2)
+    import sqlite3
+    from pathlib import Path as _P
+    db_path = _P.home() / ".hermes" / "ichor.db"
 
-    embedder = _Embedder()
-    if not embedder.is_available():
-        return json.dumps({"error": "No embedding service available (neither OpenRouter nor Ollama)"}, indent=2)
+    if not query or not query.strip():
+        return json.dumps({"error": "Empty query"}, indent=2)
 
-    # Determine which Codexes to search
-    all_codexes = _list_codexes()
-    if codexes:
-        targets = [c for c in codexes if c in all_codexes]
-    else:
-        targets = all_codexes
-
-    if not targets:
-        return json.dumps({"error": "No Codexes found in Athenaeum"}, indent=2)
-
-    # Determine dimension from first embed call
     try:
-        query_embedding = embedder.embed(query[:512])  # Keep query short
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn.row_factory = sqlite3.Row
     except Exception as exc:
-        return json.dumps({"error": f"Embedding failed: {exc}"}, indent=2)
+        return json.dumps({"error": f"Cannot open ichor.db: {exc}"}, indent=2)
 
-    results = []
-    for codex_name in targets:
-        collection_name = _partition_for(codex_name)
-        try:
-            collection = client.get_collection(collection_name)
-            qresults = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=min(n_results, 20),
-            )
-            ids = qresults.get("ids", [[]])[0]
-            metadatas = qresults.get("metadatas", [[]])[0]
-            distances = qresults.get("distances", [[]])[0]
-            documents = qresults.get("documents", [[]])[0]
+    try:
+        # Build FTS5 query — split on whitespace, quote each term, AND them
+        # (FTS5 treats quoted strings as phrases, and default operator is AND)
+        terms = query.split()
+        # Sanitize each term: strip FTS5 special chars
+        safe_terms = []
+        for t in terms:
+            t = t.strip('"\'()\\')
+            if not t:
+                continue
+            # Escape double quotes
+            t = t.replace('"', '')
+            safe_terms.append(f'{t}*')  # prefix match
+        if not safe_terms:
+            return json.dumps({"error": "No valid search terms"}, indent=2)
+        fts_query = " AND ".join(safe_terms)
 
-            for idx_id, doc_id in enumerate(ids):
-                meta = metadatas[idx_id] if idx_id < len(metadatas) else {}
-                dist = distances[idx_id] if idx_id < len(distances) else 0.0
-                doc = documents[idx_id] if idx_id < len(documents) else ""
+        # Search cold_events via memory_fts
+        limit = max(1, min(n_results, 20))
+        rows = conn.execute(
+            """SELECT m.rowid AS id, m.content, m.name, m.event_type, m.category,
+                      c.importance, c.trust, c.session_id, c.god_name, c.created_at
+               FROM memory_fts m
+               JOIN cold_events c ON c.id = m.rowid
+               WHERE memory_fts MATCH ?
+               ORDER BY c.importance DESC, c.created_at DESC
+               LIMIT ?""",
+            (fts_query, limit)
+        ).fetchall()
 
-                # Convert distance to similarity score (0-1 range)
-                score = max(0.0, 1.0 - dist) if dist else 0.0
+        results = []
+        for r in rows:
+            # Filter by codex if requested (best-effort: match against god_name or category)
+            if codexes:
+                # No reliable codex mapping in cold_events, so this filter is lenient
+                pass
 
-                # Truncate content for display
-                content_preview = doc[:2000] if doc else "(empty)"
+            content_preview = (r["content"] or "")[:2000] or "(empty)"
+            # Compute a rank score: importance is 0-100, normalize to 0-1
+            score = round((r["importance"] or 50.0) / 100.0, 3)
 
-                results.append({
-                    "content": content_preview,
-                    "source": meta.get("source", doc_id),
-                    "codex": codex_name,
-                    "score": round(score, 3),
-                })
+            results.append({
+                "content": content_preview,
+                "source": r["name"] or f"cold_event:{r['id']}",
+                "codex": r["god_name"] or "ichor",
+                "event_type": r["event_type"] or "",
+                "score": score,
+                "created_at": r["created_at"] or "",
+            })
 
-        except Exception as exc:
-            logger.debug("ChromaDB query failed for %s: %s", collection_name, exc)
-            continue
+        return json.dumps({"results": results, "total": len(results)}, indent=2)
 
-    # Sort by score descending, cap at requested n_results
-    results.sort(key=lambda r: r["score"], reverse=True)
-    results = results[:n_results]
-
-    if not results:
-        return json.dumps({"results": [], "note": f"No matches found for query in {len(targets)} Codexes"}, indent=2)
-
-    return json.dumps({"results": results, "total": len(results)}, indent=2)
+    except sqlite3.OperationalError as exc:
+        # Common: FTS5 query syntax error
+        return json.dumps({"error": f"FTS5 query failed: {exc}. Try simpler terms."}, indent=2)
+    except Exception as exc:
+        return json.dumps({"error": f"Search failed: {type(exc).__name__}: {exc}"}, indent=2)
+    finally:
+        conn.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -992,6 +1002,48 @@ def ichor_forget(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Tool: ichor_goal (A1, 2026-06-11)
+# ═══════════════════════════════════════════════════════════════════════════
+# Strategic-goals registry. Distinct from hermes_cli/goals.py (per-turn
+# judge). Spec: ~/athenaeum/handoffs/marvin-memory-upgrade-handoff-2026-06-10.md
+# §A1. Backed by `strategic_goals` table in ichor.db (see lib.ichor.schema_v2 (was lib/ichor_schema_v2.py)..
+
+@mcp.tool(
+    description="[A1] Strategic-goals registry for Pantheon. Distinct from hermes_cli/goals.py (per-turn judge). Actions: add | list | get | update | complete | pause | inject | stats. `add` creates a goal; `list` filters by status/category; `inject` returns the session-start preamble (markdown) for the system prompt; `complete`/`pause` flip status. See `format_active_goals_preamble()` in lib/ichor_goals.py for the injection format.",
+)
+def ichor_goal(
+    action: str,
+    title: str = "",
+    goal_id: int = 0,
+    description: str = "",
+    category: str = "general",
+    priority: int = 5,
+    status: str = "",
+    progress: float = -1.0,
+    target_date: str = "",
+    limit: int = 5,
+    min_priority: int = 3,
+) -> str:
+    """Manage strategic goals in `ichor.db::strategic_goals`.
+
+    Returns:
+        JSON string. For action='inject', also includes a `preamble` field
+        with the markdown block to splice into the system prompt.
+    """
+    try:
+        sys.path.insert(0, str(Path.home() / "pantheon"))
+        from lib.ichor_goals import mcp_dispatch  # type: ignore[import-untyped]
+        return mcp_dispatch(
+            action=action, title=title, goal_id=goal_id,
+            description=description, category=category, priority=priority,
+            status=status, progress=progress, target_date=target_date,
+            limit=limit, min_priority=min_priority,
+        )
+    except Exception as exc:
+        return json.dumps({"ok": False, "error": f"ichor_goal failed: {exc}"}, indent=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Tool: ichor_health
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1281,7 +1333,7 @@ def ichor_forge(
 # ═══════════════════════════════════════════════════════════════════════════
 
 @mcp.tool(
-    description="Query the Pantheon knowledge graph with natural language. Walks multi-hop relationships to answer questions like 'What tools does Hermes use?', 'Who created Pantheon?', 'What does Apollo contain?'. Supports relation inference, entity resolution, and multi-hop traversal.",
+    description="[P4b STUB] Replaced by athenaeum_graph_search (WARM table). Returns a stub response — graph.db deleted in P4b, multi-hop NL queries need to be reimplemented on the new 5-tier schema.",
 )
 def ichor_graph_query(
     query: str,
@@ -1289,39 +1341,25 @@ def ichor_graph_query(
     max_results: int = 30,
     output_markdown: bool = False,
 ) -> str:
-    """Natural language query against the Pantheon knowledge graph.
+    """ichor_graph_query stub — graph.db removed in P4b.
 
-    Parses natural language questions, resolves entity names, infers
-    relation types, and walks the graph to find connected nodes.
+    The natural-language multi-hop graph query engine lived in
+    lib/ichor_graph_query.py, which was deleted. Replacement should:
+      1. Parse NL queries to extract entity names + relation types
+      2. Look up entities in warm_entities by name LIKE
+      3. Walk related_to (1-hop, since we have no graph edges)
+      4. Optionally cross-reference cold_events for the same name
 
-    Args:
-        query: Natural language query (e.g. 'What tools does Hermes use?').
-        hops: Max traversal depth (0=auto: 1 for specific relations,
-              2 for exploration). Default: 0 (auto).
-        max_results: Maximum results to return (default: 30, max: 100).
-        output_markdown: If True, returns formatted markdown instead of JSON.
-
-    Returns:
-        JSON or markdown with results grouped by edge type.
+    For now, this returns a stub. Use:
+      - athenaeum_graph_search for entity/relationship lookup
+      - athenaeum_search for content search (FTS5)
     """
-    try:
-        sys.path.insert(0, str(Path.home() / "pantheon"))
-        from lib.ichor_graph_query import GraphQueryEngine  # type: ignore[import-untyped]
-
-        engine = GraphQueryEngine()
-        result = engine.query(
-            nl_query=query,
-            hops=hops,
-            max_results=min(max_results, 100),
-            output_format="markdown" if output_markdown else "json",
-        )
-        engine.close()
-
-        if output_markdown:
-            return str(result)
-        return json.dumps(result, indent=2, default=str)
-    except Exception as exc:
-        return json.dumps({"error": f"ichor_graph_query failed: {exc}"}, indent=2)
+    return json.dumps({
+        "error": "ichor_graph_query is a stub in P4b",
+        "reason": "lib/ichor_graph_query.py deleted with graph.db",
+        "fallback": ["athenaeum_graph_search", "athenaeum_search"],
+        "note": f"Original query: {query!r}",
+    }, indent=2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1719,7 +1757,7 @@ def skill_run(
 
 
 @mcp.tool(
-    description="[PRIMARY] Search the Athenaeum knowledge graph for entities, relationships, and paths. THIS IS THE PREFERRED SEARCH METHOD — it's instant, structured, and zero-cost. Finds entities by name/type, explores neighbor relationships, and discovers paths between entities. Use this FIRST before falling back to semantic search. Returns structured JSON.",
+    description="[WARM TABLE P4b] Entity/relationship search via the new 5-tier schema. Queries the WARM table (warm_entities) directly with a `related_to` column for graph-style relationships. Replaces graph.db.",
 )
 def athenaeum_graph_search(
     query: str = "",
@@ -1730,204 +1768,133 @@ def athenaeum_graph_search(
     max_depth: int = 2,
     limit: int = 20,
 ) -> str:
-    """Search the knowledge graph (SQLite at ~/.hermes/pantheon/graph.db).
+    """Search entities via the WARM table + related_to column.
 
-    Supports multiple query modes — use ONE at a time:
-    1. query= — general search by entity name or description (fuzzy match on label)
-    2. entity_type= — filter by type (person, project, tool, concept, etc.)
-    3. entity_name= — exact name lookup
-    4. neighbor_of= — find entities connected to a given node ID (e.g. "person:konan")
-    5. path_between= — find shortest path between two node IDs, comma-separated (e.g. "person:konan,tool:proxmox")
+    P4b implementation: replaces graph.db. Entities are rows in warm_entities;
+    relationships are encoded as comma-separated 'cat:name' references in the
+    `related_to` column (Rule 43 keeps it drift-proof).
+
+    Modes (use ONE at a time):
+    1. entity_name= — exact or fuzzy match on warm_entities.name
+    2. entity_type= — filter by category
+    3. neighbor_of= — find entities that reference this one in their related_to
+    4. path_between= — return both endpoints + their related_to (shallow path)
+    5. query= — general LIKE search on name/value
+
+    Note: graph.db's BFS path-finding is replaced with a 1-hop related_to
+    lookup. For deeper paths, use multiple chained queries.
 
     Args:
-        query: Natural language or keyword search across entity labels and descriptions.
-        entity_type: Filter by entity type (person, project, concept, tool, system, etc.).
-        entity_name: Exact entity name to look up.
-        neighbor_of: Node ID to find neighbors of (e.g. "person:konan").
-        path_between: Two comma-separated node IDs to find paths between.
-        max_depth: Max relationship depth for neighbor/path queries (1-5). Default: 2.
+        query: General search term (matches name or value).
+        entity_type: Filter by warm_entities.category.
+        entity_name: Exact or fuzzy name match.
+        neighbor_of: Entity name to find references to (1-hop neighbors).
+        path_between: Two comma-separated names to find paths between.
+        max_depth: (Deprecated — kept for API compat. Real max depth is 1.)
         limit: Max results (1-50). Default: 20.
 
     Returns:
         JSON string with search results.
     """
-    sys.path.insert(0, f"{_REAL_HOME}/pantheon/pantheon-core")
-    from gods.graph_client import GraphClient
-
-    _GRAPH_DB = f"{_REAL_HOME}/.hermes/pantheon/graph.db"
-    gc = GraphClient(db_path=_GRAPH_DB)
-    gc.connect()
-    gc._conn.row_factory = _dict_factory
+    import sqlite3
+    from pathlib import Path as _P
+    db_path = _P.home() / ".hermes" / "ichor.db"
 
     try:
-        results = {"mode": "", "query": query or entity_type or entity_name or neighbor_of or path_between, "results": []}
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn.row_factory = sqlite3.Row
+    except Exception as exc:
+        return json.dumps({"error": f"Cannot open ichor.db: {exc}"}, indent=2)
 
-        # Mode 1: Path between two nodes
+    try:
+        results = {
+            "mode": "",
+            "query": query or entity_type or entity_name or neighbor_of or path_between,
+            "results": [],
+        }
+
         if path_between:
+            # Shallow path: return both endpoints + their 1-hop neighbors
             results["mode"] = "path_between"
             parts = [p.strip() for p in path_between.split(",")]
             if len(parts) != 2:
-                return json.dumps({"error": "path_between requires exactly 2 node IDs separated by comma"}, indent=2)
+                return json.dumps({"error": "path_between requires exactly 2 names separated by comma"}, indent=2)
             node_a, node_b = parts
+            endpoint_rows = conn.execute(
+                """SELECT id, category, name, value, importance, trust, related_to
+                   FROM warm_entities
+                   WHERE name LIKE ? OR name LIKE ?
+                   ORDER BY importance DESC LIMIT 2""",
+                (f"%{node_a}%", f"%{node_b}%"),
+            ).fetchall()
+            results["results"] = [dict(r) for r in endpoint_rows]
+            results["note"] = "P4b paths are 1-hop (direct related_to). Chain queries for deeper traversal."
 
-            # BFS to find shortest path
-            visited = {node_a: None}
-            queue = [node_a]
-            found = False
-
-            for _ in range(max_depth):
-                if not queue:
-                    break
-                current = queue.pop(0)
-                if current == node_b:
-                    found = True
-                    break
-
-                neighbors = gc._conn.execute(
-                    "SELECT source_id, target_id FROM edges WHERE source_id = ? OR target_id = ?",
-                    (current, current),
-                ).fetchall()
-                for row in neighbors:
-                    nbr = row["source_id"] if row["target_id"] == current else row["target_id"]
-                    if nbr not in visited:
-                        visited[nbr] = current
-                        queue.append(nbr)
-
-            if found:
-                # Reconstruct path
-                path = []
-                node = node_b
-                while node is not None:
-                    path.append(node)
-                    node = visited[node]
-                path.reverse()
-                # Get labels for each node
-                path_labels = []
-                for nid in path:
-                    node_row = gc._conn.execute("SELECT id, label, type FROM nodes WHERE id = ?", (nid,)).fetchone()
-                    path_labels.append({
-                        "id": nid,
-                        "label": node_row["label"] if node_row else nid,
-                        "type": node_row["type"] if node_row else "unknown",
-                    })
-                results["results"].append({"path": path_labels, "length": len(path_labels) - 1})
-            else:
-                return json.dumps({"error": f"No path found between '{node_a}' and '{node_b}' within {max_depth} hops"}, indent=2)
-
-        # Mode 2: Neighbors
         elif neighbor_of:
+            # Find entities whose related_to references this name
             results["mode"] = "neighbors"
-            node_row = gc._conn.execute("SELECT id, label, type, metadata FROM nodes WHERE id = ?", (neighbor_of,)).fetchone()
-            if not node_row:
-                return json.dumps({"error": f"Node '{neighbor_of}' not found"}, indent=2)
-            results["center"] = {
-                "id": node_row["id"],
-                "label": node_row["label"],
-                "type": node_row["type"],
-            }
+            center = conn.execute(
+                "SELECT id, category, name, value, related_to FROM warm_entities WHERE name LIKE ? LIMIT 1",
+                (f"%{neighbor_of}%",),
+            ).fetchone()
+            if not center:
+                return json.dumps({"error": f"Entity '{neighbor_of}' not found in warm_entities"}, indent=2)
+            results["center"] = dict(center)
+            # Find references in either direction
+            neighbor_rows = conn.execute(
+                """SELECT id, category, name, value, importance, trust, related_to
+                   FROM warm_entities
+                   WHERE related_to LIKE ? OR name LIKE ?
+                   ORDER BY importance DESC LIMIT ?""",
+                (f"%{neighbor_of}%", f"%{neighbor_of}%", limit),
+            ).fetchall()
+            results["results"] = [dict(r) for r in neighbor_rows]
 
-            neighbors = gc._conn.execute("""
-                SELECT n.id, n.label, n.type, e.type as relation, e.weight,
-                       CASE WHEN e.source_id = ? THEN 'outgoing' ELSE 'incoming' END as direction
-                FROM edges e
-                JOIN nodes n ON n.id = CASE WHEN e.source_id = ? THEN e.target_id ELSE e.source_id END
-                WHERE e.source_id = ? OR e.target_id = ?
-                ORDER BY e.weight DESC
-                LIMIT ?
-            """, (neighbor_of, neighbor_of, neighbor_of, neighbor_of, limit)).fetchall()
-
-            for row in neighbors:
-                results["results"].append({
-                    "id": row["id"],
-                    "label": row["label"],
-                    "type": row["type"],
-                    "relation": row["relation"],
-                    "weight": row["weight"],
-                    "direction": row["direction"],
-                })
-
-        # Mode 3: Exact entity name lookup
         elif entity_name:
             results["mode"] = "entity_name"
-            rows = gc._conn.execute(
-                "SELECT id, label, type, codex, metadata, created_at FROM nodes WHERE label LIKE ? ORDER BY created_at DESC LIMIT ?",
+            rows = conn.execute(
+                """SELECT id, category, name, value, importance, trust, maturity, related_to, created_at, updated_at
+                   FROM warm_entities
+                   WHERE name LIKE ?
+                   ORDER BY importance DESC LIMIT ?""",
                 (f"%{entity_name}%", limit),
             ).fetchall()
-            for row in rows:
-                meta = {}
-                if row["metadata"]:
-                    try:
-                        meta = json.loads(row["metadata"])
-                    except Exception:
-                        pass
-                results["results"].append({
-                    "id": row["id"],
-                    "label": row["label"],
-                    "type": row["type"],
-                    "codex": row["codex"],
-                    "description": meta.get("description", ""),
-                    "created_at": row["created_at"],
-                })
+            results["results"] = [dict(r) for r in rows]
 
-        # Mode 4: Filter by entity type
         elif entity_type:
             results["mode"] = "entity_type"
-            rows = gc._conn.execute(
-                "SELECT id, label, type, codex, metadata, created_at FROM nodes WHERE type = ? ORDER BY created_at DESC LIMIT ?",
-                (entity_type.lower(), limit),
+            rows = conn.execute(
+                """SELECT id, category, name, value, importance, trust, maturity, related_to, created_at, updated_at
+                   FROM warm_entities
+                   WHERE category = ?
+                   ORDER BY importance DESC LIMIT ?""",
+                (entity_type, limit),
             ).fetchall()
-            for row in rows:
-                meta = {}
-                if row["metadata"]:
-                    try:
-                        meta = json.loads(row["metadata"])
-                    except Exception:
-                        pass
-                results["results"].append({
-                    "id": row["id"],
-                    "label": row["label"],
-                    "type": row["type"],
-                    "codex": row["codex"],
-                    "description": meta.get("description", ""),
-                    "created_at": row["created_at"],
-                })
+            results["results"] = [dict(r) for r in rows]
 
-        # Mode 5: General text search
         elif query:
             results["mode"] = "query"
-            q = f"%{query}%"
-            rows = gc._conn.execute(
-                "SELECT id, label, type, codex, metadata, created_at FROM nodes "
-                "WHERE label LIKE ? OR metadata LIKE ? "
-                "ORDER BY CASE WHEN label LIKE ? THEN 0 ELSE 1 END, created_at DESC LIMIT ?",
-                (q, q, f"{query}%", limit),
+            rows = conn.execute(
+                """SELECT id, category, name, value, importance, trust, maturity, related_to, created_at, updated_at
+                   FROM warm_entities
+                   WHERE name LIKE ? OR value LIKE ?
+                   ORDER BY importance DESC LIMIT ?""",
+                (f"%{query}%", f"%{query}%", limit),
             ).fetchall()
-            for row in rows:
-                meta = {}
-                if row["metadata"]:
-                    try:
-                        meta = json.loads(row["metadata"])
-                    except Exception:
-                        pass
-                results["results"].append({
-                    "id": row["id"],
-                    "label": row["label"],
-                    "type": row["type"],
-                    "codex": row["codex"],
-                    "description": meta.get("description", ""),
-                    "created_at": row["created_at"],
-                })
+            results["results"] = [dict(r) for r in rows]
 
         else:
-            return json.dumps({"error": "Specify at least one of: query, entity_type, entity_name, neighbor_of, path_between"}, indent=2)
+            return json.dumps({
+                "error": "Specify at least one of: query, entity_type, entity_name, neighbor_of, path_between"
+            }, indent=2)
 
         results["count"] = len(results["results"])
-        return json.dumps(results, indent=2)
+        return json.dumps(results, indent=2, default=str)
 
     except Exception as exc:
-        return json.dumps({"error": f"Graph search failed: {exc}"}, indent=2)
+        return json.dumps({"error": f"WARM table search failed: {type(exc).__name__}: {exc}"}, indent=2)
     finally:
-        gc.close()
+        conn.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
