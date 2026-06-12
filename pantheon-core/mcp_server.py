@@ -1374,31 +1374,45 @@ def ichor_graph_query(
             "fallback": "athenaeum_graph_search",
         }, indent=2)
 
-    # Resolve query → entity name via the existing WARM-table search.
-    # This is a best-effort fuzzy match; if it fails we still try the
-    # raw query against the ER layer, then give up cleanly.
+    # Resolve query → entity name. Two-stage lookup:
+    #   1. entities.name (clean L1/L2-extracted entities, ER-P1+)
+    #   2. warm_entities.name LIKE (noisy P4b fragments, fallback only)
+    # The previous single-stage warm_entities lookup was the bottleneck
+    # that made every query return 0/0: warm_entities is full of
+    # sentence fragments, so LIKE 'Marvin' matched a fragment that
+    # wasn't in the new entities table.
     resolved_name = None
     resolution_source = None
     try:
-        import urllib.request as _urlreq
-        import urllib.parse as _urlparse
-        params = _urlparse.urlencode({"query": query, "limit": 5})
-        # The MCP server itself listens on 127.0.0.1:8010 — but calling
-        # ourselves over HTTP would loop. Instead, replicate the lookup
-        # inline using the same WARM table the search tool uses.
         from lib.ichor.entities.schema import get_conn as _resolve_conn  # type: ignore[import-untyped]
         _rc = _resolve_conn()
         try:
-            # warm_entities columns: name, importance, trust, related_to
-            # (no `confidence` column — the package spec used different naming)
+            # Stage 1: exact or prefix match against clean entities.
+            # The new ER layer stores the names that graph_query can
+            # actually walk, so this is the high-precision path.
             _row = _rc.execute(
-                "SELECT name FROM warm_entities WHERE name LIKE ? "
-                "ORDER BY importance DESC, trust DESC LIMIT 1",
-                (f"%{query}%",),
+                "SELECT name FROM entities "
+                "WHERE name = ? OR name LIKE ? "
+                "ORDER BY confidence DESC LIMIT 1",
+                (query, f"{query}%"),
             ).fetchone()
             if _row:
                 resolved_name = _row[0]
-                resolution_source = "warm_entities_like"
+                resolution_source = "entities_exact_or_prefix"
+            else:
+                # Stage 2: substring fallback against warm_entities
+                # (noisy but covers entities that haven't been promoted
+                # to the new layer yet).
+                # warm_entities columns: name, importance, trust, related_to
+                # (no `confidence` column — the package spec used different naming)
+                _row = _rc.execute(
+                    "SELECT name FROM warm_entities WHERE name LIKE ? "
+                    "ORDER BY importance DESC, trust DESC LIMIT 1",
+                    (f"%{query}%",),
+                ).fetchone()
+                if _row:
+                    resolved_name = _row[0]
+                    resolution_source = "warm_entities_like"
         finally:
             _rc.close()
     except Exception as exc:
@@ -1459,6 +1473,208 @@ def ichor_graph_query(
                 f"{e.get('target', '?')} (conf={e.get('confidence', '?')})"
             )
         return "\n".join(lines)
+
+    return json.dumps(result, indent=2, default=str)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tool: ichor_l2_stats
+# ═══════════════════════════════════════════════════════════════════════════
+
+@mcp.tool(
+    description="Read-only stats on the L2 entity/relationship extractor (ER-P2). Shows how many provisional entities and relationships exist, how many LLM extractions have been logged, and how many distinct types are in use. Cheap — pure SQL count queries against the live ichor.db."
+)
+def ichor_l2_stats() -> str:
+    """L2 extraction stats. No side effects.
+
+    Returns:
+        JSON with: llm_extractions_logged, provisional_entities,
+        provisional_relationships, llm_entity_types. Plus a
+        derivation from cold_events count for context.
+    """
+    try:
+        from lib.ichor.entities import l2_stats as _l2_stats  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+        }, indent=2)
+
+    try:
+        conn = _get_conn()
+        try:
+            stats = _l2_stats(conn)
+            # Augment with raw table counts for context
+            stats["_raw_counts"] = {
+                "entities": conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0],
+                "entity_facts": conn.execute("SELECT COUNT(*) FROM entity_facts").fetchone()[0],
+                "entity_types": conn.execute("SELECT COUNT(*) FROM entity_types").fetchone()[0],
+                "relationships": conn.execute("SELECT COUNT(*) FROM relationships").fetchone()[0],
+                "relationship_types": conn.execute("SELECT COUNT(*) FROM relationship_types").fetchone()[0],
+                "extraction_log": conn.execute("SELECT COUNT(*) FROM extraction_log").fetchone()[0],
+                "cold_events": conn.execute("SELECT COUNT(*) FROM cold_events").fetchone()[0],
+            }
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "l2_stats_failed",
+            "detail": str(exc),
+        }, indent=2)
+
+    return json.dumps(stats, indent=2, default=str)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tool: ichor_extract_entities
+# ═══════════════════════════════════════════════════════════════════════════
+
+@mcp.tool(
+    description="Run one incremental pass of the L2 LLM entity/relationship extractor (ER-P2). Reads up to `batch_size` cold events past `last_event_id`, calls the configured LLM, stores extracted entities + relationships as provisional. Use `dry_run=true` to build the prompt without calling the LLM (debug). Without an API key in the env, returns a clean error envelope rather than crashing."
+)
+def ichor_extract_entities(
+    last_event_id: int = 0,
+    batch_size: int = 25,
+    provider: str = "minimax",
+    model: str = "",
+    dry_run: bool = False,
+    session_id: str = "",
+) -> str:
+    """Run one L2 extraction pass.
+
+    Args:
+        last_event_id: Process cold events with id > this. Use the
+            highest id from a prior `ichor_extract_entities` call's
+            `last_event_id_after`, or 0 to start fresh.
+        batch_size: Cap on events per call. Default 25 (matches the
+            package's "every 25 turns" cadence). Max 200.
+        provider: Hermes provider name (must exist in
+            ~/.hermes/config.yaml providers.<name>). Default
+            "minimax" — the active profile.
+        model: Optional model override. Default = provider's
+            default_model from config.
+        dry_run: If True, build the prompt and return it without
+            calling the LLM. Useful for debugging the prompt
+            construction and validating the wiring.
+        session_id: Optional tag stored with extraction_log entries
+            so you can correlate runs to sessions.
+
+    Returns:
+        JSON with: events_in_batch, last_event_id_after, stored
+        counts (entity_types_created, rel_types_created,
+        entities_created, relationships_created,
+        extraction_logs_inserted), and any parse_warnings from the
+        LLM response. On error: structured error envelope.
+    """
+    # Clamp batch_size to a sensible upper bound.
+    batch_size = max(1, min(int(batch_size or 25), 200))
+
+    try:
+        from lib.ichor.entities import extract_incremental  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
+        from lib.ichor.llm import _resolve_llm_provider  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+        }, indent=2)
+
+    # Resolve provider config from Hermes. The package's
+    # extract_incremental requires a non-None provider_cfg.
+    provider_cfg = _resolve_llm_provider("marvin") or _resolve_llm_provider(provider)
+    if not isinstance(provider_cfg, dict):
+        return json.dumps({
+            "error": "llm_provider_not_configured",
+            "provider": provider,
+            "fix": f"Add a `providers.{provider}` block to ~/.hermes/config.yaml with api/default_model/api_key, "
+                   f"or set the {provider.upper()}_API_KEY env var.",
+        }, indent=2)
+
+    # Surface the no-key condition explicitly so callers don't see a
+    # 401 buried in a stack trace.
+    import os as _os
+    api_key = provider_cfg.get("api_key") or _os.environ.get(
+        f"{(provider_cfg.get('name') or provider).upper()}_API_KEY", ""
+    )
+    if not api_key:
+        return json.dumps({
+            "error": "llm_provider_no_api_key",
+            "provider": provider_cfg.get("name", provider),
+            "api_base": provider_cfg.get("api", ""),
+            "default_model": provider_cfg.get("default_model", ""),
+            "fix": f"Set the {(provider_cfg.get('name') or provider).upper()}_API_KEY env var, "
+                   f"or add api_key to providers.{provider} in ~/.hermes/config.yaml.",
+            "hint": "Re-run with dry_run=true to validate wiring without a key.",
+        }, indent=2)
+
+    if dry_run:
+        # Build the prompt that _would_ go to the LLM, return it
+        # without calling. Useful for debugging the prompt shape
+        # and for confirming the wiring reaches extract_batch.
+        try:
+            from lib.ichor.entities.l2_llm import build_prompt, _events_for_batch  # type: ignore[import-untyped]
+        except Exception as exc:
+            return json.dumps({
+                "error": "dry_run_import_failed",
+                "detail": str(exc),
+            }, indent=2)
+        try:
+            conn = _get_conn()
+            try:
+                rows = _events_for_batch(conn, int(last_event_id), batch_size)
+            finally:
+                conn.close()
+        except Exception as exc:
+            return json.dumps({
+                "error": "dry_run_fetch_failed",
+                "detail": str(exc),
+            }, indent=2)
+        if not rows:
+            return json.dumps({
+                "dry_run": True,
+                "events_in_batch": 0,
+                "last_event_id_before": last_event_id,
+                "last_event_id_after": last_event_id,
+                "skipped": "no events past last_event_id",
+            }, indent=2)
+        texts = [r["raw_text"] for r in rows]
+        prompt = build_prompt(texts)
+        return json.dumps({
+            "dry_run": True,
+            "events_in_batch": len(rows),
+            "last_event_id_before": last_event_id,
+            "last_event_id_after": int(rows[-1]["id"]),
+            "prompt_chars": len(prompt),
+            "prompt_preview": prompt[:500] + ("..." if len(prompt) > 500 else ""),
+            "would_call": {
+                "provider": provider_cfg.get("name", provider),
+                "api": provider_cfg.get("api", ""),
+                "model": model or provider_cfg.get("default_model", ""),
+            },
+        }, indent=2)
+
+    # Real call path.
+    try:
+        conn = _get_conn()
+        try:
+            result = extract_incremental(
+                conn,
+                last_event_id=int(last_event_id),
+                batch_size=batch_size,
+                provider_cfg=provider_cfg,
+                model=model or None,
+                session_id=session_id or None,
+            )
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "extract_incremental_failed",
+            "last_event_id": last_event_id,
+            "batch_size": batch_size,
+            "detail": str(exc),
+        }, indent=2)
 
     return json.dumps(result, indent=2, default=str)
 
