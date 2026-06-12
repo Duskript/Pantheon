@@ -153,11 +153,15 @@ async def _send_telegram_alert(text: str, chat_id: str = DEFAULT_TELEGRAM_CHAT_I
         def _post():
             req = urllib.request.Request(url, data=data, method="POST")
             with urllib.request.urlopen(req, timeout=10) as r:
-                return r.status
-        status = await asyncio.get_event_loop().run_in_executor(None, _post)
-        return status == 200
+                return r.status, r.read()[:200].decode("utf-8", errors="replace")
+        status, body = await asyncio.get_event_loop().run_in_executor(None, _post)
+        if status == 200:
+            log.info(f"telegram alert sent (status=200, chat_id={chat_id}, len={len(text)}ch)")
+            return True
+        log.warning(f"telegram alert non-200: status={status} body={body[:120]}")
+        return False
     except Exception as e:
-        log.warning(f"telegram alert failed: {e}")
+        log.warning(f"telegram alert failed: {type(e).__name__}: {e}")
         return False
 
 
