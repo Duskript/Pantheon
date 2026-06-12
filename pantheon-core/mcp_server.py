@@ -1679,6 +1679,81 @@ def ichor_extract_entities(
     return json.dumps(result, indent=2, default=str)
 
 
+@mcp.tool(
+    description="Finalize an L2 entity/relationship extraction session. Flips provisional=1 → 0 for entities/relationships created in this session, so they become part of the canonical graph. Use after a long extraction run (e.g., ichor_extract_entities over many batches) to commit the results. Without an LLM API key in the env, returns a clean error envelope rather than crashing."
+)
+def ichor_l2_finalize(
+    last_event_id: int = 0,
+    provider: str = "opencode-go",
+    model: str = "deepseek-v4-flash",
+    session_id: str = "l2-finalize",
+) -> str:
+    """Finalize an L2 extraction session.
+
+    Flips provisional=1 → 0 for any entities/relationships whose
+    most recent extraction_log row falls in the residual range
+    (past last_event_id). Use this after a long incremental
+    extraction (e.g., 700+ batches) to commit the results to the
+    canonical graph.
+
+    Args:
+        last_event_id: The id used as the upper bound of the prior
+            extraction. The finalize pass processes events with id
+            > last_event_id as non-provisional residuals, then flips
+            provisional=1 rows from prior runs in the same session
+            to provisional=0.
+        provider: LLM provider name (must exist in
+            ~/.hermes/config.yaml). Default "opencode-go".
+        model: Model name. Default "deepseek-v4-flash".
+        session_id: Tag for the finalization pass's extraction_log
+            entries. Default "l2-finalize".
+
+    Returns:
+        JSON with: events_processed, entities_flipped, relationships_flipped,
+        residual_counts (entities_created, relationships_created), parse_warnings.
+    """
+    try:
+        from lib.ichor.entities import finalize  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
+        from lib.ichor.llm import _resolve_llm_provider  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+        }, indent=2)
+
+    # Resolve provider config.
+    provider_cfg = _resolve_llm_provider("marvin") or _resolve_llm_provider(provider)
+    if not isinstance(provider_cfg, dict):
+        return json.dumps({
+            "error": "llm_provider_not_configured",
+            "provider": provider,
+            "fix": f"Add a `providers.{provider}` block to ~/.hermes/config.yaml with api/default_model/api_key, "
+                   f"or set the {provider.upper()}_API_KEY env var.",
+        }, indent=2)
+
+    try:
+        conn = _get_conn()
+        try:
+            result = finalize(
+                conn,
+                last_event_id=int(last_event_id),
+                provider_cfg=provider_cfg,
+                model=model or None,
+                session_id=session_id or None,
+            )
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "finalize_failed",
+            "last_event_id": last_event_id,
+            "detail": str(exc),
+        }, indent=2)
+
+    return json.dumps(result, indent=2, default=str)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Tool: system_health
 # ═══════════════════════════════════════════════════════════════════════════
