@@ -73,22 +73,43 @@ PROVIDER_KEY_ENV = "OPENCODE_GO_API_KEY"
 
 
 def _load_api_key() -> str:
-    """Resolve the provider's API key from env or profile .env files.
+    """Resolve the provider's API key from env or .env files.
 
-    Order:
-      1. $PROVIDER_KEY_ENV env var (e.g. OPENCODE_GO_API_KEY)
-      2. ~/.hermes/profiles/marvin/.env
-      3. ~/.hermes/profiles/hephaestus/.env
-      4. ~/.hermes/profiles/thoth/.env
-      5. ~/.hermes/profiles/iris/.env
-      6. ~/.hermes/profiles/apollo/.env
-      7. ~/.hermes/.env
+    Order (revised 2026-06-12 after the first L2 run hit a 401):
+      1. $PROVIDER_KEY_ENV env var
+      2. ~/.hermes/.env (GLOBAL, canonical source)
+      3. ~/.hermes/profiles/marvin/.env (profile override)
+      4. ~/.hermes/profiles/hephaestus/.env
+      5. ~/.hermes/profiles/thoth/.env
+      6. ~/.hermes/profiles/iris/.env
+      7. ~/.hermes/profiles/apollo/.env
+
+    The previous order (profile .envs first) picked up a stale key
+    in the profile .envs (sk-7SXlK...) that was unauthorized for
+    opencode-go. The active working key lives in ~/.hermes/.env
+    (sk-Q75TD...). Profile .envs are now treated as overrides that
+    only fire when the global is missing.
     """
-    # 1. direct env var (use the configured env name, not hardcoded)
+    # 1. direct env var
     key = os.environ.get(PROVIDER_KEY_ENV, "").strip()
     if key:
         return key
-    # 2-6. profile .env files in priority order
+    # 2. ~/.hermes/.env first (the global canonical key)
+    global_env = _REAL_HOME / ".hermes" / ".env"
+    if global_env.is_file():
+        try:
+            for line in global_env.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                if k.strip() == PROVIDER_KEY_ENV:
+                    v = v.strip().strip("\"'")
+                    if v:
+                        return v
+        except Exception:
+            pass
+    # 3-7. profile .envs as fallback
     for profile in ["marvin", "hephaestus", "thoth", "iris", "apollo"]:
         env_file = _REAL_HOME / ".hermes" / "profiles" / profile / ".env"
         if env_file.is_file():
@@ -104,21 +125,6 @@ def _load_api_key() -> str:
                             return v
             except Exception:
                 pass
-    # 7. ~/.hermes/.env fallback
-    global_env = _REAL_HOME / ".hermes" / ".env"
-    if global_env.is_file():
-        try:
-            for line in global_env.read_text().splitlines():
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                k, v = line.split("=", 1)
-                if k.strip() == PROVIDER_KEY_ENV:
-                    v = v.strip().strip("\"'")
-                    if v:
-                        return v
-        except Exception:
-            pass
     return ""
 
 
