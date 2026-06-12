@@ -1,0 +1,32 @@
+[Unit]
+Description=Clawforge Proxy v0.1.0
+Documentation=https://github.com/konan/clawforge
+After=network-online.target
+Wants=network-online.target
+# Cap restart rate so we don't loop on a misconfigured proxy
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# Runs as the invoking user; replace __USER__ at install time (see INSTALL.md)
+User=__USER__
+WorkingDirectory=/home/__USER__
+ExecStart=/home/__USER__/.hermes/hermes-agent/venv/bin/python3 /home/__USER__/pantheon/scripts/clawforge-proxy.py --config /home/__USER__/.hermes/clawforge.yaml daemon
+Restart=on-failure
+RestartSec=10
+# Allow time for graceful shutdown on stop
+TimeoutStopSec=15
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/home/__USER__/.hermes/clawforge
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
