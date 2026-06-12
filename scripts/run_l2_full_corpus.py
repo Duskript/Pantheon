@@ -54,19 +54,41 @@ if _PANTHEON_ROOT not in sys.path:
 _REAL_HOME = Path("/home/konan")
 ICHOR_DB = _REAL_HOME / ".hermes" / "ichor.db"
 
-# Provider config — MiniMax (the active profile's default)
-PROVIDER_NAME = "minimax"
-PROVIDER_API = "https://api.minimax.io/v1"
-PROVIDER_DEFAULT_MODEL = "MiniMax-M3"
+# Provider config — opencode-go (NOT ollama-launch, NOT minimax)
+# API: https://opencode.ai/zen/go/v1 (OpenAI-compatible)
+# Models: deepseek-v4-flash, deepseek-v4-pro, kimi-k2.6, glm-5.1,
+#         minimax-m3, etc. (per ~/.hermes/provider_models_cache.json)
+# Env var for API key: OPENCODE_GO_API_KEY
+# Key location: ~/.hermes/.env (also in profile .envs as fallback)
+# $10/month subscription via https://opencode.ai/auth
+#
+# The provider's `name` would resolve to OPENCODE_API_KEY in the
+# package's env-var fallback; we pass the key directly in provider_cfg
+# to bypass that mismatch. The same key is what auth.json's
+# credential_pool.opencode-go[0] uses.
+PROVIDER_NAME = "opencode-go"
+PROVIDER_API = "https://opencode.ai/zen/go/v1"
+PROVIDER_DEFAULT_MODEL = "deepseek-v4-flash"
+PROVIDER_KEY_ENV = "OPENCODE_GO_API_KEY"
 
 
 def _load_api_key() -> str:
-    """Resolve MiniMax API key from env or profile .env files."""
-    # 1. direct env var
-    key = os.environ.get("MINIMAX_API_KEY", "").strip()
+    """Resolve the provider's API key from env or profile .env files.
+
+    Order:
+      1. $PROVIDER_KEY_ENV env var (e.g. OPENCODE_GO_API_KEY)
+      2. ~/.hermes/profiles/marvin/.env
+      3. ~/.hermes/profiles/hephaestus/.env
+      4. ~/.hermes/profiles/thoth/.env
+      5. ~/.hermes/profiles/iris/.env
+      6. ~/.hermes/profiles/apollo/.env
+      7. ~/.hermes/.env
+    """
+    # 1. direct env var (use the configured env name, not hardcoded)
+    key = os.environ.get(PROVIDER_KEY_ENV, "").strip()
     if key:
         return key
-    # 2. profile .env files in priority order
+    # 2-6. profile .env files in priority order
     for profile in ["marvin", "hephaestus", "thoth", "iris", "apollo"]:
         env_file = _REAL_HOME / ".hermes" / "profiles" / profile / ".env"
         if env_file.is_file():
@@ -76,13 +98,13 @@ def _load_api_key() -> str:
                     if not line or line.startswith("#") or "=" not in line:
                         continue
                     k, v = line.split("=", 1)
-                    if k.strip() == "MINIMAX_API_KEY":
+                    if k.strip() == PROVIDER_KEY_ENV:
                         v = v.strip().strip("\"'")
                         if v:
                             return v
             except Exception:
                 pass
-    # 3. ~/.hermes/.env fallback
+    # 7. ~/.hermes/.env fallback
     global_env = _REAL_HOME / ".hermes" / ".env"
     if global_env.is_file():
         try:
@@ -91,7 +113,7 @@ def _load_api_key() -> str:
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 k, v = line.split("=", 1)
-                if k.strip() == "MINIMAX_API_KEY":
+                if k.strip() == PROVIDER_KEY_ENV:
                     v = v.strip().strip("\"'")
                     if v:
                         return v
@@ -359,7 +381,13 @@ def main():
         texts = [r["raw_text"] for r in rows]
         prompt = build_prompt(texts)
         print(f"\n=== DRY RUN ===")
-        print(f"would call: provider=minimax model={PROVIDER_DEFAULT_MODEL}")
+        # Bug fix: provider=minimax was hardcoded here, lying about which
+        # provider the real run would call. Use the module-level
+        # constants so dry-run, status, and the real run all agree.
+        print(
+            f"would call: provider={PROVIDER_NAME} "
+            f"model={PROVIDER_DEFAULT_MODEL} api={PROVIDER_API}"
+        )
         print(f"events in first batch: {len(rows)}")
         print(f"prompt chars: {len(prompt)}")
         print(f"prompt preview (first 800 chars):\n{prompt[:800]}")
