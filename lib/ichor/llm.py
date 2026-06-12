@@ -223,6 +223,13 @@ def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
 
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
+    # Cloudflare (which fronts opencode.ai and many other LLM gateways)
+    # rejects requests with no User-Agent as bot traffic (error 1010).
+    # Set a recognizable UA so the package works against CF-fronted
+    # endpoints out of the box. Discovered 2026-06-12 while running
+    # the L2 full-corpus loop — the opencode-go endpoint returned 403
+    # until we added this header.
+    req.add_header("User-Agent", "pantheon-ichor/1.0 (lib.ichor.llm)")
     if api_key:
         req.add_header("Authorization", f"Bearer {api_key}")
 
