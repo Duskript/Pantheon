@@ -425,5 +425,7 @@ ${YELLOW}  Next steps:${NC}
     1. Add API keys to ${CYAN}~/pantheon/.env${NC} (at least one LLM provider)
     2. Browse the Welcome Wizard that just opened
     3. Open the Web UI and forge your first God
+    4. ${BOLD}Enterprise / multi-instance install?${NC} See ${CYAN}$PANTHEON_DIR/docs/TALLON_INSTALL.md${NC}
+       (covers Hermes 0.16 memory activation + Clawforge connect for Tallon and similar)
 
 EOF
