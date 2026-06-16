@@ -1,11 +1,11 @@
 plan_id: phase-4-quarantine-sovereign
 parent: conductor-v2
 status: in_progress
-current_step: "4.4.briefs.brief_3_of_3"
-next_step: "4.5.briefs.brief_1_of_3"
+current_step: "4.5.briefs.brief_3_of_3"
+next_step: "4.6.briefs.brief_1_of_1"
 steps_total: 7
-steps_done: 4
-steps_pending: 3
+steps_done: 5
+steps_pending: 2
 gods_involved: [marvin, thoth, hephaestus]
 
 steps:
@@ -70,17 +70,19 @@ steps:
       - "Possibly: ~/.config/systemd/user/hermes-gateway-*.service (if hook needs to be in service file)"
   - id: "4.5"
     title: "Heuristic .archive/ cleanup (6 hephaestus entries)"
-    status: pending
+    status: DONE
     god: hephaestus
     qa: thoth
+    completed_at: "2026-06-16"
+    verdict: SHIP
     briefs_planned: 3
     briefs:
-      - brief_1_of_3: "Build deliverable: audit the 6 hephaestus .archive/ entries (capture-idea, js-regex-escaping, pantheon-god-bot-setup, pantheon-mcp-server, pantheon-system-migration, pantheon-wsl-networking)"
-      - brief_2_of_3: "Dependency-ordered follow-on: remove (if obsolete) or promote to canonical (if still useful)"
-      - brief_3_of_3: "Verification: find returns 0 obsolete .archive/ entries"
+      - brief_1_of_3: "Audit the 6 entries — SHIPPED (6/6 OBSOLETE; curator 2026-05-06 already merged 5/6 into pantheon-god-architecture/references/)"
+      - brief_2_of_3: "Remove the 6 entries — SHIPPED v1 BLOCKED at V4 (backup missing), v2 SHIPPED after operator created backup (Option A); 6 dirs removed, 11 files (6 SKILL.md + 5 supplementary) preserved at athenaeum/Codex-God-hephaestus/.archive/"
+      - brief_3_of_3: "Verification — SHIPPED (9/9 checks pass: pre/post symlink count delta=0, hephaestus gateway active, bootstrap ran with missing_total=0/failed=0, pytest 200/1-skip/0-fail, bash 12/12, direct detector exit 0)"
     success_criteria:
       - "6 .archive/ entries either removed (if obsolete) or promoted to canonical (if still useful)"
-    verification: "find ~/.hermes/profiles/hephaestus -name SKILL.md -path '*.archive/*' returns 0 (or 0 non-redundant entries)"
+    verification: "find ~/.hermes/profiles/hephaestus -name SKILL.md -path '*.archive/*' returns 0 (post-Brief 2 + post-Brief 3); pytest 200/1-skip/0-fail; symlink count 1126 pre/post restart"
     out_of_scope:
       - "Per-profile SKILL.md in non-.archive/ paths"
     reversibility: "git history + the original 6 files are in athenaeum/Codex-God-hephaestus/.archive/ backups"
