@@ -527,6 +527,16 @@ class WorkflowStep:
     # (workflow_validator.py) for any step whose subject matches
     # SOVEREIGN_OUTBOUND_RE. See the 2026-06-15 sovereign-NATS breach incident.
     operator_approval_required: bool = False
+    # --- Step 4.9 (Brief 1, 2026-06-16): cli_tool step type ---
+    # `cli_tool` step fields: which registered tool to invoke, the input
+    # contract (prompt, working_dir, env, session_id, resume, timeout, stream),
+    # and on_error config (retry policy + final-failure action). Per Thoth's
+    # spec §2.1, §7.3, and the 2026-06-16-step-4.7 decision log. The actual
+    # subprocess invocation lives in cli_tool.py; the engine just dispatches
+    # and stores the output.
+    tool: Optional[str] = None  # which registered tool (claude-code, codex, etc.)
+    tool_input: dict[str, Any] = field(default_factory=dict)  # {prompt, working_dir, env, session_id, resume, timeout, stream}
+    on_error: dict[str, Any] = field(default_factory=dict)  # {retry: {max_attempts, backoff, backoff_base_seconds}, on_final_failure: <action>}
 
 
 # Maximum nesting depth for `parallel` steps. Spec §9 Q2 recommendation:
@@ -632,6 +642,15 @@ class Workflow:
             # field on the WorkflowStep dataclass. Default is False —
             # workflows that don't set it are assumed non-sovereign.
             operator_approval_required=bool(s.get("operator_approval_required", False)),
+            # Step 4.9 — cli_tool step fields (Brief 1, 2026-06-16).
+            # `tool` names a registered CLI tool (claude-code, codex, etc.);
+            # `tool_input` carries the prompt/working_dir/env/session_id
+            # contract per Thoth spec §2.1; `on_error` carries the retry
+            # policy + final-failure action per spec §7.3. All default to
+            # None / empty dicts so existing workflows are unaffected.
+            tool=s.get("tool"),
+            tool_input=dict(s.get("tool_input", {}) or {}),
+            on_error=dict(s.get("on_error", {}) or {}),
         )
 
     def step_by_id(self, step_id: str) -> Optional[WorkflowStep]:
@@ -955,6 +974,13 @@ class ConductorEngine:
                 await self._exec_parallel(inst, wf, step)
             elif step.type == "merge":
                 await self._exec_merge(inst, wf, step)
+            elif step.type == "cli_tool":
+                # Step 4.9 (Brief 1, 2026-06-16): dispatch to the
+                # subprocess-invocation orchestrator. The actual
+                # subprocess work happens in cli_tool.py; this method
+                # wraps it with timeout, retry, output capture, and
+                # step-history recording.
+                await self._exec_cli_tool(inst, wf, step)
             else:
                 # default branch: god_dispatch (back-compat for
                 # existing step definitions that omit `type:`)
@@ -1243,6 +1269,114 @@ class ConductorEngine:
             return json.loads(stdout)
         except json.JSONDecodeError as e:
             return {"text": stdout, "error": f"llm subprocess returned non-JSON: {e}"}
+
+    # ----- cli_tool step executor -----
+
+    async def _exec_cli_tool(
+        self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
+    ) -> None:
+        """Execute a `type: cli_tool` step (subprocess invocation).
+
+        Per Thoth's spec §2.1, §7.3. The actual subprocess work happens
+        in `cli_tool.run_cli_tool` (synchronous). This method wraps it
+        with: (1) tool resolution, (2) timeout enforcement, (3) output
+        capture + structured parsing, (4) retry policy per on_error,
+        (5) step-history recording (in_progress → completed/failed),
+        (6) output stored at workflow context_bag for downstream steps.
+
+        The `in_progress` history entry was already appended by
+        `_execute_step` before this method runs (mirrors the god_dispatch
+        and nats_publish patterns). We update its `god` field to the
+        tool name so audit trails show which CLI was invoked.
+
+        Failure modes (mirrors `_exec_nats_publish`):
+          - ValueError if `step.tool` is missing (caller bug)
+          - CliToolNotFoundError (binary not on PATH) — fail fast
+          - CliToolTimeoutError (subprocess timeout) — fail fast
+          - CliToolError (non-zero exit after all retries) — recorded
+            as failed; if abort_on_fail, the workflow is aborted
+        """
+        if not step.tool:
+            raise ValueError(f"cli_tool step {step.id!r} has no `tool` field")
+
+        # Update the in_progress history entry's `god` field to the
+        # tool name (mirrors the god_dispatch pattern but with the tool
+        # name as the "actor" for audit clarity). The entry was seeded
+        # by _execute_step with god=None since cli_tool steps have no god.
+        for h in inst.step_history:
+            if h.get("step_id") == step.id and h.get("status") == "in_progress":
+                h["god"] = step.tool
+                break
+        self._save_instance(inst)
+
+        # Lazy import — keeps cli_tool.py out of the engine's import
+        # graph until a cli_tool step actually runs. Avoids any future
+        # circular-import risk if cli_tool.py grows dependencies.
+        from .cli_tool import (
+            run_cli_tool,
+            resolve_tool,
+            CliToolError,
+            CliToolNotFoundError,
+            CliToolTimeoutError,
+        )
+
+        # Resolve the tool registration. For Brief 1 this returns the
+        # _mock_echo placeholder; Brief 2 replaces resolve_tool with a
+        # cli_tools.yaml loader. CliToolNotFoundError is fail-fast.
+        tool_reg = resolve_tool(step.tool)
+
+        # Run the subprocess (with timeout, retry, session resume) on the
+        # default executor. run_cli_tool is synchronous; wrapping in
+        # run_in_executor lets the event loop continue serving other
+        # tasks (e.g. a parallel sibling) while the tool runs.
+        timeout_s = _parse_duration(step.timeout)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,  # default ThreadPoolExecutor
+            lambda: run_cli_tool(
+                tool_reg=tool_reg,
+                input_dict=step.tool_input,
+                on_error=step.on_error,
+                timeout_s=timeout_s,
+            ),
+        )
+
+        # Store the parsed output in the context bag so downstream
+        # steps can read it via input_from / context_bag (mirrors how
+        # god_dispatch stores its result).
+        if step.output:
+            inst.context_bag[step.output] = result
+
+        # Wrap the dict result in a SimpleNamespace so the engine's
+        # existing _record_step_completion / _advance code (which
+        # expects a RunResult-like with .status, .output, .session_id)
+        # works via duck-typing. The refusal-detection regex in
+        # _record_step_completion is god-domain and won't match tool
+        # stdout, so it's a no-op here. We force .status == "completed"
+        # so the step is marked completed (not "refused" or "failed").
+        from types import SimpleNamespace
+        run_result = SimpleNamespace(
+            status="completed",
+            output=result.get("stdout", "") if isinstance(result, dict) else "",
+            session_id="",
+            error=None,
+        )
+
+        # Record completion (existing pattern from _exec_god_dispatch).
+        self._record_step_completion(inst, step, run_result)
+        # Augment the latest history entry with cli_tool-specific metadata
+        # so the audit trail shows the actual tool, exit_code, duration.
+        for h in reversed(inst.step_history):
+            if h.get("step_id") == step.id:
+                h["tool"] = step.tool
+                tm = result.get("tool_metadata", {}) if isinstance(result, dict) else {}
+                h["exit_code"] = result.get("exit_code") if isinstance(result, dict) else None
+                h["duration_seconds"] = result.get("duration_seconds") if isinstance(result, dict) else None
+                h["attempts"] = tm.get("attempts") if isinstance(tm, dict) else None
+                break
+
+        # Continue the DAG.
+        await self._advance(inst, wf, step, run_result)
 
     # ----- parallel step executor -----
 
