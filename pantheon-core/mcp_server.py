@@ -2359,8 +2359,50 @@ def _conductor_dispatch(fn_name: str, **kwargs) -> str:
     touches sys.path per call.
     """
     try:
-        from conductor.conductor_server import start_workflow as _start_workflow
-        result = _start_workflow(**kwargs)
+        # P1 hotfix (2026-06-16, Phase 4 Step 4.4): the v1 module
+        # `conductor.conductor_server` is gitignored from the PR tree
+        # (Option C operator call), so any fresh clone fails this import
+        # with ModuleNotFoundError and the MCP tool silently returns an
+        # error envelope for every call. Route through the v2 engine
+        # instead — `ConductorEngine.start_workflow_sync` is the
+        # daemon-free variant explicitly designed for MCP bridge callers
+        # (engine.py docstring: "The MCP bridge
+        # (conductor.conductor_server.start_workflow) and any other
+        # out-of-process caller ... should call this"). It returns a
+        # `WorkflowInstance` which we serialize via `.to_dict()` so the
+        # JSON shape matches the documented MCP contract
+        # (workflow_id, definition_id, status, current_step, state_file,
+        # started_at).
+        #
+        # Status alias: v2 uses status="in_progress" internally; the MCP
+        # contract asks for "running" (engine.py:782-787 keeps the v2
+        # default stable and lets the bridge be the alias).
+        from conductor.v2.engine import ConductorEngine
+        from dataclasses import asdict, is_dataclass
+        engine = ConductorEngine()
+        inst = engine.start_workflow_sync(
+            workflow_def_id=kwargs.get("workflow_id", ""),
+            context=kwargs.get("context"),
+            initiator=kwargs.get("initiator", "hermes"),
+            original_request=kwargs.get("original_request", ""),
+        )
+        # WorkflowInstance is a dataclass — to_dict() is the canonical
+        # serializer; fall back to asdict if it doesn't have one.
+        result = inst.to_dict() if hasattr(inst, "to_dict") else (
+            asdict(inst) if is_dataclass(inst) else dict(inst.__dict__)
+        )
+        # MCP contract: status should be "running" not "in_progress".
+        if isinstance(result, dict) and result.get("status") == "in_progress":
+            result["status"] = "running"
+        # MCP contract also expects "state_file" (path under state/) —
+        # derive it from the workflow_id so callers can `cat` it.
+        if isinstance(result, dict) and "workflow_id" in result:
+            result.setdefault(
+                "state_file",
+                f"state/{result['workflow_id']}.json",
+            )
+            # started_at alias for the v1 contract (v2 uses "created").
+            result.setdefault("started_at", result.get("created", ""))
         return json.dumps(result, indent=2, default=str)
     except Exception as exc:
         # Thoth Minor #2, Step 1.7 polish: drop str(exc) from the error
