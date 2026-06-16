@@ -1,0 +1,33 @@
+workflow:
+  id: cross-pantheon-deploy
+  name: "Cross-Pantheon Deploy"
+  version: "1.0.0"
+  description: "Deploy approved features to Tallon's Enterprise instance"
+
+  context:
+    required: [feature_summary, review_artifacts]
+    optional: [approval_notes, target_environment]
+
+  steps:
+    - id: package
+      god: marvin
+      skill: shipping-and-launch
+      input_from: review
+      output: deployment_package
+      timeout: 30m
+
+    - id: notify-enterprise
+      type: nats_publish
+      subject: "subspace.konan.outgoing.tallon"
+      input_from: package
+      message: "Deploy request: ${workflow_id} - ${message}"
+      payload:
+        workflow_id: "${workflow_id}"
+        feature_summary: "${context.feature_summary}"
+        review_artifacts: "${context.review_artifacts}"
+
+    - id: await-ack
+      god: hermes
+      action: await_ack
+      timeout: 24h
+      output: enterprise_ack

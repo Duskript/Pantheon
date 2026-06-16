@@ -1,0 +1,26 @@
+workflow:
+  id: sovereign-publish-tallon-correction
+  name: "Sovereign Publish — Tallon Correction (NATS breach retraction)"
+  version: "1.0.0"
+  description: >
+    Operator-approved sovereign-publish workflow for retracting the 2 fabricated
+    'ready for Enterprise deploy' messages from the 2026-06-15 sovereign-NATS breach
+    (wf_8a0b5f28 at 02:16:56Z, wf_f26885f8 at 02:23:25Z). Single-step workflow that
+    publishes a counter-message to subspace.konan.outgoing.tallon. Engine guard
+    requires operator_approval_token in context_bag, which is seeded below.
+  context:
+    required:
+      - operator_approval_token
+      - retraction_body_path
+    optional:
+      - references
+  steps:
+    - id: notify-tallon
+      type: nats_publish
+      subject: "subspace.konan.outgoing.tallon"
+      input_from: null
+      message: "${context.retraction_body_path}"
+      payload:
+        workflow_id: "${workflow_id}"
+        retraction_body_path: "${context.retraction_body_path}"
+        references: "${context.references}"

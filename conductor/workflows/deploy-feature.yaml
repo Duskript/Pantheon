@@ -1,0 +1,59 @@
+workflow:
+  id: deploy-feature
+  name: "New Feature Deployment"
+  version: "1.0.0"
+  description: "Full pipeline from research through deployment with RALPH review gates"
+
+  context:
+    required: [spec_summary, artifacts, decisions]
+    optional: [ticket_url, deadline]
+
+  steps:
+    - id: research
+      god: thoth
+      skill: deep-research
+      input: user_request
+      gates: [state_gate]
+      output: research_findings
+      timeout: 30m
+      on_timeout: escalate_hermes
+
+    - id: architect
+      god: hephaestus
+      skill: architecture-design
+      input_from: research
+      gates: [logic_gate, phase_detect]
+      output: architecture_spec
+      timeout: 2h
+
+    - id: implement
+      god: marvin
+      skill: test-driven-development
+      input_from: architect
+      gates: [logic_gate]
+      output: implementation
+      timeout: 4h
+
+    - id: review
+      god: hephaestus
+      skill: code-review
+      input_from: implement
+      gates: [logic_gate, state_gate]
+      loop:
+        max_retries: 3
+        on_fail: back_to_implement
+        gate: logic_gate
+      output: reviewed
+      timeout: 1h
+
+    - id: notify-enterprise
+      type: nats_publish
+      subject: "subspace.konan.outgoing.tallon"
+      input_from: review
+      message: "Feature ${workflow_id} implemented and reviewed, ready for Enterprise deploy"
+
+    - id: project-manager
+      god: hermes
+      action: update_sprint
+      input_from: review
+      gates: [state_gate]
