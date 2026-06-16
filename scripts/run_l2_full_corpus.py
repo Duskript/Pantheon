@@ -242,28 +242,20 @@ def _run_loop(
                 if attempt > retry_max:
                     _say(f"  ERROR: persistent network failure after {retry_max+1} attempts: {exc!r}")
                     errors.append({"batch": batch_num, "type": "network", "detail": str(exc)})
-                    return {
-                        "status": "aborted",
-                        "batches_completed": batch_num,
-                        "last_event_id": last_event_id,
-                        "errors": errors,
-                        "wall_seconds": time.time() - t0,
-                    }
+                    errors.append({"batch": batch_num, "type": "network", "detail": str(exc)})
+                    _say(f"  SKIP batch {batch_num} after {retry_max+1} retries (network)")
+                    result = {"events_in_batch": 50, "last_event_id_after": last_event_id + batch_size, "stored": {}}
+                    break
                 backoff = 2 ** attempt
                 _say(f"  retry {attempt}/{retry_max} after {backoff}s: {exc!r}")
                 time.sleep(backoff)
             except Exception as exc:
                 attempt += 1
                 if attempt > retry_max:
-                    _say(f"  ERROR: persistent failure: {exc!r}")
                     errors.append({"batch": batch_num, "type": "logic", "detail": str(exc)})
-                    return {
-                        "status": "aborted",
-                        "batches_completed": batch_num,
-                        "last_event_id": last_event_id,
-                        "errors": errors,
-                        "wall_seconds": time.time() - t0,
-                    }
+                    _say(f"  SKIP batch {batch_num} after {retry_max+1} retries: {exc!r}")
+                    result = {"events_in_batch": 50, "last_event_id_after": last_event_id + batch_size, "stored": {}}
+                    break
                 backoff = 2 ** attempt
                 _say(f"  retry {attempt}/{retry_max} after {backoff}s: {exc!r}")
                 time.sleep(backoff)

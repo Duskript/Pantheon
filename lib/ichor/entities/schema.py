@@ -40,6 +40,14 @@ from lib.ichor.entities.relationship_type_seeds import (
     seed_relationship_types as _seed_relationship_types,
 )
 
+# Thoth (2026-06-12) — seed canonical entity types. Imported here
+# so that calling `migrate()` seeds person, organization, project,
+# product_idea, decision, pricing_vertical, interaction, lyrics, etc.
+# See entity_type_seeds.py for the full list.
+from lib.ichor.entities.entity_type_seeds import (
+    seed_entity_types as _seed_entity_types,
+)
+
 logger = logging.getLogger("ichor.entities.schema")
 
 # Same path as the rest of the Ichor stack — we extend, not fork.
@@ -237,6 +245,17 @@ def migrate(db_path: Path | str | None = None) -> dict:
             logger.warning("relationship_type seed failed (non-fatal): %s", exc)
             seed_result = {"inserted": 0, "already_present": 0, "error": str(exc)}
 
+        # Thoth (2026-06-12) — seed canonical entity types.
+        # Seeds person, organization, project, product_idea, decision,
+        # pricing_vertical, interaction, lyrics, concept, artifact, etc.
+        # Idempotent: existing types left untouched. Runs after rel-type
+        # seed so a fresh DB has both registries ready.
+        try:
+            entity_seed_result = _seed_entity_types(conn)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("entity_type seed failed (non-fatal): %s", exc)
+            entity_seed_result = {"inserted": 0, "already_present": 0, "error": str(exc)}
+
         conn.commit()
         result = {
             "created": created,
@@ -244,6 +263,7 @@ def migrate(db_path: Path | str | None = None) -> dict:
             "tables_total": len(SCHEMA_TABLES),
             "migrations_applied": migrations_applied,
             "seed_result": seed_result,
+            "entity_seed_result": entity_seed_result,
         }
         if created:
             logger.info("Created entity-graph tables: %s", created)
@@ -256,6 +276,12 @@ def migrate(db_path: Path | str | None = None) -> dict:
                 "Seeded %d canonical relationship types: %s",
                 seed_result["inserted"],
                 seed_result,
+            )
+        if entity_seed_result.get("inserted"):
+            logger.info(
+                "Seeded %d canonical entity types: %s",
+                entity_seed_result["inserted"],
+                entity_seed_result,
             )
         return result
     finally:

@@ -320,5 +320,139 @@ class TestIsTierAPlusEnabled(unittest.TestCase):
         self.assertFalse(_is_tier_a_plus_enabled("nonexistent-god-12345"))
 
 
+# ---------------------------------------------------------------------------
+# P4d: Merge adjacent fragments + noisy blocker reclassification
+# ---------------------------------------------------------------------------
+
+
+class TestMergeAdjacentEvents(unittest.TestCase):
+    """P4d: _merge_adjacent_events collapses overlapping same-type fragments."""
+
+    def setUp(self):
+        self.ext = TierAExtractor.__new__(TierAExtractor)
+
+    def _make_event(self, event_type, subject, raw_text, session_id="sess_1",
+                    confidence=0.55):
+        return {
+            "event_type": event_type, "subject": subject, "raw_text": raw_text,
+            "confidence": confidence, "session_id": session_id, "occurrences": 1,
+            "speaker": "assistant", "god_name": "thoth",
+            "predicate": event_type, "object": subject,
+        }
+
+    def test_overlapping_fragments_merge(self):
+        """Four overlapping fragments → one merged event."""
+        events = [
+            self._make_event("blocker", "test fail 1",
+                "The test fails for edge case X when input is empty. This needs a fix."),
+            self._make_event("blocker", "test fail 2",
+                "fails for edge case X when input is empty. This needs a fix. Additionally, the"),
+            self._make_event("blocker", "test fail 3",
+                "when input is empty. This needs a fix. Additionally, the seed value is not"),
+            self._make_event("blocker", "test fail 4",
+                "This needs a fix. Additionally, the seed value is not being reset between tests."),
+        ]
+        merged = self.ext._merge_adjacent_events(events)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["occurrences"], 4)
+
+    def test_different_types_do_not_merge(self):
+        """Blocker and follow_up should not merge even if overlapping."""
+        events = [
+            self._make_event("blocker", "error found",
+                "There is an error in the build pipeline."),
+            self._make_event("follow_up", "fix later",
+                "error in the build pipeline. We should fix this in the next iteration."),
+        ]
+        merged = self.ext._merge_adjacent_events(events)
+        self.assertEqual(len(merged), 2)
+
+    def test_non_overlapping_stay_separate(self):
+        """Completely unrelated events stay as-is."""
+        events = [
+            self._make_event("blocker", "auth failure",
+                "Authentication failed: invalid token."),
+            self._make_event("blocker", "db timeout",
+                "Database connection timed out after 30 seconds."),
+        ]
+        merged = self.ext._merge_adjacent_events(events)
+        self.assertEqual(len(merged), 2)
+
+    def test_empty_input(self):
+        """Empty list returns empty list."""
+        self.assertEqual(self.ext._merge_adjacent_events([]), [])
+
+    def test_single_event(self):
+        """Single event passes through unchanged."""
+        events = [self._make_event("blocker", "only", "Just one event.")]
+        merged = self.ext._merge_adjacent_events(events)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["subject"], "only")
+
+
+class TestDowngradeNoisyBlockers(unittest.TestCase):
+    """P4d: _downgrade_noisy_blockers reclassifies task-language blockers."""
+
+    def setUp(self):
+        self.ext = TierAExtractor.__new__(TierAExtractor)
+
+    def _make_blocker(self, subject, raw_text, confidence=0.55, session_id="sess_x"):
+        return {
+            "event_type": "blocker", "subject": subject, "raw_text": raw_text,
+            "confidence": confidence, "session_id": session_id, "occurrences": 1,
+            "speaker": "assistant", "god_name": "thoth",
+            "predicate": "blocker", "object": subject,
+        }
+
+    def test_task_language_downgrades(self):
+        """Blockers with 'fix', 'implement' → follow_up in large batches."""
+        events = [
+            self._make_blocker(f"item {i}",
+                f"Fix the test for edge case {i}. The build fails because of a missing import.")
+            for i in range(15)
+        ]
+        result = self.ext._downgrade_noisy_blockers(events)
+        follow_ups = [e for e in result if e["event_type"] == "follow_up"]
+        self.assertEqual(len(follow_ups), 15)
+
+    def test_real_blocker_preserved(self):
+        """Event with strong blocking language stays as blocker."""
+        events = [
+            self._make_blocker(f"item {i}",
+                f"Fix the test for edge case {i}.") for i in range(14)
+        ]
+        # Strong blocking language
+        events.append(self._make_blocker("real blocker",
+            "I am stuck and blocked. Cannot proceed without credentials."))
+        result = self.ext._downgrade_noisy_blockers(events)
+        still_blocker = [e for e in result if e["event_type"] == "blocker"]
+        self.assertEqual(len(still_blocker), 1)
+
+    def test_small_batch_bypass(self):
+        """Small batches (<10) skip reclassification entirely."""
+        events = [
+            self._make_blocker(f"item {i}", f"Fix the test for edge case {i}.")
+            for i in range(5)
+        ]
+        result = self.ext._downgrade_noisy_blockers(events)
+        still_blocker = [e for e in result if e["event_type"] == "blocker"]
+        self.assertEqual(len(still_blocker), 5)
+
+    def test_high_confidence_preserved(self):
+        """High-confidence blockers (≥0.66) are never downgraded."""
+        events = [
+            self._make_blocker(f"item {i}", f"Fix the test for edge case {i}.",
+                               confidence=0.8)
+            for i in range(15)
+        ]
+        result = self.ext._downgrade_noisy_blockers(events)
+        still_blocker = [e for e in result if e["event_type"] == "blocker"]
+        self.assertEqual(len(still_blocker), 15)
+
+    def test_empty_input(self):
+        """Empty list returns empty list."""
+        self.assertEqual(self.ext._downgrade_noisy_blockers([]), [])
+
+
 if __name__ == "__main__":
     unittest.main()

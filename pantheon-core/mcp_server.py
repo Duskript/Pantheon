@@ -23,15 +23,24 @@ from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
 # Constants
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 _REAL_HOME = os.path.expanduser("~")
+_PANTHEON_HOME = Path(f"{_REAL_HOME}/pantheon")
 _ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 _CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 _MESSAGES_DIR = Path(f"{_REAL_HOME}/pantheon/gods/messages")
 _PANTHEON_DIR = Path(f"{_REAL_HOME}/pantheon")
 _HADES_REPORTS = Path(f"{_REAL_HOME}/athenaeum/Codex-Pantheon/reports")
 _EMBEDDABLE_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
+
+# Ensure `~ / pantheon` is on sys.path at module import time so `import
+# conductor.*` works when the MCP server is launched outside the Pantheon
+# rootdir (e.g. as a systemd %h-shifted service). This used to live inside
+# _conductor_dispatch (Thoth Minor #3, Step 1.7 polish). One-time path
+# injection — keep idempotent.
+if _PANTHEON_HOME.exists() and str(_PANTHEON_HOME) not in sys.path:
+    sys.path.insert(0, str(_PANTHEON_HOME))
 
 # Load env vars from ~/.hermes/.env and profile-specific .env files
 for env_file in [
@@ -258,6 +267,7 @@ mcp = FastMCP(
 Available systems:
 - **Athenaeum** — file-based knowledge store with Codex-partitioned semantic search
 - **Messaging** — inter-god message delivery via file-based inboxes
+- **Conductor** — workflow + reaction engine (10 endpoints: submit_handoff, check_inbox, ack_handoff, get_workflow_state, list_pending, list_rules, list_workflows, abort_workflow, cleanup, start_workflow)
 - **Ichor Brief** — query-less recall: 'what should I know right now?' — ranked context from conversation memory
 - **Ichor Graph** — multi-hop NL graph queries: 'what tools does Hermes use?' — relation inference + entity resolution + path walking
 - **Skills** — shared executable skills hub at athenaeum/skills/
@@ -363,6 +373,47 @@ def athenaeum_search(
                 "score": score,
                 "created_at": r["created_at"] or "",
             })
+
+        # Also search reference_knowledge (curated athenaeum concepts).
+        # The table has no FTS5 index (only idx_ref_slug), so we use LIKE
+        # against title/body/brief/outline. The populated content is short
+        # (a few KB per codex INDEX.md) so LIKE is fast enough for the
+        # ~30-row table. FTS5 would be the right answer at scale.
+        ref_query_terms = [t.rstrip('*') for t in safe_terms]
+        if ref_query_terms:
+            like_clauses_per_term = []
+            params = []
+            for t in ref_query_terms:
+                like = f"%{t}%"
+                like_clauses_per_term.append(
+                    "(title LIKE ? OR body LIKE ? OR brief LIKE ? OR outline LIKE ?)"
+                )
+                params.extend([like, like, like, like])
+            ref_sql = f"""
+                SELECT id, title, body, source, brief, outline
+                FROM reference_knowledge
+                WHERE {" OR ".join(like_clauses_per_term)}
+                LIMIT ?
+            """
+            params.append(limit)
+            ref_rows = conn.execute(ref_sql, params).fetchall()
+            for r in ref_rows:
+                # Use 0.6 as a default mid-tier score for reference rows.
+                # (Better than dropping the data; ranking can be refined
+                # later when there's a fuller signal set.)
+                content_preview = (r["brief"] or r["body"] or "")[:2000] or "(empty)"
+                results.append({
+                    "content": content_preview,
+                    "source": r["source"] or f"reference:{r['id']}",
+                    "codex": "athenaeum-reference",
+                    "event_type": "reference_knowledge",
+                    "score": 0.6,
+                    "created_at": "",
+                })
+
+        # Re-rank merged results by score, cap to limit.
+        results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        results = results[:limit]
 
         return json.dumps({"results": results, "total": len(results)}, indent=2)
 
@@ -1571,6 +1622,7 @@ def ichor_extract_entities(
     batch_size = max(1, min(int(batch_size or 25), 200))
 
     try:
+        sys.path.insert(0, str(Path.home() / "pantheon"))  # 2026-06-14: was missing here, broke lib.ichor.* imports
         from lib.ichor.entities import extract_incremental  # type: ignore[import-untyped]
         from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
         from lib.ichor.llm import _resolve_llm_provider  # type: ignore[import-untyped]
@@ -1713,6 +1765,7 @@ def ichor_l2_finalize(
         residual_counts (entities_created, relationships_created), parse_warnings.
     """
     try:
+        sys.path.insert(0, str(Path.home() / "pantheon"))  # 2026-06-14: was missing here, broke lib.ichor.* imports
         from lib.ichor.entities import finalize  # type: ignore[import-untyped]
         from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
         from lib.ichor.llm import _resolve_llm_provider  # type: ignore[import-untyped]
@@ -2289,7 +2342,79 @@ def athenaeum_graph_search(
         conn.close()
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# Phase 1 Step 1.1 — start_workflow MCP tool.
+# Mints a wf_* workflow instance via the v2 engine and returns the instance
+# dict. See BUILD-PLAN.md §1.1. Other Conductor surfaces (submit_handoff,
+# ack_handoff, etc.) are deliberately NOT exposed here — they belong to
+# follow-up steps. The `context` arg is a JSON string so callers without
+# nested-dict MCP support can pass `'{"k":"v"}'`.
+
+
+def _conductor_dispatch(fn_name: str, **kwargs) -> str:
+    """Call a conductor module-level function and JSON-serialize the result.
+    Returns an error envelope on any exception.
+
+    sys.path injection is done at module import time (see Constants block
+    above) — Thoth Minor #3, Step 1.7 polish. This function no longer
+    touches sys.path per call.
+    """
+    try:
+        from conductor.conductor_server import start_workflow as _start_workflow
+        result = _start_workflow(**kwargs)
+        return json.dumps(result, indent=2, default=str)
+    except Exception as exc:
+        # Thoth Minor #2, Step 1.7 polish: drop str(exc) from the error
+        # envelope — it can leak credentials/paths/internal state. Keep
+        # type name only; callers branch on type if they need more.
+        return json.dumps({
+            "error": f"conductor_{fn_name} failed: {type(exc).__name__}"
+        }, indent=2)
+
+
+@mcp.tool(
+    description="[Conductor v2] Start a new workflow instance. Mints a wf_* id, "
+    "writes the state file to state/, and returns the instance dict "
+    "(workflow_id, definition_id, status, current_step, state_file, started_at).",
+)
+def conductor_start_workflow(
+    workflow_id: str,
+    context: str = "{}",
+    original_request: str = "",
+    # Thoth Minor #1, Step 1.7 polish: introspect $USER when the caller
+    # doesn't pass an explicit initiator. If $USER is empty (e.g. systemd
+    # service with no User= set, some sandboxes), fall back to 'hermes'
+    # so we never record an empty-string audit-trail value.
+    initiator: str = "",
+) -> str:
+    if not initiator:
+        initiator = os.environ.get("USER") or "hermes"
+    """Start a new workflow instance via the v2 engine.
+
+    Args:
+        workflow_id: Workflow definition id (e.g. 'morning-briefing'). Must
+            match a yaml file under conductor/workflows/.
+        context: JSON-encoded dict of context_bag values. Pass '{}' for none.
+        original_request: Free-text reason; stored on the instance for audit.
+        initiator: God or user name. Default 'hermes' for MCP-driven starts.
+
+    Returns:
+        JSON with workflow_id (wf_...), definition_id, status ('running'),
+        current_step, state_file, started_at.
+    """
+    import json as _json
+    try:
+        ctx_obj = _json.loads(context) if context else {}
+    except _json.JSONDecodeError as e:
+        return _json.dumps({"error": f"invalid context JSON: {e}"}, indent=2)
+    return _conductor_dispatch(
+        "start_workflow",
+        workflow_id=workflow_id,
+        context=ctx_obj,
+        original_request=original_request,
+        initiator=initiator,
+    )
+
+
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════
 

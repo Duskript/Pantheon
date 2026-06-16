@@ -282,14 +282,18 @@ except:
         assert result is None  # No check for .bin
 
     def test_intervention_cap(self, logic_gate: LogicGate) -> None:
-        """After cap, passes through with warning."""
+        """After cap, passes through with warning.
+
+        Uses unique paths per call so the 60s dedup window doesn't
+        short-circuit the test (added in P2a).
+        """
         bad_content = "invalid python {{{"
         limit = 3
 
         for i in range(limit):
             result = logic_gate.post_call(
                 "write_file",
-                {"path": "test.py", "content": bad_content},
+                {"path": f"test_{i}.py", "content": bad_content},
                 None, {},
             )
             assert result is not None
@@ -298,7 +302,7 @@ except:
         # This one should pass through (cap reached)
         result = logic_gate.post_call(
             "write_file",
-            {"path": "test.py", "content": bad_content},
+            {"path": "test_cap.py", "content": bad_content},
             None, {},
         )
         assert result is not None

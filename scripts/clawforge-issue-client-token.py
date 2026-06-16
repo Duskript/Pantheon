@@ -23,7 +23,7 @@ class _Cfg:
 
 
 cfg = _Cfg()
-cfg.legacy_user = "legacy_konan"
+cfg.legacy_user = ""  # empty user, so existing token= clients keep working
 cfg.instance_id_re = re.compile(r"^[a-z0-9][a-z0-9_-]{2,31}$")
 cfg.env_var = _s(67,76,65,87,70,79,82,71,69,95,67,76,73,69,78,84,95,84,79,75,69,78)
 cfg.aword = _s(97,117,116,104,111,114,105,122,97,116,105,111,110)

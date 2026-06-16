@@ -395,6 +395,13 @@ def _compress_tool_result(
     tool_call_id: str = '',
     duration_ms: int = 0,
     god: str = '',
+    # 2026-06-14: added `turn_id` and `api_request_id` after the gateway
+    # started logging `unexpected keyword argument` on every tool call.
+    # Hermes core now passes both keywords; hook signature must accept
+    # them or the gateway logs warnings and skips compression.
+    # See journal 2026-06-14-ichor-nudge-diagnostic.md for the trace.
+    turn_id: str = '',
+    api_request_id: str = '',
 ) -> str | None:
     """Apply all 10 compression rules and the output cap. Returns compressed string or None."""
     if not result or not isinstance(result, str):

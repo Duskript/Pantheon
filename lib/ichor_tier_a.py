@@ -7,8 +7,16 @@ Events are stored in the ichor_events table via IchorDB for instant FTS5 search.
 Usage:
     extractor = TierAExtractor()
     count = extractor.extract_and_store(text, session_id, god_name="apollo")
+
+P4d (2026-06-15): batch-merge + reclassify for over-fragmentation.
+  - _merge_adjacent_events() merges same-type events from the same session
+    whose raw_text windows overlap, collapsing N fragments into 1 event.
+  - _downgrade_noisy_blockers() reclassifies low-confidence blocker events
+    as follow_up when the batch is large and the raw_text looks like task
+    language (fix, implement, test, etc.) rather than a gating issue.
 """
 
+import difflib
 import logging
 import os
 import re
@@ -26,6 +34,35 @@ CONFIDENCE_FLOOR = 0.5
 
 # Default path for the Ichor database
 ICHOR_DB_PATH = os.path.expanduser("~/.hermes/ichor.db")
+
+# ── Merge threshold for adjacent fragment collapse (P4d) ─────────────────
+# Two same-type events from the same session are merged if their raw_text
+# windows have a similarity ratio >= this threshold (0.0-1.0, difflib).
+ADJACENT_MERGE_THRESHOLD = 0.40
+
+# ── Batch size threshold for noisy-blocker reclassification (P4d) ────────
+# When a single session produces this many events in one extract_and_store
+# call, low-confidence blockers are scrutinised for task-language reclassification.
+BATCH_SIZE_RECLASSIFY = 10
+
+# ── Task-language trigger words for blocker→follow_up reclassification ───
+# If a low-confidence blocker's raw_text contains more task words than
+# blocking/gating words, it's probably describing work to do, not a blocker.
+_TASK_WORDS = frozenset({
+    "fix", "implement", "add", "update", "test", "review", "refactor",
+    "build", "create", "write", "deploy", "rework", "improve", "change",
+    "modify", "adjust", "configure", "migrate", "upgrade", "replace",
+    "rewrite", "clean", "cleanup", "simplify", "extract", "consolidate",
+    "TODO", "FIXME", "HACK", "XXX", "to-do", "todo",
+})
+
+# ── Gating/blocking trigger words that signal a real blocker ─────────────
+_BLOCK_WORDS = frozenset({
+    "stuck", "blocked", "can't figure", "can't find", "can't get",
+    "cannot proceed", "blocking me", "showstopper", "dealbreaker",
+    "halted", "impassable", "dead end", "roadblock", "brick wall",
+    "no way forward", "at a standstill",
+})
 
 # Default importance (0-100) seeded at Tier A insert time, indexed by
 # event_type. Higher = more retrieval-worthy on day-zero before any
@@ -230,6 +267,179 @@ class TierAExtractor:
 
         return results
 
+    # ── P4d: Post-extraction merge and reclassify ────────────────────────
+
+    def _merge_adjacent_events(self, events: List[Dict]) -> List[Dict]:
+        """Merge same-type events from the same session whose raw_text overlaps.
+
+        When a large text blob produces many small events of the same type
+        (e.g., 200+ blocker fragments from one code review), adjacent fragments
+        with overlapping raw_text windows are merged into a single event.
+
+        Strategy:
+          1. Group events by (event_type, session_id).
+          2. Sort each group by fingerprint (middle 40 chars of raw_text) so
+             overlapping fragments sort near each other.
+          3. Walk sorted list with a sliding window (±WINDOW_SIZE neighbors);
+             merge pairs whose raw_text similarity (difflib ratio) exceeds
+             ADJACENT_MERGE_THRESHOLD.
+          4. Merge each connected component into a single event.
+
+        Returns:
+            Deduplicated list with overlapping fragments collapsed.
+        """
+        if len(events) <= 1:
+            return events
+
+        # Sort key: middle portion of raw_text as a position proxy.
+        # Overlapping windows share their middle sections even when
+        # the ends differ, so this groups fragments correctly.
+        def _fingerprint(raw: str) -> str:
+            if len(raw) < 40:
+                return raw
+            mid = len(raw) // 2
+            return raw[mid - 20 : mid + 20]
+
+        # Group by (event_type, session_id)
+        groups: Dict[Tuple[str, str], List[Dict]] = {}
+        for ev in events:
+            key = (ev.get("event_type", ""), ev.get("session_id", ""))
+            groups.setdefault(key, []).append(ev)
+
+        merged: List[Dict] = []
+        for group in groups.values():
+            n = len(group)
+            if n <= 1:
+                merged.extend(group)
+                continue
+
+            # Sort by fingerprint so overlapping fragments cluster together
+            group.sort(key=lambda e: _fingerprint(e.get("raw_text", "")))
+
+            # Union-find for connected components
+            parent = list(range(n))
+
+            def find(x: int) -> int:
+                while parent[x] != x:
+                    parent[x] = parent[parent[x]]
+                    x = parent[x]
+                return x
+
+            def union(a: int, b: int) -> None:
+                ra, rb = find(a), find(b)
+                if ra != rb:
+                    parent[rb] = ra
+
+            # Sliding window: only compare within WINDOW_SIZE neighbors
+            # after sorting by fingerprint. Overlapping fragments cluster
+            # tightly; distant fragments won't overlap.
+            WINDOW_SIZE = 15
+            for i in range(n):
+                raw_i = group[i].get("raw_text", "")
+                if not raw_i:
+                    continue
+                limit = min(n, i + WINDOW_SIZE + 1)
+                for j in range(i + 1, limit):
+                    raw_j = group[j].get("raw_text", "")
+                    if not raw_j:
+                        continue
+                    ratio = difflib.SequenceMatcher(None, raw_i, raw_j).ratio()
+                    if ratio >= ADJACENT_MERGE_THRESHOLD:
+                        union(i, j)
+
+            # Collect components
+            components: Dict[int, List[Dict]] = {}
+            for i, ev in enumerate(group):
+                root = find(i)
+                components.setdefault(root, []).append(ev)
+
+            # Merge each component
+            for comp in components.values():
+                if len(comp) == 1:
+                    merged.append(comp[0])
+                else:
+                    result = comp[0]
+                    for other in comp[1:]:
+                        result = self._merge_two_events(result, other)
+                    merged.append(result)
+
+        return merged
+
+    @staticmethod
+    def _merge_two_events(a: Dict, b: Dict) -> Dict:
+        """Merge two events of the same type into one combined event.
+
+        - raw_text: longer of the two keeps more context.
+        - subject: longer of the two is more descriptive.
+        - confidence: average of the two.
+        - occurrences: sum.
+        """
+        raw_a = a.get("raw_text", "")
+        raw_b = b.get("raw_text", "")
+        subj_a = a.get("subject", "")
+        subj_b = b.get("subject", "")
+
+        return {
+            "event_type": a["event_type"],
+            "subject": subj_a if len(subj_a) >= len(subj_b) else subj_b,
+            "predicate": a.get("predicate", b.get("predicate", "")),
+            "object": (raw_a if len(raw_a) >= len(raw_b) else raw_b)[:300],
+            "confidence": round(
+                (a.get("confidence", 0.5) + b.get("confidence", 0.5)) / 2, 2
+            ),
+            "raw_text": (raw_a if len(raw_a) >= len(raw_b) else raw_b)[:300],
+            "speaker": a.get("speaker", b.get("speaker", "")),
+            "session_id": a.get("session_id", b.get("session_id", "")),
+            "god_name": a.get("god_name", b.get("god_name", "")),
+            "occurrences": a.get("occurrences", 1) + b.get("occurrences", 1),
+        }
+
+    def _downgrade_noisy_blockers(self, events: List[Dict]) -> List[Dict]:
+        """Reclassify low-confidence blockers as follow_up in large batches.
+
+        When a single session produces a large batch of events (≥
+        BATCH_SIZE_RECLASSIFY), low-confidence (0.50-0.65) blocker events
+        whose raw_text contains more task-oriented language than gating/blocking
+        language are reclassified as follow_up.
+
+        This prevents noise from overwhelming the subconscious engine when
+        one large document (code review, build plan, etc.) generates many
+        regex matches that look like errors but are actually task descriptions.
+
+        Returns:
+            Events list with some blocker→follow_up reclassifications applied.
+        """
+        if len(events) < BATCH_SIZE_RECLASSIFY:
+            return events
+
+        reclassified = 0
+        for ev in events:
+            if ev.get("event_type") != "blocker":
+                continue
+            confidence = ev.get("confidence", 1.0)
+            if confidence > 0.65:
+                continue  # High-confidence blockers are kept
+
+            raw_text = (ev.get("raw_text") or "").lower()
+
+            # Count task-oriented vs blocking language in the raw_text
+            task_score = sum(1 for w in _TASK_WORDS if w.lower() in raw_text)
+            block_score = sum(1 for w in _BLOCK_WORDS if w.lower() in raw_text)
+
+            # Reclassify if task language dominates
+            if task_score > block_score:
+                ev["event_type"] = "follow_up"
+                ev["predicate"] = "follow_up"
+                reclassified += 1
+
+        if reclassified:
+            logger.debug(
+                "P4d reclassify: %d blockers → follow_up (batch size %d)",
+                reclassified, len(events),
+            )
+
+        return events
+
     # ── Store extraction results ─────────────────────────────────────────
 
     def extract_and_store(
@@ -251,6 +461,11 @@ class TierAExtractor:
             Number of events stored.
         """
         events = self.extract_from_text(text, session_id, god_name, speaker)
+
+        # P4d: post-extraction cleanup (merge adjacent fragments + reclassify)
+        events = self._merge_adjacent_events(events)
+        events = self._downgrade_noisy_blockers(events)
+
         return self._store_events(events, session_id, god_name)
 
     def extract_and_store_segment(
@@ -268,6 +483,11 @@ class TierAExtractor:
         events = self.extract_from_segment(
             user_msg, assistant_msg, session_id, god_name
         )
+
+        # P4d: post-extraction cleanup
+        events = self._merge_adjacent_events(events)
+        events = self._downgrade_noisy_blockers(events)
+
         return self._store_events(events, session_id, god_name)
 
     def _store_events(
@@ -300,7 +520,7 @@ class TierAExtractor:
                 # P4b: also write to cold_events (the canonical v2 table)
                 try:
                     conn = self.db.connect()
-                    # B1: derive brief + outline from raw_text (heursitic, L0/L1)
+                    # B1: derive brief + outline from raw_text (heuristic, L0/L1)
                     _raw = ev.get("raw_text", "") or ""
                     _brief, _outline = auto_generate_tiers(_raw)
                     cur = conn.execute(
@@ -453,6 +673,47 @@ class TierAExtractor:
 
 
 # ── Helper functions ───────────────────────────────────────────────────
+
+
+def _raw_texts_overlap(a: str, b: str, min_ngram: int = 8) -> bool:
+    """Check whether two raw_text windows overlap in the source text.
+
+    Extracts all N-grams from the shorter text and checks whether any
+    appear in the longer text.  The N-gram size adapts to text length:
+      - Texts < 50 chars: n=8  (catches partial overlaps)
+      - Texts 50-120 chars: n=12
+      - Texts >= 120 chars: n=16 (longer windows need larger match)
+
+    Overlapping sliding windows from the same source text always share
+    at least one contiguous substring, so N-gram containment is an
+    excellent proxy for overlap.  Using Python's native (C-level) `in`
+    substring search against a set of unique N-grams is dramatically
+    faster than difflib for large batches.
+
+    Returns True if the texts share an N-gram of sufficient length.
+    """
+    if not a or not b:
+        return False
+    shorter = a if len(a) < len(b) else b
+    longer = b if len(a) < len(b) else a
+
+    # Adaptive N-gram size: larger for longer texts to avoid false positives
+    # from short common phrases (e.g., "the test", "should be")
+    ngram = min_ngram
+    if len(shorter) >= 120:
+        ngram = 16
+    elif len(shorter) >= 50:
+        ngram = 12
+
+    ngram = min(ngram, len(shorter))
+    if ngram < 4:
+        return shorter in longer
+
+    # Build a set of unique N-grams from the shorter text (dedup)
+    ngrams = {shorter[i:i + ngram] for i in range(len(shorter) - ngram + 1)}
+    # Check each N-gram against the longer text — Python's `in` is
+    # implemented in C with Two-Way/BMH substring search.
+    return any(ng in longer for ng in ngrams)
 
 
 def _extract_context(text: str, match_start: int, match_end: int) -> str:
