@@ -1,0 +1,86 @@
+# Conductor v2 cli_tools registration
+#
+# Per Thoth's spec §4 (~/athenaeum/Codex-Pantheon/specs/conductor-cli-orchestration.md).
+# Loaded at engine startup by load_tools_config(). New tools can be added
+# by appending a tool entry below — no code change required.
+#
+# Fields per tool:
+#   command:         Executable name (resolved via $PATH) or absolute path
+#   args_template:   Argument template, with {prompt}, {working_dir},
+#                    {session_id} placeholders
+#   output_format:   json | text | stream-json
+#                    (json/text supported, stream-json requires the
+#                    WebSocket live-observability stream which is deferred)
+#   timeout_default: ISO duration (30s, 5m, 1h, 4h, 1d)
+#   session_id_flag: Flag to pass session_id for resume
+#                    (e.g. --resume for Claude Code)
+#   stdin_prompt:    If true, prompt is piped to stdin instead of via args
+#   env:             Default env vars (merged with step-level env; step wins)
+#   max_concurrent:  Per-workflow concurrency cap (1 = serial, 4 = up to 4 branches)
+#   stream_format:   none | claude-stream-json | codex-stream-json
+#                    (none for v1 — WebSocket observability is deferred)
+#
+# IMPORTANT — _mock_echo: the POSIX `echo` binary is always present, so
+# the test suite uses it as a subprocess-lifecycle fixture. Production
+# workflows should not reference _mock_echo; it's a first-class entry
+# in the config because tests need it to be there when load_tools_config
+# runs at engine startup.
+
+cli_tools:
+
+  # Anthropic's Claude Code CLI
+  # Usage: claude --prompt "..." --cwd <dir>
+  #        claude --resume <session_id> --prompt "..." --cwd <dir>
+  claude-code:
+    command: "claude"
+    args_template: ["--prompt", "{prompt}", "--cwd", "{working_dir}"]
+    output_format: "json"
+    timeout_default: "4h"
+    session_id_flag: "--resume"
+    stdin_prompt: false
+    env: {}
+    max_concurrent: 2
+    stream_format: "claude-stream-json"
+
+  # OpenAI's Codex CLI
+  # Usage: codex exec --prompt "..." --working-dir <dir>
+  #        codex exec --session <id> --prompt "..." --working-dir <dir>
+  codex:
+    command: "codex"
+    args_template: ["exec", "--prompt", "{prompt}", "--working-dir", "{working_dir}"]
+    output_format: "stream-json"
+    timeout_default: "4h"
+    session_id_flag: "--session"
+    stdin_prompt: false
+    env: {}
+    max_concurrent: 2
+    stream_format: "codex-stream-json"
+
+  # Google's Gemini CLI
+  # Usage: gemini -p "..."
+  # Note: output_format is "text" (not json/stream-json) since Gemini
+  # CLI's output format is not standardized across versions.
+  gemini-cli:
+    command: "gemini"
+    args_template: ["-p", "{prompt}"]
+    output_format: "text"
+    timeout_default: "2h"
+    session_id_flag: null
+    stdin_prompt: false
+    env: {}
+    max_concurrent: 1
+    stream_format: "none"
+
+  # Mock tool for tests (POSIX-builtin echo, always available).
+  # The test suite uses this to verify subprocess invocation without
+  # requiring real Claude Code or Codex CLI binaries.
+  _mock_echo:
+    command: "echo"
+    args_template: ["{prompt}"]
+    output_format: "text"
+    timeout_default: "30s"
+    session_id_flag: null
+    stdin_prompt: false
+    env: {}
+    max_concurrent: 4
+    stream_format: "none"
