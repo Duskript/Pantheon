@@ -154,7 +154,7 @@ def detect_drift(
         no_canon = set()
 
     findings: list[dict[str, str]] = []
-    for cat, skill, _skill_path in iter_canonical_skill_files(canonical_root):
+    for cat, skill, canonical_skill_md in iter_canonical_skill_files(canonical_root):
         for god in profiles:
             if (god, cat, skill) in no_canon:
                 # Intentional per-profile-only (per Step 4.3 NO-CANON report)
@@ -179,13 +179,24 @@ def detect_drift(
                 # functionally equivalent to symlinks. So both must be
                 # excluded to log only genuine drift (regular file landed
                 # by a manual edit, not by a hardlink).
+                #
+                # P2 #2 hotfix (2026-06-16, Phase 4 Step 4.4): the
+                # original inode check compared `per_profile.stat().st_ino`
+                # to `per_profile.resolve().stat().st_ino` — which is
+                # tautologically True for any regular file (since
+                # .resolve() returns the same file when no symlinks are in
+                # the path), so genuine drift was silently suppressed
+                # (caught by Codex review on PR #33 and confirmed via the
+                # `test_profile_bootstrap_detect.sh` Test 6 regression).
+                # The CORRECT comparison is against the canonical file's
+                # own inode: if the per-profile path shares the canonical
+                # inode, it's a real hardlink → skip; otherwise it's
+                # genuine drift → log.
                 if per_profile.is_file() and not per_profile.is_symlink():
-                    # Belt-and-suspenders: even with the symlink check,
-                    # also verify inode != canonical inode to skip hardlinks.
                     try:
-                        if per_profile.stat().st_ino == per_profile.resolve().stat().st_ino:
-                            # Same file as the resolved target (hardlink case)
-                            # — not drift, just a hardlink pointing at canon.
+                        if per_profile.stat().st_ino == canonical_skill_md.stat().st_ino:
+                            # Same file as canonical (hardlink case) —
+                            # not drift, just a hardlink pointing at canon.
                             continue
                     except (OSError, FileNotFoundError):
                         pass  # broken symlink etc. — fall through to drift log
