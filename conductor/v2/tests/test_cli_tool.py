@@ -220,11 +220,20 @@ class TestResolveTool(unittest.TestCase):
         self.assertEqual(reg.output_format, "text")
 
     def test_resolve_tool_unknown_raises(self):
-        """Test 8: resolve_tool('not-a-real-tool') → CliToolNotFoundError."""
+        """Test 8: resolve_tool('not-a-real-tool') → CliToolNotFoundError.
+
+        The error message is operator-friendly: names the missing tool,
+        lists the currently-registered tools, and points at the YAML
+        config that should be edited (or register_tool() as the
+        runtime alternative).
+        """
         with self.assertRaises(ct.CliToolNotFoundError) as ctx:
             ct.resolve_tool("not-a-real-tool")
-        self.assertIn("not-a-real-tool", str(ctx.exception))
-        self.assertIn("Brief 2", str(ctx.exception))  # operator-friendly hint
+        msg = str(ctx.exception)
+        self.assertIn("not-a-real-tool", msg)
+        self.assertIn("cli_tools.yaml", msg)        # points at the config
+        self.assertIn("register_tool", msg)         # runtime alternative
+        self.assertIn("_mock_echo", msg)            # lists available tools
 
 
 # ---------------------------------------------------------------------------
@@ -522,6 +531,240 @@ class TestWorkflowStepDataclassStep49(unittest.TestCase):
             self.assertEqual(s.timeout, "30s")
         finally:
             tmp.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# 23-28: load_tools_config (Brief 2)
+# ---------------------------------------------------------------------------
+
+class TestLoadToolsConfig(unittest.TestCase):
+    """Brief 2 config loader: reads cli_tools.yaml, validates, registers.
+
+    Each test snapshots + restores _REGISTRY around its body so it can't
+    leak tools into other tests. TmpConductor is used for real tmp dirs
+    (matching the rest of the v2 suite's pattern).
+    """
+
+    def setUp(self):
+        # Snapshot the registry so each test gets a clean baseline.
+        # (Some Brief 1 tests register/unregister; we don't want those
+        # to leak into Brief 2 tests.)
+        self._registry_snapshot = dict(ct._REGISTRY)
+
+    def tearDown(self):
+        # Restore the registry to its pre-test state.
+        ct._REGISTRY.clear()
+        ct._REGISTRY.update(self._registry_snapshot)
+
+    def _write_yaml(self, tmp_dir, doc):
+        """Dump a dict as YAML to a tmp file, return the path."""
+        import yaml as _yaml
+        path = Path(tmp_dir) / "cli_tools.yaml"
+        path.write_text(_yaml.safe_dump(doc))
+        return path
+
+    def test_load_tools_config_reads_yaml(self):
+        """Test 23: load_tools_config reads a real YAML with 2 tools.
+
+        Uses a tmp dir rather than mocking the file I/O, so we exercise
+        the full path including yaml.safe_load and the file-exists check.
+        """
+        tmp = cf.TmpConductor.create()
+        try:
+            path = self._write_yaml(tmp.root, {
+                "cli_tools": {
+                    "alpha-tool": {
+                        "command": "/bin/echo",
+                        "args_template": ["-n", "{prompt}"],
+                        "output_format": "text",
+                        "timeout_default": "10s",
+                    },
+                    "beta-tool": {
+                        "command": "/bin/true",
+                        "args_template": ["{prompt}"],
+                        "output_format": "json",
+                        "timeout_default": "1m",
+                    },
+                },
+            })
+            registered = ct.load_tools_config(path)
+        finally:
+            tmp.cleanup()
+
+        self.assertEqual(len(registered), 2)
+        names = {r.name for r in registered}
+        self.assertEqual(names, {"alpha-tool", "beta-tool"})
+
+        # Verify both are now in the registry and resolvable
+        alpha = ct.resolve_tool("alpha-tool")
+        self.assertEqual(alpha.command, "/bin/echo")
+        self.assertEqual(alpha.output_format, "text")
+        self.assertEqual(alpha.timeout_default, "10s")
+        self.assertEqual(alpha.args_template, ["-n", "{prompt}"])
+
+        beta = ct.resolve_tool("beta-tool")
+        self.assertEqual(beta.command, "/bin/true")
+        self.assertEqual(beta.output_format, "json")
+        self.assertEqual(beta.timeout_default, "1m")
+
+    def test_load_tools_config_validates_required_fields(self):
+        """Test 24: missing `command` or `args_template` → CliToolConfigError."""
+        # Missing `args_template` only
+        tmp = cf.TmpConductor.create()
+        try:
+            path = self._write_yaml(tmp.root, {
+                "cli_tools": {
+                    "bad-tool": {
+                        "command": "/bin/echo",
+                        "output_format": "text",
+                    },
+                },
+            })
+            with self.assertRaises(ct.CliToolConfigError) as ctx:
+                ct.load_tools_config(path)
+            self.assertIn("bad-tool", str(ctx.exception))
+            self.assertIn("args_template", str(ctx.exception))
+            self.assertIn("missing required fields", str(ctx.exception))
+        finally:
+            tmp.cleanup()
+
+        # Missing `command` only
+        tmp = cf.TmpConductor.create()
+        try:
+            path = self._write_yaml(tmp.root, {
+                "cli_tools": {
+                    "no-command": {
+                        "args_template": ["{prompt}"],
+                    },
+                },
+            })
+            with self.assertRaises(ct.CliToolConfigError) as ctx:
+                ct.load_tools_config(path)
+            self.assertIn("no-command", str(ctx.exception))
+            self.assertIn("command", str(ctx.exception))
+        finally:
+            tmp.cleanup()
+
+        # Missing BOTH → both names in the error
+        tmp = cf.TmpConductor.create()
+        try:
+            path = self._write_yaml(tmp.root, {
+                "cli_tools": {
+                    "double-bad": {
+                        "output_format": "text",
+                    },
+                },
+            })
+            with self.assertRaises(ct.CliToolConfigError) as ctx:
+                ct.load_tools_config(path)
+            msg = str(ctx.exception)
+            self.assertIn("command", msg)
+            self.assertIn("args_template", msg)
+        finally:
+            tmp.cleanup()
+
+    def test_load_tools_config_validates_output_format(self):
+        """Test 25: unknown output_format → CliToolConfigError.
+
+        Per the loader, valid output_format values are
+        {json, text, stream-json} (see VALID_OUTPUT_FORMATS in cli_tool.py).
+        """
+        tmp = cf.TmpConductor.create()
+        try:
+            path = self._write_yaml(tmp.root, {
+                "cli_tools": {
+                    "weird-format": {
+                        "command": "/bin/echo",
+                        "args_template": ["{prompt}"],
+                        "output_format": "yaml-stream",  # not valid
+                    },
+                },
+            })
+            with self.assertRaises(ct.CliToolConfigError) as ctx:
+                ct.load_tools_config(path)
+            msg = str(ctx.exception)
+            self.assertIn("weird-format", msg)
+            self.assertIn("output_format", msg)
+            self.assertIn("yaml-stream", msg)
+            # Should list the valid options
+            self.assertIn("json", msg)
+            self.assertIn("text", msg)
+        finally:
+            tmp.cleanup()
+
+    def test_resolve_tool_after_config_load_returns_registered(self):
+        """Test 26: After load_tools_config(cli_tools.yaml), resolve_tool()
+        returns the registered tool from the config.
+
+        This is the integration test that proves the production config
+        file is loadable AND that resolve_tool can see the loaded tools.
+        """
+        config_path = Path("/home/konan/pantheon/conductor/config/cli_tools.yaml")
+        self.assertTrue(config_path.exists(), f"missing config: {config_path}")
+
+        registered = ct.load_tools_config(config_path)
+        loaded_names = {r.name for r in registered}
+        # All 4 v1 tools should be loaded
+        self.assertEqual(loaded_names, {"claude-code", "codex", "gemini-cli", "_mock_echo"})
+
+        # claude-code resolves to the right shape
+        cc = ct.resolve_tool("claude-code")
+        self.assertEqual(cc.command, "claude")
+        self.assertEqual(cc.output_format, "json")
+        self.assertEqual(cc.session_id_flag, "--resume")
+        self.assertEqual(cc.args_template, ["--prompt", "{prompt}", "--cwd", "{working_dir}"])
+        self.assertEqual(cc.max_concurrent, 2)
+
+        # codex resolves to its distinct shape
+        codex = ct.resolve_tool("codex")
+        self.assertEqual(codex.command, "codex")
+        self.assertEqual(codex.output_format, "stream-json")
+        self.assertEqual(codex.session_id_flag, "--session")
+
+    def test_register_tool_and_unregister_tool_round_trip(self):
+        """Test 27: register_tool → resolve_tool works;
+        unregister_tool → resolve_tool raises CliToolNotFoundError.
+        """
+        # Define a custom tool that doesn't exist in the v1 config
+        custom = ct.ToolRegistration(
+            name="_round_trip_tool",
+            command="/bin/true",
+            args_template=["{prompt}"],
+            output_format="text",
+            timeout_default="5s",
+        )
+        # Pre-condition: not registered
+        with self.assertRaises(ct.CliToolNotFoundError):
+            ct.resolve_tool("_round_trip_tool")
+
+        # Register
+        ct.register_tool(custom)
+        resolved = ct.resolve_tool("_round_trip_tool")
+        self.assertIs(resolved, custom)  # same object, not a copy
+
+        # Unregister
+        ct.unregister_tool("_round_trip_tool")
+        with self.assertRaises(ct.CliToolNotFoundError):
+            ct.resolve_tool("_round_trip_tool")
+
+        # Unregister an unknown name is a no-op (no exception)
+        ct.unregister_tool("never-existed")  # should not raise
+
+    def test_load_tools_config_handles_missing_file(self):
+        """Test 28: load_tools_config(Path('/nonexistent')) →
+        CliToolConfigError with a clear message that points at the
+        config file and tells the operator how to fix it.
+        """
+        path = Path("/nonexistent/path/that/cannot/exist/cli_tools.yaml")
+        self.assertFalse(path.exists())  # pre-condition
+
+        with self.assertRaises(ct.CliToolConfigError) as ctx:
+            ct.load_tools_config(path)
+        msg = str(ctx.exception)
+        self.assertIn("not found", msg)
+        self.assertIn(str(path), msg)
+        # The fix hint should be present
+        self.assertIn("load_tools_config", msg)
 
 
 if __name__ == "__main__":

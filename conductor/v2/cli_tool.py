@@ -37,7 +37,13 @@ import re
 import subprocess
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
+
+try:
+    import yaml  # PyYAML — required by load_tools_config() (Brief 2, 2026-06-16)
+except ImportError:  # pragma: no cover — only hit in stripped-down envs
+    yaml = None  # type: ignore[assignment]
 
 LOG = logging.getLogger("conductor.v2.cli_tool")
 
@@ -69,6 +75,15 @@ class CliToolTimeoutError(CliToolError):
     pass
 
 
+class CliToolConfigError(CliToolError):
+    """Raised when cli_tools.yaml is malformed — missing required fields,
+    invalid output_format, missing 'cli_tools' top-level key, or file not
+    readable. Distinct from CliToolNotFoundError so callers / tests can
+    differentiate "the YAML is broken" from "the binary isn't installed".
+    """
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
@@ -95,16 +110,18 @@ class ToolRegistration:
     stream_format: Optional[str] = None  # none | claude-stream-json | codex-stream-json
 
 
-# Brief 1 placeholder: a default tool registration so the engine can
-# dispatch a cli_tool step without Brief 2 being shipped. The test
-# suite uses this MOCK tool (see test_cli_tool.py) — Brief 1 does NOT
-# need to invoke real Claude Code or Codex CLI binaries.
+# Module-level registry: name -> ToolRegistration.
 #
-# _mock_echo uses the POSIX `echo` builtin/external, available on every
-# Linux/macOS system. This lets the test suite exercise the full
-# subprocess lifecycle (spawn, capture, exit_code) without depending on
-# a coding agent being installed.
-_DEFAULT_TOOLS: dict[str, ToolRegistration] = {
+# Populated by:
+#   1. Module import (this dict) — ships with _mock_echo for back-compat
+#      with Brief 1 tests that don't load a config.
+#   2. load_tools_config(path) at engine startup — reads cli_tools.yaml.
+#   3. register_tool(reg) at runtime — used by tests, dynamic tool loading.
+#
+# The dict is named _REGISTRY (Brief 2) and _DEFAULT_TOOLS is a back-compat
+# alias. New code should reference _REGISTRY; existing Brief 1 test
+# imports of _DEFAULT_TOOLS still work.
+_REGISTRY: dict[str, ToolRegistration] = {
     "_mock_echo": ToolRegistration(
         name="_mock_echo",
         command="echo",
@@ -114,41 +131,158 @@ _DEFAULT_TOOLS: dict[str, ToolRegistration] = {
     ),
 }
 
+# Back-compat alias (Brief 1 tests reference this name directly).
+_DEFAULT_TOOLS = _REGISTRY
+
 
 def resolve_tool(name: str) -> ToolRegistration:
-    """Look up a tool by name. For Brief 1, returns the _mock_echo
-    placeholder if the name matches. Brief 2 will replace this with a
-    cli_tools.yaml loader.
+    """Look up a tool by name in the module-level registry.
+
+    The registry is populated at module import with _mock_echo, then
+    expanded at engine startup by load_tools_config() (which reads
+    pantheon/conductor/config/cli_tools.yaml and adds the v1 tool set:
+    claude-code, codex, gemini-cli).
 
     Raises CliToolNotFoundError if the tool isn't registered. The error
-    message is operator-friendly: it tells them which tool was missing
-    AND that the v1 tool set ships in Brief 2.
+    message is operator-friendly: it tells them which tool was missing,
+    lists the currently-registered tools, and points at the YAML config
+    that should be edited to add a new one.
     """
-    if name in _DEFAULT_TOOLS:
-        return _DEFAULT_TOOLS[name]
-    # Brief 2 will populate this from cli_tools.yaml (claude-code, codex,
-    # gemini-cli). For now, _mock_echo is the only registered tool.
+    if name in _REGISTRY:
+        return _REGISTRY[name]
     raise CliToolNotFoundError(
-        f"tool {name!r} is not registered. Brief 1 ships with only "
-        f"the _mock_echo placeholder; Brief 2 adds the cli_tools.yaml "
-        f"config loader with the v1 tool set (claude-code, codex, gemini-cli)."
+        f"tool {name!r} is not registered. "
+        f"Available tools: {sorted(_REGISTRY.keys())}. "
+        f"Check pantheon/conductor/config/cli_tools.yaml or call register_tool() to "
+        f"register it at runtime."
     )
 
 
 def register_tool(reg: ToolRegistration) -> None:
-    """Programmatically register a tool (used by Brief 2's config loader
-    and by tests that need custom mock tools). Brief 1 tests can use
-    this to inject /bin/false, /bin/sleep, etc. without depending on
-    _mock_echo semantics.
+    """Add or replace a tool in the registry. Used by load_tools_config()
+    and by tests that need to register custom mock tools (e.g. /bin/false,
+    /bin/sleep) without depending on _mock_echo semantics.
     """
-    _DEFAULT_TOOLS[reg.name] = reg
+    _REGISTRY[reg.name] = reg
 
 
 def unregister_tool(name: str) -> None:
     """Remove a tool from the registry. Tests use this to clean up
-    injected mocks so they don't leak into other tests.
+    injected mocks so they don't leak into other tests. No-op if the
+    tool isn't registered.
     """
-    _DEFAULT_TOOLS.pop(name, None)
+    _REGISTRY.pop(name, None)
+
+
+# ---------------------------------------------------------------------------
+# Config loader (Brief 2, 2026-06-16)
+# ---------------------------------------------------------------------------
+
+# Valid output_format values per Thoth's spec §4. stream-json requires the
+# WebSocket live-observability stream (deferred) and is accepted here as
+# a valid value so the YAML can be loaded, but _parse_output still raises
+# on it (Brief 1 behavior — see _parse_output below).
+VALID_OUTPUT_FORMATS: set[str] = {"json", "text", "stream-json"}
+REQUIRED_TOOL_FIELDS: set[str] = {"command", "args_template"}
+
+
+def load_tools_config(path: "Path | str") -> list[ToolRegistration]:
+    """Load tools from a YAML config file. Returns the list of registered
+    tools (in declaration order). Validates required fields and
+    output_format values; raises CliToolConfigError on malformed entries.
+
+    Per Thoth's spec §4 (conductor-cli-orchestration.md):
+    'Adding new tools later: claude-code-web, codex-remote, custom
+    internal tools, etc. The cli_tool step type is tool-agnostic; what
+    runs is determined by the registration.'
+
+    Idempotent: calling load_tools_config twice replaces the registry
+    entries (does not duplicate). Tools NOT listed in the config are
+    left in the registry unchanged (e.g. _mock_echo is always present
+    because it's seeded in _REGISTRY; a second load just overwrites the
+    tools it lists).
+
+    Raises:
+        CliToolConfigError — file missing, top-level 'cli_tools' key
+            missing, a tool entry is not a mapping, required fields
+            missing, or output_format is not in VALID_OUTPUT_FORMATS.
+    """
+    p = Path(path)
+    if yaml is None:
+        raise CliToolConfigError(
+            "PyYAML is not installed; cannot load cli_tools config. "
+            "Install with `pip install pyyaml`."
+        )
+    if not p.exists():
+        raise CliToolConfigError(
+            f"cli_tools config not found: {p!r}. Create the file or "
+            f"remove the load_tools_config() call from engine startup."
+        )
+
+    try:
+        doc = yaml.safe_load(p.read_text())
+    except yaml.YAMLError as e:
+        raise CliToolConfigError(
+            f"cli_tools config {p!r} is not valid YAML: {e}"
+        ) from e
+
+    if not isinstance(doc, dict) or "cli_tools" not in doc:
+        raise CliToolConfigError(
+            f"cli_tools config {p!r} missing top-level 'cli_tools' key. "
+            f"See pantheon/conductor/config/cli_tools.yaml for the expected shape."
+        )
+
+    cli_tools_section = doc["cli_tools"]
+    if not isinstance(cli_tools_section, dict):
+        raise CliToolConfigError(
+            f"cli_tools config {p!r}: 'cli_tools' must be a mapping, "
+            f"got {type(cli_tools_section).__name__}."
+        )
+
+    registered: list[ToolRegistration] = []
+    for name, entry in cli_tools_section.items():
+        if not isinstance(entry, dict):
+            raise CliToolConfigError(
+                f"cli_tools config {p!r}: tool {name!r} entry is not a mapping"
+            )
+
+        missing = REQUIRED_TOOL_FIELDS - set(entry.keys())
+        if missing:
+            raise CliToolConfigError(
+                f"cli_tools config {p!r}: tool {name!r} missing required fields: "
+                f"{sorted(missing)}"
+            )
+
+        output_format = entry.get("output_format", "text")
+        if output_format not in VALID_OUTPUT_FORMATS:
+            raise CliToolConfigError(
+                f"cli_tools config {p!r}: tool {name!r} has invalid output_format "
+                f"{output_format!r}; must be one of {sorted(VALID_OUTPUT_FORMATS)}"
+            )
+
+        args_template = entry["args_template"]
+        if not isinstance(args_template, list):
+            raise CliToolConfigError(
+                f"cli_tools config {p!r}: tool {name!r} args_template must be a list, "
+                f"got {type(args_template).__name__}"
+            )
+
+        reg = ToolRegistration(
+            name=name,
+            command=entry["command"],
+            args_template=list(args_template),
+            output_format=output_format,
+            timeout_default=entry.get("timeout_default", "4h"),
+            session_id_flag=entry.get("session_id_flag"),
+            stdin_prompt=bool(entry.get("stdin_prompt", False)),
+            env=dict(entry.get("env", {}) or {}),
+            max_concurrent=int(entry.get("max_concurrent", 1)),
+            stream_format=entry.get("stream_format"),
+        )
+        register_tool(reg)
+        registered.append(reg)
+
+    return registered
 
 
 # ---------------------------------------------------------------------------
@@ -174,25 +308,29 @@ def _substitute_template(template: list[str], substitutions: dict[str, str]) -> 
 def _parse_duration(s: str) -> float:
     """Parse '30m', '4h', '90s' into seconds.
 
-    Delegates to the engine's `_parse_duration` if available (the engine
-    is the canonical parser for the Conductor v2 codebase). Falls back
-    to a local parser only if the engine import fails — this keeps
-    cli_tool.py usable as a standalone module for unit testing.
+    We validate against a local regex FIRST so garbage input raises
+    ValueError (per the cli_tool contract — spec §2.1 timeout field
+    must be a valid duration). The engine's _parse_duration returns
+    1800.0 on garbage as a "soft default" for the broader system, but
+    that would mask caller bugs in the cli_tool path. If validation
+    passes, we delegate to the engine's parser for the actual value.
     """
     if isinstance(s, (int, float)):
         return float(s)
-    try:
-        # Lazy import avoids a circular dependency at module load.
-        # The engine's _parse_duration returns 1800.0 on garbage input
-        # (its "soft default"), so we re-validate against the regex
-        # below to raise ValueError on truly invalid durations.
-        from .engine import _parse_duration as _engine_parse
-        return _engine_parse(s)
-    except (ImportError, ValueError):
-        pass
+    # Local validation: must be «number» followed by optional unit
     m = re.match(r"^(\d+(?:\.\d+)?)([smhd]?)$", s.strip())
     if not m:
         raise ValueError(f"invalid duration: {s!r}")
+    # Validation passed; delegate the actual conversion to the engine
+    # if available (keeps cli_tool.py in lockstep with the rest of
+    # the v2 codebase's unit handling). Fall back to the local parser
+    # if the engine can't be imported (e.g. running cli_tool.py
+    # standalone in a test or as a script).
+    try:
+        from .engine import _parse_duration as _engine_parse
+        return _engine_parse(s)
+    except ImportError:
+        pass
     value = float(m.group(1))
     unit = m.group(2) or "s"
     return value * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
