@@ -1,0 +1,160 @@
+plan_id: phase-1-mcp-engine-wire
+parent: conductor-v2
+status: DONE
+completed_at: "2026-06-15"
+current_step: "1.7"
+steps_total: 7
+steps_done: 7
+gods_involved: [marvin, thoth]
+test_count_final: "170/170 combined (36 v1 + 132 v2 + 2 backbone E2E)"
+
+steps:
+  - id: "1.1"
+    title: "Add start_workflow MCP tool"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-14"
+    verdict: SHIP
+    files_touched:
+      - "conductor_server.py (new tool)"
+      - "v2/engine.py (ensure method is exposed)"
+      - "pantheon-core/mcp_server.py (65-line bridge)"
+      - "conductor/v2/tests/test_conductor_bridge.py (8 tests)"
+  - id: "1.2"
+    title: "Make submit_handoff route through v2 engine (Option C — v2 definition marker only)"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-14"
+    verdict: SHIP (after Minor #8 fix)
+    files_touched:
+      - "conductor_server.py:Conductor.submit_handoff (4-line patch)"
+      - "conductor/v2/tests/test_v2_marker.py (new, 9.9K, 4 test classes)"
+    notes: "True v2 routing deferred to Step 1.6. Marker is return-only."
+  - id: "1.3"
+    title: "Make ack_handoff advance the workflow"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-14"
+    verdict: SHIP
+    files_touched:
+      - "conductor_server.py:Conductor.ack_handoff (~55-line addition)"
+    qa_session: "20260614_195104_5e37f7"
+  - id: "1.4"
+    title: "Wire v2 daemon to consume MCP inbox files"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-14"
+    verdict: SHIP
+    files_touched:
+      - "conductor/v2/tests/test_daemon_consumes_inbox.py (new, 340 lines, 3 tests)"
+    notes: "No code change needed; wiring was already in place. Test locks in behavior."
+    qa_session: "20260614_202636_04b563"
+  - id: "1.5"
+    title: "End-to-end proof"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-14"
+    verdict: SHIP
+    files_touched:
+      - "conductor/v2/tests/test_backbone_e2e.py (new, 720+ lines, 2 tests)"
+    notes: "3 REWORK cycles to get green. Phase 1 E2E gate passes."
+    qa_session: "20260614_212243_87ac0d"
+  - id: "1.6"
+    title: "Add v2/engine.py:ConductorEngine.submit_handoff (true v2 routing)"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-15"
+    verdict: SHIP
+    files_touched:
+      - "v2/engine.py:ConductorEngine.submit_handoff (L1035, ~145 lines)"
+      - "conductor_server.py:Conductor.submit_handoff (L377, v2 branch)"
+      - "conductor_server.py:_v2_engine() (L168, L245-307, lazy singleton)"
+      - "conductor/v2/tests/test_submit_handoff_v2.py (new, 4 cases)"
+      - "tests/test_workflow_definition_can_select_next_step (v1 contract test fix)"
+      - "tests/test_cleanup_deletes_only_declared_workflow_temp_paths (v1 contract test fix)"
+    qa_session: "20260614_232552_633084"
+  - id: "1.7"
+    title: "Polish pass: Step 1.1/1.2 minors + PANTHEON_ROOT env bug + Marvin's 4 hygiene notes"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-15"
+    verdict: SHIP
+    files_touched:
+      - "pantheon-core/mcp_server.py (4 minor fixes + sys.path top-of-module)"
+      - "conductor_server.py (LOG.warning on v2 marker degraded, HANDOFF_ID_RE rationale)"
+      - "conductor/v2/tests/conftest.py (new, env-guard plugin + session fixture)"
+      - "conductor/v2/tests/fixtures.py (canonical imports)"
+      - "conductor/v2/tests/test_conductor_bridge.py (canonical imports)"
+      - "v2/engine.py (WARNING block on import-time binding)"
+      - "conductor/v2/tests/test_isolation.py (new, 5 cases)"
+    qa_session: "20260614_235014_863ca3"
+
+file_dependency_map:
+  /home/kohan/pantheon/conductor/v2/engine.py:
+    role: load_bearing
+    depends_on: [ConductorEngine.start_workflow (L815), start_workflow_sync (L761), ConductorEngine.submit_handoff (L1035), watch_pending (L1168-1222), _record_step_completion, next_step_after, _build_handoff, _save_instance]
+    depended_on_by: [conductor_server.py, pantheon-core/mcp_server.py, workflows/*.yaml, conductor daemon]
+    touched_by: [step-1.1, step-1.3, step-1.4, step-1.5, step-1.6, step-1.7]
+  /home/kohan/pantheon/conductor/conductor_server.py:
+    role: load_bearing
+    depends_on: [v2.engine, _v2_engine() lazy singleton, HANDOFF_ID_RE (L84-109)]
+    depended_on_by: [pantheon-core/mcp_server.py, all MCP conductor_* tools]
+    touched_by: [step-1.2, step-1.3, step-1.6, step-1.7]
+  /home/kohan/pantheon/pantheon-core/mcp_server.py:
+    role: bridge
+    depends_on: [conductor_server.py, sys.path at module top (post-Step 1.7)]
+    depended_on_by: [every MCP conductor_* tool call, every god session]
+    touched_by: [step-1.1, step-1.2 minor, step-1.7 polish]
+  /home/kohan/pantheon/conductor/v2/tests/test_backbone_e2e.py:
+    role: test
+    depends_on: [engine.start_workflow_sync, conductor_server.submit_handoff, conductor_server.ack_handoff]
+    depended_on_by: [pytest -q, every phase closeout]
+    touched_by: [step-1.5, step-1.7 polish]
+    notes: 2 backbone E2E tests. The failable check for the whole project.
+
+body: |
+  # Phase 1 — Wire MCP API into v2 Engine
+
+  ## Goal
+
+  Every MCP call (submit_handoff, ack_handoff, list_pending, etc.) routes through the v2 engine so the workflow executor, rule engine, and state tracking all participate. No more parallel v1/v2 systems.
+
+  ## Why first
+
+  Everything else builds on this. If MCP doesn't reach v2, then any other change is invisible to the user.
+
+  ## Failable check
+
+  Submit a handoff via MCP that has a matching workflow definition. Observe: the workflow instance is created in state/, the first god step runs via gw.submit_run, the handoff file lands in the god's inbox, the state file advances when the god returns, and a follow-up MCP call returns the updated state. End-to-end observable.
+
+  ## Test counts
+
+  - 36 v1 contract tests (unchanged)
+  - 132 v2 tests (grew 114→118→121→123→127→132 across Steps 1.1-1.7)
+  - 2 backbone E2E (Step 1.5)
+  - Combined 170/170 pass with PANTHEON_ROOT=/home/konan/pantheon + PYTHONPATH=/home/konan/pantheon
+
+  ## Honest diagnosis (2026-06-14, the gap list this phase closed)
+
+  1. MCP submit_handoff → v1 path, not v2 engine (real, blocking) — closed Step 1.2 + 1.6
+  2. No start_workflow MCP tool (likely real, blocks kickoff) — closed Step 1.1
+  3. No scheduler emitting schedule.cron events (real, rules exist but never fire) — closed Phase 2
+  4. NATS bridge quarantines everything (real, cross-Pantheon inbound is dead) — closed Phase 3
+  5. MCP ack_handoff doesn't chain (real, even within v1, the loop stops at 1 step) — closed Step 1.3
+  6. Quarantine backlog not auto-included in morning brief (real, skill patched but dawn-patrol doesn't call helper) — closed Phase 4
+  7. The "successful E2E" tests have empty definition_id (real, they're not actually exercising the engine) — closed Step 1.5
+
+  ## Carry-forwards (closed in subsequent steps)
+
+  - Dual-module WORKFLOWS_DIR binding (Step 1.5 carry-forward) — noted in Step 1.5 verdict
+  - v1+v2 state file collision — noted in Step 1.5 verdict
+  - step_history empty after advance (Step 1.3 carry-forward) — closed Step 1.6 (per Thoth finding)
+
+  — Hermes, 2026-06-15T17:45Z

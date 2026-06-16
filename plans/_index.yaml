@@ -1,0 +1,28 @@
+plan_id: conductor-v2
+updated: "2026-06-15T17:45Z"
+subplans:
+  - id: phase-1-mcp-engine-wire
+    status: DONE
+    completed_at: "2026-06-15"
+    last_step: "1.7"
+    file: phase-1-mcp-engine-wire.yaml
+  - id: phase-2-cron-scheduler
+    status: DONE
+    completed_at: "2026-06-15"
+    last_step: "2.3"
+    file: phase-2-cron-scheduler.yaml
+  - id: phase-3-nats-rule-bridge
+    status: DONE
+    completed_at: "2026-06-15"
+    last_step: "3.2"
+    file: phase-3-nats-rule-bridge.yaml
+  - id: phase-4-quarantine-sovereign
+    status: in_progress
+    last_step: "4.3"
+    next_step: "4.4"
+    file: phase-4-quarantine-sovereign.yaml
+  - id: phase-5-e2e-test-suite
+    status: not_started
+    last_step: null
+    next_step: "5.1"
+    file: phase-5-e2e-test-suite.yaml

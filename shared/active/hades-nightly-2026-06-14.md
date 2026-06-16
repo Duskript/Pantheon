@@ -1,0 +1,11 @@
+# Hades Nightly Run — 2026-06-14
+- **Run time:** 2026-06-14T13:03:46 UTC
+- **Duration:** 1.18s
+- **Errors:** 0
+- **Codexes checked:** 7 (all have INDEX.md)
+- **Distillation:** 443 sessions → 315 distilled files written
+- **Embed backfill:** 0 files (none pending)
+- **Archive scan:** 0 candidates
+- **Report saved:** ~/athenaeum/Codex-Pantheon/reports/hades-2026-06-14.md
+- **Mailbox:** Delivered to Hermes (msg_20260614_130347_943451.json)
+- **Sentinel:** ~/.hermes/pantheon/hades-last-success.json updated

@@ -1,0 +1,92 @@
+plan_id: conductor-v2
+plan_title: "Conductor v2 — Sovereign Workflow Engine"
+created: "2026-06-15"
+last_updated: "2026-06-15T17:45Z"
+owner: konan
+pm: hermes
+status: in_progress
+current_subplan: phase-4-quarantine-sovereign
+current_step: "4.4"
+total_subplans: 5
+subplans_complete: 3
+subplans_in_progress: 1
+subplans_pending: 1
+gods_involved: [marvin, thoth, hephaestus]
+supersedes: "~/pantheon/conductor/BUILD-PLAN.md (archived 2026-06-15T17:45Z)"
+
+subplans:
+  - id: phase-1-mcp-engine-wire
+    status: DONE
+    completed_at: "2026-06-15"
+    last_step: "1.7"
+    file: phase-1-mcp-engine-wire.yaml
+  - id: phase-2-cron-scheduler
+    status: DONE
+    completed_at: "2026-06-15"
+    last_step: "2.3"
+    file: phase-2-cron-scheduler.yaml
+  - id: phase-3-nats-rule-bridge
+    status: DONE
+    completed_at: "2026-06-15"
+    last_step: "3.2"
+    file: phase-3-nats-rule-bridge.yaml
+  - id: phase-4-quarantine-sovereign
+    status: in_progress
+    last_step: "4.3"
+    next_step: "4.4"
+    file: phase-4-quarantine-sovereign.yaml
+  - id: phase-5-e2e-test-suite
+    status: not_started
+    next_step: "5.1"
+    file: phase-5-e2e-test-suite.yaml
+
+body: |
+  # Conductor v2 — Master Build Plan
+
+  ## Cycle goal
+
+  Ship the Conductor v2 sovereign workflow engine: a backbone that connects gods via structured workflows, rules, and handoffs, with operator-approved sovereign-outbound guarantees, drift-free per-profile skill loading, and an E2E-tested scheduler + cross-Pantheon bridge. The system must be safe to leave unattended — any sovereign outbound requires an operator_approval_token, and a 3rd fabricated breach like the 2026-06-15 wf_8a0b5f28 / wf_f26885f8 incident is structurally impossible.
+
+  ## Cross-cutting decisions
+
+  1. The sovereign-NATS guard is the load-bearing safety pattern. No workflow that publishes to subspace.*.outgoing.* may fire without operator_approval_token in context_bag. Engine rejects on missing/invalid/consumed token. Source: 2026-06-15 NATS breach + 13:55Z engine fix + 17:06:33Z Tallon correction (wf_tallon_retraction_20260615_1655).
+
+  2. Per-profile SKILL.md drift was a real bug class. Symlinks prevent existing drift. Profile-bootstrap hook (Step 4.4) prevents new instances of the class. Source: Step 4.2 root cause + Step 4.3 symlink fix.
+
+  3. State files in state/wf_*.json are append-only + correctable. Manual truth-write is the audit-trail of last resort. Reversible via cp from state/backups/. Source: 13:17Z truth-write on wf_8a0b5f28 + wf_f26885f8.
+
+  4. The dispatcher resolver is a known root cause, deferred to a future project. The sovereign guard catches the symptom (refusals block breach), but the step-to-god resolver doesn't validate active_session.god == step.god. Tracked for a future "Conductor v3 — Resolver Correctness" project.
+
+  5. The PM loop is the operator authority surface; the Conductor is the execution surface; the operator_approval_token is the bridge. Three independent gates, layered defense.
+
+  6. Briefs are sliced 3-per-step, one per job, never batched. Each brief is focused enough that a god can read it in one pass and execute without ambiguity.
+
+  7. The build plan is the executable spec. Master + sub-plan YAMLs replace the legacy BUILD-PLAN.md. Memory is a cache, not source of truth.
+
+  ## Phase progression
+
+  ```
+  [=========] Phase 1: 7/7 steps DONE (SHIP 2026-06-15) — 170/170 tests pass
+  [=========] Phase 2: 3/3 steps DONE (SHIP 2026-06-15) — 189/189 tests pass
+  [=========] Phase 3: 1/1 step DONE (3.1 dropped, 3.2 SHIP) — 201/201 tests pass
+  [==·······] Phase 4: 3/7 steps DONE (4.1, 4.2, 4.3 SHIP; 4.4-4.6 + 4.final pending)
+  [·········] Phase 5: 0/2 steps DONE (pending)
+  ```
+
+  ## Deferred / out-of-scope
+
+  - Step 4.5 (hephaestus .archive/ cleanup of 6 entries): in scope, pending.
+  - Step 4.6 (YAML guardrails + validator): in scope, deferrable. Engine guard already catches the breach shape; this is defense-in-depth.
+  - Step 4.final (Phase 4 final review): in scope, hermes-only.
+  - Conductor v3 — Resolver Correctness: separate project, future.
+  - Build-plan-builder skill: separate project, in progress this session. Spec at `~/pantheon/shared/active/build-plan-builder-skill-spec.md`.
+
+  ## Operator ratification
+
+  - [x] Sub-plan split (5 phases, with 4.1-4.3 DONE from BUILD-PLAN, 4.4-4.6 + 4.final in current sub-plan)
+  - [x] Cross-cutting decisions (7 captured above)
+  - [x] File dependency map (11 entries — see per-file section in each sub-plan)
+  - [x] BUILD-PLAN.md fate: archived
+  - [x] Final-review step (4.final) is hermes-only, blocks advancement to phase-5
+
+  — Hermes, 2026-06-15T17:45Z

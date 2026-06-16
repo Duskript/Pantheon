@@ -1,0 +1,1 @@
+- 2026-06-11T20:00Z | Cron: Hades nightly run | Ran via Thoth cron | Hades report already generated at 06:00Z (MCP) | 1 session pruned | ChromaDB module missing (known issue) | Report filed: `Codex-Pantheon/reports/hades-cron-2026-06-11-night.md`

@@ -1,0 +1,86 @@
+plan_id: phase-5-e2e-test-suite
+parent: conductor-v2
+status: not_started
+next_step: "5.1"
+steps_total: 2
+steps_done: 0
+gods_involved: [marvin, thoth]
+blocked_by: "phase-4-quarantine-sovereign (specifically 4.final must pass)"
+
+steps:
+  - id: "5.1"
+    title: "E2E test infrastructure"
+    status: pending
+    god: marvin
+    qa: thoth
+    briefs_planned: 3
+    briefs:
+      - brief_1_of_3: "Build deliverable: test class that gets a real ConductorEngine with a real GatewayClient, points it at tmp pending/+state/+rules/+workflows/, runs a workflow"
+      - brief_2_of_3: "Dependency-ordered follow-on: extend the 2-case backbone_e2e.py with assertions on state file transitions (not mocks)"
+      - brief_3_of_3: "Verification: if engine skips the gateway, the test fails (negative case)"
+    success_criteria:
+      - "Test passes"
+      - "Test fails when engine is changed to skip the gateway (regression tripwire)"
+    verification: "Same as Step 1.5 (already shipped 2 backbone E2E cases in test_backbone_e2e.py). Step 5.1 builds on top of that."
+    files_touched_planned:
+      - "v2/tests/test_backbone_e2e.py (extend with new cases)"
+  - id: "5.2"
+    title: "Backbone regression tests (one per gap fixed in Phases 1-4)"
+    status: pending
+    god: marvin
+    qa: thoth
+    briefs_planned: 3
+    briefs:
+      - brief_1_of_3: "Build deliverable: Phase 1 regression (start_workflow MCP + ack_handoff MCP chains to next step)"
+      - brief_2_of_3: "Dependency-ordered follow-on: Phase 2 regression (schedule.cron event fires rule's workflow) + Phase 3 regression (NATS message on matched subject triggers rule) + Phase 4 regression (quarantine helper returns right shape + sovereign guard blocks no-token publish)"
+      - brief_3_of_3: "Verification: all 4 backbone tests pass + existing test_backbone_e2e.py 2 cases still pass + full v2 suite still 193+ pass"
+    success_criteria:
+      - "All 4 backbone tests pass"
+      - "Full v2 suite still 193+ pass"
+    verification: "pytest conductor/v2/tests/ -q"
+    files_touched_planned:
+      - "v2/tests/test_backbone_e2e.py (extend)"
+
+file_dependency_map:
+  /home/kohan/pantheon/conductor/v2/tests/test_backbone_e2e.py:
+    role: test
+    depends_on: [engine.start_workflow_sync, conductor_server.submit_handoff, conductor_server.ack_handoff, cron_scheduler.CronScheduler, nats._handle_msg, quarantine_status.py, engine._exec_nats_publish]
+    depended_on_by: [pytest -q, every phase closeout]
+    touched_by: [step-1.5, future-step-5.1, future-step-5.2]
+    notes: "Currently 2 cases from Step 1.5. Will be expanded to 6+ cases across Phases 1-4 regression coverage."
+
+body: |
+  # Phase 5 — Sane E2E Test Suite
+
+  ## Goal
+
+  The 90 existing tests cover components. We need tests that exercise the backbone. These should fail in known ways if the system breaks, not pass on empty mocks.
+
+  ## Why fifth
+
+  Without this, we'll regress and not know. Every phase above should leave a test behind. Phase 5 is the consolidation.
+
+  ## Failable check
+
+  A new test file v2/tests/test_backbone_e2e.py runs a real 2-step workflow via the gateway and asserts on observable side effects (state file transitions, step history, completion). It uses the venv python and the live thoth gateway. It does NOT use the _quarantine or temporaltest mocks.
+
+  ## What this phase adds
+
+  - One backbone regression test per gap fixed in Phases 1-4 (4 tests total)
+  - The existing 2 cases from Step 1.5 stay (start + ack chains, 2-step workflow end-to-end)
+  - Total backbone_e2e.py goes from 2 to 6+ cases
+  - Combined v2 test count: 193+ → 199+ (Phase 1) + 200+ (Phase 2) + 201+ (Phase 3) + 232+ (Phase 4) + 236+ (Phase 5)
+
+  ## Status
+
+  - blocked_by: phase-4-quarantine-sovereign (specifically 4.final must pass before this phase can start)
+  - ready_when: 4.final review passes; 95 symlinks live; sovereign guard live with 17/17 tests; 6 .archive/ entries cleaned or promoted
+
+  ## Test counts (projected)
+
+  - 36 v1 contract (unchanged)
+  - 200+ v2 tests
+  - 2 backbone E2E (current) → 6+ after this phase
+  - Combined 240+ pass
+
+  — Hermes, 2026-06-15T17:45Z

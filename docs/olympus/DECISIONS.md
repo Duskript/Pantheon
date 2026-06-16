@@ -168,3 +168,25 @@ Preferred language:
 ## Working Principle
 
 Capture decisions in this document as they happen. Organize later. Avoid losing product/UX decisions in chat history.
+
+---
+
+## 2026-06-14 — Conductor v2 is the canonical reaction engine; n8n deprecated
+
+**Decision:** Conductor v2 ships as the single source of truth for Pantheon event routing. v1 stays retired. n8n is being sunset in favor of TheoForge (visual editor on top of Conductor v2).
+
+**Evidence:**
+- v2 is a single-process daemon with 5 modules (engine, gateway, nats, webhook, delivery) wired by `service.py`
+- Test suite: 90/90 passing, all loading real production YAML from `~/pantheon/conductor/{rules,workflows}/`
+- Zero `hermes-agent/` imports in v2/ — verified by grep. Decoupled from any Hermes refactor.
+- Spec 8.1: all 5 handling modes (`log_only`, `notify`, `notify_and_log`, `approval_required`, `route_on_approval`) implemented; unmatched external events default to `approval_required`.
+- Spec 8.4: workflow versions are locked per instance.
+- Spec 8.5: Conductor routes, gods don't — verified by `TestHandoffRouting`.
+- Live smoke test passed: daemon started, gateway connected (Thoth :8642), webhook received, unmatched event quarantined to `pending/_quarantine/`.
+- systemd unit installed at `~/.config/systemd/user/conductor-v2.service` (not enabled — manual start until we have a day of clean runs).
+
+**DO NOT:**
+- Re-add `import hermes_cli` or any hermes-agent import to v2/ — keep it decoupled.
+- Add new NATS implementations, webhook handlers, or god-spawn paths outside `v2/`. v1's sprawl is why we're here.
+- Auto-enable the systemd unit. Test manually for a week first.
+- Modify production rules/workflows without running the test suite — tests are the contract.
