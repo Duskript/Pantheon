@@ -521,6 +521,12 @@ class WorkflowStep:
     inputs: list[str] = field(default_factory=list)
     strategy: Optional[str] = None  # concat|first|diff|vote|llm_summarize|llm_pick_best
     strategy_config: dict[str, Any] = field(default_factory=dict)
+    # --- Step 4.6 (Brief 2, 2026-06-16): sovereign-outbound contract ---
+    # True → this nats_publish step is a sovereign outbound and the operator
+    # has approved its single-use publish. Required by the load-time validator
+    # (workflow_validator.py) for any step whose subject matches
+    # SOVEREIGN_OUTBOUND_RE. See the 2026-06-15 sovereign-NATS breach incident.
+    operator_approval_required: bool = False
 
 
 # Maximum nesting depth for `parallel` steps. Spec §9 Q2 recommendation:
@@ -548,7 +554,7 @@ class Workflow:
         steps = []
         for s in wf.get("steps", []) or []:
             steps.append(cls._step_from_dict(s))
-        return cls(
+        wf_obj = cls(
             id=wf["id"],
             name=wf.get("name", wf["id"]),
             version=wf.get("version", "1.0.0"),
@@ -558,6 +564,18 @@ class Workflow:
             steps=steps,
             source_path=source,
         )
+        # Step 4.6 Brief 2 (2026-06-16) — load-time sovereign-outbound
+        # contract check. Lazy import avoids a circular dependency at
+        # module level (validator imports engine for SOVEREIGN_OUTBOUND_RE;
+        # engine imports validator only here, at runtime).
+        from .workflow_validator import validate_workflow, WorkflowValidationError
+        violations = validate_workflow(wf_obj)
+        if violations:
+            raise WorkflowValidationError(
+                f"workflow {wf_obj.id!r} (source={source}) failed "
+                f"sovereign-outbound validation:\n  " + "\n  ".join(violations)
+            )
+        return wf_obj
 
     @classmethod
     def _step_from_dict(
@@ -609,6 +627,11 @@ class Workflow:
             inputs=list(s.get("inputs", []) or []),
             strategy=s.get("strategy"),
             strategy_config=dict(s.get("strategy_config", {}) or {}),
+            # Step 4.6 — sovereign-outbound contract (Brief 2).
+            # Parsed from YAML so the load-time validator can inspect the
+            # field on the WorkflowStep dataclass. Default is False —
+            # workflows that don't set it are assumed non-sovereign.
+            operator_approval_required=bool(s.get("operator_approval_required", False)),
         )
 
     def step_by_id(self, step_id: str) -> Optional[WorkflowStep]:

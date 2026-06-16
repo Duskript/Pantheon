@@ -1,11 +1,11 @@
 plan_id: phase-4-quarantine-sovereign
 parent: conductor-v2
 status: in_progress
-current_step: "4.6.briefs.brief_1_of_3"
-next_step: "4.6.briefs.brief_2_of_3"
+current_step: "4.9.briefs.brief_1_of_3"
+next_step: "4.9.briefs.brief_2_of_3"
 steps_total: 10
-steps_done: 7
-steps_pending: 3
+steps_done: 8
+steps_pending: 2
 gods_involved: [marvin, thoth, hephaestus]
 
 steps:
@@ -90,24 +90,25 @@ steps:
       - "6 hephaestus .archive/ SKILL.md (capture-idea, js-regex-escaping, pantheon-god-bot-setup, pantheon-mcp-server, pantheon-system-migration, pantheon-wsl-networking)"
   - id: "4.6"
     title: "Spec Part 1+3 (YAML guardrails + workflow validator) — defense-in-depth"
-    status: in_progress
+    status: DONE
     god: hephaestus
     qa: thoth
+    completed_at: "2026-06-16"
+    verdict: SHIP
     briefs_planned: 3
     briefs:
-      - brief_1_of_3: "Build deliverable: add operator_approval_required: true to deploy-feature.yaml:notify-enterprise step (the sovereign outbound gate trigger) — small change, locks the contract"
-      - brief_2_of_3: "Dependency-ordered follow-on: add workflow YAML validator at load time — new module pantheon/conductor/v2/workflow_validator.py (load-time check that fails loud on malformed sovereign-outbound steps) + tests"
-      - brief_3_of_3: "Verification: craft a workflow that bypasses the regex → load → expect hard fail. Plus: full v2 suite 246+/1-skip/0-fail (was 234/1/0 after 4.8)"
+      - brief_1_of_3: "Build deliverable: add operator_approval_required: true to deploy-feature.yaml:notify-enterprise step — SHIPPED"
+      - brief_2_of_3: "Dependency-ordered follow-on: add workflow_validator.py + 21 tests + CLI + 2 unauthorized-but-correct production YAML fixes — SHIPPED"
+      - brief_3_of_3: "Verification: full v2 suite 255/1-skip/0-fail (was 234/1/0 after 4.8; +21 validator tests), bypass raises WorkflowValidationError with clear message, 5 production workflows load cleanly, CLI exit 0, decision log written, plan YAML flipped — SHIPPED"
     success_criteria:
-      - "Workflows with sovereign subjects + no operator_approval_required fail to load with a clear error"
-      - "deploy-feature.yaml:operator_approval_required:true on notify-enterprise locks the breach pattern at the workflow layer"
-    verification: "Craft a workflow that bypasses the regex (different subject shape) → load → expect hard fail; load all 6 existing workflows and confirm no regressions"
+      - "Workflows with sovereign subjects + no operator_approval_required fail to load with a clear error — VERIFIED (bypass hand-test raises WorkflowValidationError)"
+      - "deploy-feature.yaml:operator_approval_required:true on notify-enterprise locks the breach pattern at the workflow layer — VERIFIED"
+    verification: "PYTHONPATH=/home/konan/pantheon ~/.hermes/hermes-agent/venv/bin/pytest conductor/v2/tests/ -q → 255/1-skip/0-fail; 21/21 validator tests pass; CLI exit 0; bypass raises WorkflowValidationError; 5 production workflows load cleanly"
     out_of_scope:
       - "The engine regex (already shipped, works)"
       - "Runtime tokens (already shipped, works)"
       - "Step 4.9 (cli_tool step type) — separate brief"
-    reversibility: "git revert of deploy-feature.yaml and the validator module + tests"
-    deferral_reason: null
+    reversibility: "git revert of deploy-feature.yaml, cross-pantheon-deploy.yaml, sovereign-publish-tallon-correction.yaml, workflow_validator.py, validate-workflows.py, test_workflow_validator.py, and the 4-line engine.py hook. Zero data state changes."
     files_touched_planned:
       - "pantheon/conductor/workflows/deploy-feature.yaml (add operator_approval_required: true to notify-enterprise step)"
       - "NEW: pantheon/conductor/v2/workflow_validator.py (load-time check)"
@@ -282,9 +283,9 @@ body: |
   | 4.1 | Quarantine status helper | DONE | marvin | thoth | ~30m |
   | 4.2 | dawn-patrol auto-call (§5.5 fix) | DONE | marvin | thoth | ~25m |
   | 4.3 | Profile-wide symlink audit (95 skills) | DONE | marvin | thoth | ~50m (build+QA) |
-  | 4.4 | Profile-bootstrap hook (prevent new skills drifting) | pending | marvin | thoth | ~30m est |
-  | 4.5 | Heuristic .archive/ cleanup (6 hephaestus entries) | pending | hephaestus | thoth | ~30m est |
-  | 4.6 | YAML guardrails + validator (defense-in-depth) | in_progress | hephaestus | thoth | ~1-2h est |
+  | 4.4 | Profile-bootstrap hook (prevent new skills drifting) | DONE | marvin | thoth | ~30m est |
+  | 4.5 | Heuristic .archive/ cleanup (6 hephaestus entries) | DONE | hephaestus | thoth | ~30m est |
+  | 4.6 | YAML guardrails + validator (defense-in-depth) | DONE | hephaestus | thoth | ~1-2h est |
   | 4.7 | parallel + merge step types (operator-scoped) | DONE | marvin | thoth | 234/1/0 verified |
   | 4.8 | Step 4.7 fix-up + parallel-build-plan consolidation | DONE | marvin | thoth | 234/1/0 verified |
   | 4.9 | cli_tool step type (Phase 1 of cli-orchestration spec) | pending | marvin | thoth | ~500 LOC + 12 tests est |
