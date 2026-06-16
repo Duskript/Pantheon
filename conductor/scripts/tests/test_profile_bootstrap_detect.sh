@@ -54,7 +54,11 @@ ln -sf "$WORK/canon/dev/ci-test-skill/SKILL.md" "$WORK/profiles/apollo/skills/de
 ln -sf "$WORK/canon/dev/caddy-vhost-routing/SKILL.md" "$WORK/profiles/apollo/skills/dev/caddy-vhost-routing/SKILL.md"
 # drift (regular file): cachyos has ci-test-skill as a real file
 echo "drift" > "$WORK/profiles/cachyos/skills/dev/ci-test-skill/SKILL.md"
-# missing: hephaestus, iris, marvin, rheta, thoth have nothing for ci-test-skill
+# hardlink: hephaestus has a hardlink to canonical (shares inode, NOT drift)
+# Phase 4 Step 4.4 P2 #2 hotfix regression case — the original Brief 1.5
+# inode check would have logged this as drift. We want this to be silent.
+ln "$WORK/canon/dev/ci-test-skill/SKILL.md" "$WORK/profiles/hephaestus/skills/dev/ci-test-skill/SKILL.md"
+# missing: iris, marvin, rheta, thoth have nothing for ci-test-skill
 
 # NO-CANON fixture: pretend ci-fixture-only is intentional per-profile-only for rheta
 cat > "$WORK/no_canon.txt" <<'EOF'
@@ -81,9 +85,9 @@ echo "--- Test 3: caddy-vhost-routing appears 6 times (apollo has symlink, other
 count=$(echo "$out" | grep -c "caddy-vhost-routing")
 assert "caddy-vhost-routing count" 6 "$count"
 
-echo "--- Test 4: ci-test-skill appears 5 times (apollo symlink, cachyos drift logged but not in output, other 5 missing) ---"
+echo "--- Test 4: ci-test-skill appears 4 times (apollo symlink, cachyos drift logged but not in output, hephaestus hardlink, other 4 missing) ---"
 count=$(echo "$out" | grep -c "ci-test-skill")
-assert "ci-test-skill count (drift in stderr not stdout)" 5 "$count"
+assert "ci-test-skill count (drift in stderr not stdout)" 4 "$count"
 
 echo "--- Test 5: cachyos ci-test-skill is NOT in output (path is present as regular file) ---"
 if echo "$out" | grep -q "^cachyos.*ci-test-skill"; then
@@ -130,6 +134,19 @@ if echo "$out" | grep -q "rheta.*ci-fixture-only"; then
   assert "rheta ci-fixture-only NOT filtered (filter disabled)" "yes" "yes"
 else
   assert "rheta ci-fixture-only NOT filtered (filter disabled)" "yes" "no"
+fi
+
+echo "--- Test 11: hephaestus hardlink to canonical is NOT in stderr as drift ---"
+# Phase 4 Step 4.4 P2 #2 regression: a hardlink (regular file sharing
+# canonical inode) is functionally equivalent to a symlink. The detector
+# must NOT log it as drift. The previous broken check (per vs
+# per.resolve() inodes) would have suppressed regular-file drift;
+# this test pins down the OPPOSITE direction — that hardlinks stay silent.
+err=$(python3 "$SCRIPT" --canonical-root "$WORK/canon" --profiles-root "$WORK/profiles" --no-canon-report "$WORK/no_canon.txt" 2>&1 >/dev/null)
+if echo "$err" | grep -q "hephaestus.*ci-test-skill.*regular file"; then
+  assert "hephaestus hardlink in stderr (should NOT be)" "no" "yes"
+else
+  assert "hephaestus hardlink in stderr (should NOT be)" "no" "no"
 fi
 
 echo
