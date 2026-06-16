@@ -193,11 +193,17 @@ def _load_provider_config(provider_name: str) -> Optional[Dict[str, Any]]:
 
 def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
               model: Optional[str] = None,
-              timeout: float = 30.0) -> str:
+              timeout: float = 180.0) -> str:
     """Single LLM call. Returns the raw text response.
 
     Uses the OpenAI-compatible chat completions endpoint that most
-    providers expose. Times out after 30s.
+    providers expose. Times out after 180s.
+
+    180s (3 min) is the floor for deepseek-v4-flash on dense batches at
+    max_tokens=8000. The model can legitimately take 60-130s to respond
+    on a 25-event prompt; 30s was a leftover from when max_tokens=800
+    and the model finished in <10s. Bumped 2026-06-12 after the L2
+    full-corpus loop timed out on 3/3 retries at the 30s default.
     """
     api_base = provider_cfg.get("api", "").rstrip("/")
     if not api_base:
@@ -217,12 +223,26 @@ def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
              "content": "You are a careful analyst. Output ONLY valid JSON."},
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": 800,
+        "max_tokens": 8000,
+        # Disable reasoning mode for thinking models (deepseek-v4-flash, kimi-k2
+        # thinking, etc.). Without this, the model uses its entire token budget
+        # for hidden chain-of-thought reasoning and emits 0 chars of visible
+        # content, leaving the L2 extractor with empty responses. Per deepseek
+        # API docs: api-docs.deepseek.com/guides/thinking_mode. Discovered
+        # 2026-06-12 during the L2 full-corpus run.
+        "thinking": {"type": "disabled"},
         "temperature": 0.2,
     }).encode("utf-8")
 
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
+    # Cloudflare (which fronts opencode.ai and many other LLM gateways)
+    # rejects requests with no User-Agent as bot traffic (error 1010).
+    # Set a recognizable UA so the package works against CF-fronted
+    # endpoints out of the box. Discovered 2026-06-12 while running
+    # the L2 full-corpus loop — the opencode-go endpoint returned 403
+    # until we added this header.
+    req.add_header("User-Agent", "pantheon-ichor/1.0 (lib.ichor.llm)")
     if api_key:
         req.add_header("Authorization", f"Bearer {api_key}")
 

@@ -1,0 +1,202 @@
+plan_id: phase-4-quarantine-sovereign
+parent: conductor-v2
+status: in_progress
+current_step: "4.4.briefs.brief_2_of_3"
+next_step: "4.4.briefs.brief_3_of_3"
+steps_total: 7
+steps_done: 3
+steps_pending: 4
+gods_involved: [marvin, thoth, hephaestus]
+
+steps:
+  - id: "4.1"
+    title: "Quarantine status helper"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-15"
+    verdict: SHIP
+    files_touched:
+      - "conductor/scripts/quarantine_status.py (new, 6.1K)"
+    notes: "Helper returns {count, oldest_age, items}. Exit 0 if empty, 1 if non-empty. 14 unit tests pass."
+  - id: "4.2"
+    title: "dawn-patrol auto-call (thoth-dawn-patrol §5.5 fix)"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-15"
+    verdict: SHIP
+    files_touched:
+      - "~/.hermes/profiles/thoth/skills/thoth/thoth-dawn-patrol/SKILL.md (was 34,997 B, mtime 00:07; now byte-identical to canonical 35,813 B via cp)"
+      - "/home/kohan/athenaeum/reports/dawn-patrol/2026-06-15.md (added ⚠️ Conductor Quarantine Backlog section at line 137)"
+    notes: "Root cause was candidate #2 from the brief (stale per-profile SKILL.md, mtime 1h33m before canonical was updated), not #1 (load-order) or #4 (spec added post-run). Thoth QA session 20260615_104204_4b472f."
+    qa_session: "20260615_161453_hermes"
+  - id: "4.3"
+    title: "Profile-wide symlink audit (95 skills)"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-15"
+    verdict: SHIP (with 1 minor scope clarification on the NO-CANON report, operator-ratified 86-scope)
+    files_touched:
+      - "95 per-profile SKILL.md replaced with ln -sf symlinks to canonical (apollo 18, cachyos 18, hephaestus 20, iris 20, thoth 19)"
+      - "66 per-profile references/ subdirs merged with rsync -a --ignore-existing (551 new files, 1270→1821 per-profile)"
+      - "/home/kohan/pantheon/shared/active/conductor-step-4.3-no-canon.txt (new, 14668 bytes, 86 entries)"
+    notes: "Per-god NO-CANON breakdown (operator-ratified 86-scope): hephaestus 28, marvin 21, thoth 15, iris 12, apollo 5, cachyos 4, rheta 1. The 6 hephaestus .archive/ entries are flagged for Step 4.5 cleanup. Thoth QA session 20260615_164935_hermes."
+    qa_session: "20260615_164935_hermes"
+  - id: "4.4"
+    title: "Profile-bootstrap hook (prevent new skills from drifting)"
+    status: in_progress
+    god: marvin
+    qa: thoth
+    briefs_planned: 3
+    briefs:
+      - brief_1_of_3: "Build deliverable: detect new canonical skills at gateway start"
+      - brief_2_of_3: "Dependency-ordered follow-on: create per-profile symlinks for new skills"
+      - brief_3_of_3: "Verification: fresh-gateway-start test, pytest, no regression on 95 existing symlinks"
+    success_criteria:
+      - "New canonical SKILL.md → per-profile symlink created at next gateway start"
+      - "Pre-existing 95 symlinks untouched"
+      - "Failure mode: log + continue, don't block startup"
+    verification: "Drop a test canonical skill, restart any per-profile gateway, confirm symlink + readlink; pytest -q → still 193/193"
+    out_of_scope:
+      - "Spec Part 1 (YAML guardrails) — that's Step 4.6"
+      - "Spec Part 3 (YAML validator) — that's Step 4.6"
+    reversibility: "rm the bootstrap hook script + revert any service file changes. Symlinks remain correct."
+    files_touched_planned:
+      - "NEW: pantheon/conductor/scripts/profile-bootstrap-hook.sh (or similar, propose in brief response)"
+      - "Possibly: ~/.config/systemd/user/hermes-gateway-*.service (if hook needs to be in service file)"
+  - id: "4.5"
+    title: "Heuristic .archive/ cleanup (6 hephaestus entries)"
+    status: pending
+    god: hephaestus
+    qa: thoth
+    briefs_planned: 3
+    briefs:
+      - brief_1_of_3: "Build deliverable: audit the 6 hephaestus .archive/ entries (capture-idea, js-regex-escaping, pantheon-god-bot-setup, pantheon-mcp-server, pantheon-system-migration, pantheon-wsl-networking)"
+      - brief_2_of_3: "Dependency-ordered follow-on: remove (if obsolete) or promote to canonical (if still useful)"
+      - brief_3_of_3: "Verification: find returns 0 obsolete .archive/ entries"
+    success_criteria:
+      - "6 .archive/ entries either removed (if obsolete) or promoted to canonical (if still useful)"
+    verification: "find ~/.hermes/profiles/hephaestus -name SKILL.md -path '*.archive/*' returns 0 (or 0 non-redundant entries)"
+    out_of_scope:
+      - "Per-profile SKILL.md in non-.archive/ paths"
+    reversibility: "git history + the original 6 files are in athenaeum/Codex-God-hephaestus/.archive/ backups"
+    files_touched_planned:
+      - "6 hephaestus .archive/ SKILL.md (capture-idea, js-regex-escaping, pantheon-god-bot-setup, pantheon-mcp-server, pantheon-system-migration, pantheon-wsl-networking)"
+  - id: "4.6"
+    title: "Spec Part 1+3 (YAML guardrails + workflow validator) — defense-in-depth"
+    status: pending
+    deferrable: true
+    god: hephaestus
+    qa: thoth
+    briefs_planned: 3
+    briefs:
+      - brief_1_of_3: "Build deliverable: add operator_approval_required: true to deploy-feature.yaml:notify-enterprise"
+      - brief_2_of_3: "Dependency-ordered follow-on: add workflow YAML validator at load time"
+      - brief_3_of_3: "Verification: craft a workflow that bypasses the regex → load → expect hard fail"
+    success_criteria:
+      - "Workflows with sovereign subjects + no operator_approval_required fail to load with a clear error"
+    verification: "Craft a workflow that bypasses the regex (different subject shape) → load → expect hard fail"
+    out_of_scope:
+      - "The engine regex (already shipped, works)"
+      - "Runtime tokens (already shipped, works)"
+    reversibility: "git revert of deploy-feature.yaml and the validator"
+    deferral_reason: "Engine guard already catches the breach shape via regex. This is defense-in-depth, not blocking."
+    files_touched_planned:
+      - "pantheon/conductor/workflows/deploy-feature.yaml (add god, gates, operator_approval_required to notify-enterprise step)"
+      - "NEW: pantheon/conductor/v2/workflow_validator.py (load-time check)"
+      - "pantheon/conductor/v2/tests/test_workflow_validator.py (lock-in)"
+  - id: "4.final"
+    title: "Phase 4 final review"
+    status: pending
+    type: review
+    god: hermes (no god dispatch — meta-step)
+    trigger: "All 4.1-4.6 DONE"
+    output: "reviews/phase-4-quarantine-sovereign-final-review.md"
+    output_format:
+      section_1_holes: "Step statuses are DONE, but the actual deliverable is missing or wrong"
+      section_2_decisions: "Implicit scope calls made during execution that weren't in the spec"
+      section_3_blockers: "Anything that would prevent the next sub-plan (phase-5-e2e-test-suite) from starting"
+      section_4_forward_impacts: "Dependencies the next sub-plan assumed that aren't real"
+      section_5_drift: "Live state vs. spec in ways that matter"
+    blocks: "Advancement to phase-5-e2e-test-suite sub-plan"
+
+file_dependency_map:
+  /home/kohan/pantheon/conductor/v2/engine.py:
+    role: load_bearing
+    depends_on: [SOVEREIGN_OUTBOUND_RE (L157), _has_operator_approval (L179), _consume_operator_approval (L199), _REFUSAL_MARKER_RE (L122)]
+    depended_on_by: [workflows/*.yaml, conductor daemon, all god dispatches]
+    touched_by: [step-4.final, future-step-4.6]
+  /home/kohan/pantheon/conductor/scripts/quarantine_status.py:
+    role: feature
+    depends_on: [Python stdlib]
+    depended_on_by: [thoth-dawn-patrol §5.5, conductor cron, daily brief, quarantine sweeper]
+    touched_by: [step-4.1]
+  /home/kohan/.hermes/skills/thoth/thoth-dawn-patrol/SKILL.md:
+    role: feature
+    depends_on: [canonical SKILL.md, §5.5 spec]
+    depended_on_by: [thoth-profile skill loader, dawn-patrol cron, morning brief]
+    touched_by: [step-4.2]
+    notes: "Per-profile copy is now symlinked to canonical (step 4.3)"
+  /home/kohan/.hermes/profiles/*/skills/*/*/SKILL.md:
+    role: feature (95 symlinks + 459 per-profile-only files preserved)
+    depends_on: [~/.hermes/skills/*/*/SKILL.md via symlink]
+    depended_on_by: [profile-specific skill loaders, dawn-patrol cron, all god dispatches]
+    touched_by: [step-4.3]
+    notes: "6 hephaestus .archive/ entries flagged for step 4.5 cleanup. NO-CANON report at shared/active/conductor-step-4.3-no-canon.txt (86 entries, operator-ratified)."
+  /home/kohan/pantheon/conductor/v2/tests/test_sovereign_outbound_guard.py:
+    role: test
+    depends_on: [engine._exec_nats_publish, engine._has_operator_approval]
+    depended_on_by: [pytest -q, every phase closeout]
+    touched_by: [step-4.final]
+    notes: "17 tests. Lock-in for the breach fix."
+
+body: |
+  # Phase 4 — Quarantine + Sovereign Guards
+
+  ## Goal
+
+  When the morning brief runs, the Conductor quarantine backlog is automatically checked and surfaced — no manual ls needed. AND no workflow can publish to a sovereign outbound subject without an operator-issued, single-use, workflow_id-bound token. The sovereign-NATS breach (2026-06-15 02:16:56Z and 02:23:25Z) is structurally impossible after this phase.
+
+  ## Why fourth
+
+  We built the sweeper and patched the skill section in 06-14, but the auto-wiring was still manual, and the sovereign-NATS guard didn't exist. Closing this loop means the morning brief always knows if anything's stuck AND no fabricated breach can fire.
+
+  ## Failable check
+
+  With 1+ files in pending/_quarantine/, the dawn-patrol output includes the backlog section automatically. AND a test that publishes to subspace.*.outgoing.* without an operator_approval_token is blocked by the engine, not propagated to NATS.
+
+  ## Steps overview
+
+  | Step | Title | Status | God | QA | Wall-clock |
+  |---|---|---|---|---|---|
+  | 4.1 | Quarantine status helper | DONE | marvin | thoth | ~30m |
+  | 4.2 | dawn-patrol auto-call (§5.5 fix) | DONE | marvin | thoth | ~25m |
+  | 4.3 | Profile-wide symlink audit (95 skills) | DONE | marvin | thoth | ~50m (build+QA) |
+  | 4.4 | Profile-bootstrap hook (prevent new skills drifting) | pending | marvin | thoth | ~30m est |
+  | 4.5 | Heuristic .archive/ cleanup (6 hephaestus entries) | pending | hephaestus | thoth | ~30m est |
+  | 4.6 | YAML guardrails + validator (defense-in-depth) | pending, deferrable | hephaestus | thoth | ~1-2h est |
+  | 4.final | Phase 4 final review | pending | hermes (meta-step) | n/a | ~20m est |
+
+  ## Test counts
+
+  - 36 v1 contract (unchanged)
+  - 193 v2 tests (current; +17 from test_sovereign_outbound_guard.py)
+  - 1 slow E2E (Phase 2)
+  - 2 backbone E2E (Phase 1)
+  - Combined 232/232 pass
+
+  ## Sovereign-NATS breach — what happened, what closed it
+
+  - 2026-06-15T02:16:56.473655Z: wf_8a0b5f28's notify-enterprise step auto-published "Feature wf_8a0b5f28 implemented and reviewed, ready for Enterprise deploy" to subspace.konan.outgoing.tallon
+  - 2026-06-15T02:23:25.734427Z: wf_f26885f8's notify-enterprise step auto-published the same fabricated claim
+  - 13:17Z: Both state files truth-corrected to status=aborted
+  - 13:55Z: Engine fix shipped — _exec_nats_publish now requires operator_approval_token
+  - 17:06:33Z: Operator-approved counter-message published via wf_tallon_retraction_20260615_1655
+
+  ## Phase 4 final review (4.final) — what it will check
+
+  Before advancing to phase-5-e2e-test-suite, the runner blocks on a 5-section review at reviews/phase-4-quarantine-sovereign-final-review.md. The review surfaces holes, decisions, blockers, forward impacts, and drift. This is the "one smooth build" check the operator asked for.
+
+  — Hermes, 2026-06-15T17:45Z

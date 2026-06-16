@@ -453,19 +453,72 @@ class LogicGate(BaseGate):
                     f"Line {i}: bare 'except:' — use 'except Exception:'"
                 )
 
-        # Leftover debug
-        for i, line in enumerate(content.split("\n"), 1):
+        # Leftover debug print
+        # Rule: a top-level `print()` in a file that has function defs is
+        # suspicious (real code shouldn't sprinkle prints). Top-level scripts
+        # (no defs) and `if __name__ == "__main__":` blocks are fine.
+        # Module-level print in first 5 lines is always allowed (CLI banners).
+        lines = content.split("\n")
+        has_def = any(re.match(r"^(async\s+)?def\s+\w+", ln) for ln in lines)
+        in_main_block = False
+        main_indent = -1
+        for i, line in enumerate(lines, 1):
             stripped = line.strip()
-            if re.match(r"^print\(.+\)\s*$", stripped) and "def " not in content:
-                if i <= 5:
-                    continue  # Module-level print in first 5 lines is OK
+            # Track `if __name__ == "__main__":` block
+            if re.match(r'^if\s+__name__\s*==\s*["\']__main__["\']\s*:', stripped):
+                in_main_block = True
+                main_indent = len(line) - len(line.lstrip())
+                continue
+            if in_main_block and stripped and not line.startswith(" "):
+                # Dedent past main block
+                in_main_block = False
+            if re.match(r"^print\(.+\)\s*$", stripped):
+                # A print at column 0 (top-level) in a file with function
+                # defs is suspicious. Indented prints are inside a
+                # function/block and treated as legitimate logging.
+                # `if __name__ == "__main__":` blocks and top-level
+                # scripts (no defs) are exempt.
+                if line.startswith(" ") or line.startswith("\t"):
+                    continue
+                if in_main_block:
+                    continue
+                if not has_def:
+                    continue
                 errors.append(f"Line {i}: leftover print() call")
 
-        # TODO/FIXME markers
-        for i, line in enumerate(content.split("\n"), 1):
-            if re.search(r"\b(TODO|FIXME|HACK|XXX)\b", line):
+        # TODO/FIXME markers — only flag at the start of a comment line
+        # (not inside string literals, regex patterns, or docstrings).
+        # Comment lines start with optional whitespace then `#`.
+        in_triple_string = False
+        triple_quote_chars = None
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # Track triple-quoted string state (rudimentary but cheap)
+            if not in_triple_string:
+                m = re.match(r'^(\s*)([rubfRUBF]*)("""|\'\'\')', line)
+                if m:
+                    # Find the closing triple-quote on the same line
+                    rest = line[m.end():]
+                    if "'''" in rest and m.group(3) == "'''":
+                        # Triple-single on one line — full docstring, no state change
+                        pass
+                    elif '"""' in rest and m.group(3) == '"""':
+                        # Triple-double on one line — full docstring, no state change
+                        pass
+                    else:
+                        in_triple_string = True
+                        triple_quote_chars = m.group(3)
+                        continue
+            else:
+                if triple_quote_chars and triple_quote_chars in line:
+                    in_triple_string = False
+                    triple_quote_chars = None
+                continue
+            # Must be a comment line: optional whitespace + # + word
+            cm = re.match(r"^\s*#\s*(\w+)", stripped)
+            if cm and cm.group(1) in ("TODO", "FIXME", "HACK", "XXX"):
                 errors.append(
-                    f"Line {i}: unresolved marker — {line.strip()[:60]}"
+                    f"Line {i}: unresolved marker — {stripped[:60]}"
                 )
 
         return errors
@@ -510,11 +563,22 @@ class LogicGate(BaseGate):
             return None
 
         path = params.get("path", "")
-        content = (
-            params.get("content", "")
-            or params.get("new_string", "")
-        )
-        if not path or not content:
+        if not path:
+            return None
+
+        # For `write_file`, params['content'] is the full file (authoritative).
+        # For `patch`, params['new_string'] is a FRAGMENT — we must re-read
+        # the file from disk to validate the post-patch state.
+        if tool_name == "write_file":
+            content = params.get("content", "")
+        else:  # patch
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+            except (FileNotFoundError, IOError, OSError):
+                return None
+
+        if not content:
             return None
 
         # P2b: burst tracking happens BEFORE dedup so we can detect rapid

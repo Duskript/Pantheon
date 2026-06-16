@@ -7,6 +7,7 @@ All event storage, retrieval, and search operations for the Pantheon system.
 import os
 import re
 import sqlite3
+import threading
 from typing import Any, Optional
 
 
@@ -119,6 +120,11 @@ class IchorDB:
         """
         self.db_path = os.path.expanduser(db_path)
         self._conn: Optional[sqlite3.Connection] = None
+        # RLock: the gateway calls this from worker threads (token-juice,
+        # context-compressor, ichor nudge). check_same_thread=False in
+        # connect() lets the connection be touched from any thread; this
+        # lock serialises access so SQLite's own thread-safety rules hold.
+        self._lock = threading.RLock()
 
     def connect(self) -> sqlite3.Connection:
         """Open (or create) the database and ensure the schema exists.
@@ -129,29 +135,37 @@ class IchorDB:
         Raises:
             sqlite3.Error: If the database cannot be opened or schema creation fails.
         """
+        # Double-checked locking: fast path for the common case, lock for init.
         if self._conn is not None:
             return self._conn
+        with self._lock:
+            if self._conn is not None:
+                return self._conn
 
-        # Ensure parent directory exists
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
+            # Ensure parent directory exists
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir:
+                os.makedirs(db_dir, exist_ok=True)
 
-        self._conn = sqlite3.connect(self.db_path)
-        self._conn.execute("PRAGMA journal_mode=WAL;")
-        self._conn.execute("PRAGMA foreign_keys=ON;")
-        self._conn.row_factory = sqlite3.Row
+            # check_same_thread=False lets the gateway call this from
+            # worker threads (token-juice, context-compressor, ichor
+            # nudge). The RLock above serialises all access so SQLite's
+            # own thread semantics remain safe.
+            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA foreign_keys=ON;")
+            self._conn.row_factory = sqlite3.Row
 
-        # Load and execute the schema DDL
-        schema_path = os.path.join(
-            os.path.dirname(__file__), "..", "schemas", "ichor-events.sql"
-        )
-        schema_path = os.path.normpath(schema_path)
+            # Load and execute the schema DDL
+            schema_path = os.path.join(
+                os.path.dirname(__file__), "..", "schemas", "ichor-events.sql"
+            )
+            schema_path = os.path.normpath(schema_path)
 
-        with open(schema_path, "r") as f:
-            schema_sql = f.read()
-        self._conn.executescript(schema_sql)
-        self._conn.commit()
+            with open(schema_path, "r") as f:
+                schema_sql = f.read()
+            self._conn.executescript(schema_sql)
+            self._conn.commit()
 
         return self._conn
 

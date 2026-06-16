@@ -4,7 +4,7 @@ ER-P4: Dream cycle — consolidation, dedup, contradiction detection, decay.
 Spec: ~/athenaeum/Codex-God-thoth/research/entity-relationship-taxonomies/ichor-entity-model-design.md
      (lines 195, 215, 278, 299, 640, 687)
 
-The dream cycle has THREE sub-cycles that the cron runs at different cadences:
+The dream cycle has FOUR sub-cycles that the cron runs at different cadences:
 
   DEDUP (daily)
     Find entities with the same `(type_id, lower(name))` that aren't
@@ -34,24 +34,34 @@ The dream cycle has THREE sub-cycles that the cron runs at different cadences:
     conservative: an entity you extracted last month but never
     looked at again still decays, which is the right default.
 
-The 3 sub-cycles share one DB connection. They are run in this
+  ENTITY_DECAY (weekly, runs AFTER decay)
+    Entity confidence decay + fact decay. For each active entity,
+    apply the same exponential decay to `confidence` using the
+    entity's `last_accessed` (or `updated_at` as fallback).
+    Entities below `archive_threshold` get `status='archived'`
+    and their relationships are archived too.
+    Also decays `entity_facts.confidence` using the parent
+    entity's last_accessed as a proxy.
+
+The 4 sub-cycles share one DB connection. They are run in this
 order: dedup first (so contradictions fire on the merged graph),
-contradiction next (lightweight read-only), decay last (touches
-weights, must come after any merge so freshly-redirected edges
-get the right inheritance).
+contradiction next (lightweight read-only), decay next (touches
+relationship weights), entity_decay last (touches entity confidence
+and cascades to relationships).
 
 Usage:
     python3 -m lib.ichor.entities.dream --cycle=dedup --execute
     python3 -m lib.ichor.entities.dream --cycle=dedup,contradiction --execute
     python3 -m lib.ichor.entities.dream --cycle=all --execute
     python3 -m lib.ichor.entities.dream --cycle=decay --half-life-days=7 --execute
+    python3 -m lib.ichor.entities.dream --cycle=entity_decay --execute
 
     from lib.ichor.entities import run_dream_cycle
     report = run_dream_cycle(cycles=("dedup", "contradiction"), dry_run=False)
 
 Cron integration (per build list):
     ichor-dream.service + .timer           daily 03:30 UTC  (dedup, contradiction)
-    ichor-dream-decay.service + .timer     weekly Sun 04:00 UTC  (decay)
+    ichor-dream-decay.service + .timer     weekly Sun 04:00 UTC  (decay, entity_decay)
     Both 30 minutes after ichor-tick at 03:00, so they run in
     sequence and the decay is off-peak.
 """
@@ -112,8 +122,7 @@ def _now_iso() -> str:
 
 def _parse_db_datetime(iso_str: str) -> datetime | None:
     """Parse a SQLite datetime('now') string. Defensive: returns None
-    on failure rather than raising, so decay can skip junk data.
-    """
+    on failure rather than raising, so decay can skip junk data."""
     if not iso_str or not isinstance(iso_str, str):
         return None
     # SQLite's datetime('now') is 'YYYY-MM-DD HH:MM:SS' in UTC. Strip
@@ -121,7 +130,7 @@ def _parse_db_datetime(iso_str: str) -> datetime | None:
     s = iso_str.strip()
     if s.endswith(" UTC"):
         s = s[:-4]
-    # Drop subseconds if any ('YYYY-MM-DD HH:MM:SS.fff' → first 19 chars)
+    # Drop subseconds if any ('YYYY-MM-DD HH:MM:SS.fff' -> first 19 chars)
     if len(s) > 19 and s[19] in (".", ","):
         s = s[:19]
     try:
@@ -437,7 +446,7 @@ def detect_contradictions(
 
 
 # ---------------------------------------------------------------------------
-# Sub-cycle 3: decay
+# Sub-cycle 3: relationship decay
 # ---------------------------------------------------------------------------
 
 def _relationships_to_decay(
@@ -457,7 +466,9 @@ def _relationships_to_decay(
     rows = con.execute(
         "SELECT r.id, r.weight, r.updated_at, r.source_id, r.target_id, "
         "       se.last_accessed AS src_la, se.updated_at AS src_ua, "
-        "       te.last_accessed AS tgt_la, te.updated_at AS tgt_ua "
+        "       se.confidence AS src_conf, "
+        "       te.last_accessed AS tgt_la, te.updated_at AS tgt_ua, "
+        "       te.confidence AS tgt_conf "
         "FROM relationships r "
         "JOIN entities se ON r.source_id = se.id "
         "JOIN entities te ON r.target_id = te.id "
@@ -479,8 +490,8 @@ def decay(
       - effective_last_access = max(source.last_accessed, target.last_accessed)
         (a relationship is "used" if either endpoint was recently touched)
         Fall back to source.updated_at if no last_accessed.
-      - Δt = days since effective_last_access
-      - if Δt > half_life_days: new_weight = weight * exp(-Δt * ln(2) / half_life_days)
+      - dt = days since effective_last_access
+      - if dt > half_life_days: new_weight = weight * exp(-dt * ln(2) / half_life_days)
       - if new_weight < archive_threshold: weight = 0, mark archived
 
     Returns: {
@@ -552,6 +563,155 @@ def decay(
 
 
 # ---------------------------------------------------------------------------
+# Sub-cycle 4: entity + fact confidence decay
+# ---------------------------------------------------------------------------
+
+def _entities_to_decay(
+    con: sqlite3.Connection, *, half_life_days: float
+) -> list[dict[str, Any]]:
+    """List active entities that haven't been touched recently."""
+    rows = con.execute(
+        "SELECT id, name, type_id, confidence, "
+        "       last_accessed, updated_at "
+        "FROM entities "
+        "WHERE status = 'active'"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _entity_facts_to_decay(
+    con: sqlite3.Connection,
+) -> list[dict[str, Any]]:
+    """List active facts whose parent entity hasn't been touched."""
+    rows = con.execute(
+        "SELECT f.id, f.entity_id, f.key, f.value, f.confidence, "
+        "       f.valid_to, "
+        "       e.last_accessed AS e_la, e.updated_at AS e_ua "
+        "FROM entity_facts f "
+        "JOIN entities e ON f.entity_id = e.id "
+        "WHERE f.valid_to IS NULL"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def entity_decay(
+    con: sqlite3.Connection,
+    *,
+    half_life_days: float = DEFAULT_HALF_LIFE_DAYS,
+    archive_threshold: float = DEFAULT_ARCHIVE_THRESHOLD,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Apply exponential decay to entity confidence and archive stale ones.
+
+    Also cascades to entity_facts (decay confidence) and relationships
+    (archived when their entity is archived).
+
+    Returns: {
+        "entities_considered": int,
+        "entities_decayed": int,
+        "entities_archived": int,
+        "facts_considered": int,
+        "facts_decayed": int,
+        "facts_archived": int,
+        "relationships_archived": int,
+        "dry_run": bool,
+    }
+    """
+    k = math.log(2) / half_life_days
+    now = _now_iso()
+
+    # -- Entity decay --
+    e_rows = _entities_to_decay(con, half_life_days=half_life_days)
+    e_considered = len(e_rows)
+    e_decayed = 0
+    e_archived = 0
+    rels_archived = 0
+
+    for r in e_rows:
+        effective_la = r["last_accessed"] or r["updated_at"]
+        if not effective_la:
+            continue
+        delta_days = _days_between(now, effective_la)
+        if delta_days < half_life_days:
+            continue
+        new_conf = r["confidence"] * math.exp(-k * delta_days)
+        if new_conf < archive_threshold:
+            e_archived += 1
+            if not dry_run:
+                con.execute(
+                    "UPDATE entities SET status = 'archived', "
+                    "  confidence = 0.0, updated_at = ? "
+                    "WHERE id = ?",
+                    (now, r["id"]),
+                )
+                con.execute(
+                    "UPDATE relationships SET weight = 0, "
+                    "  provenance = 'dream_entity_archived' "
+                    "WHERE (source_id = ? OR target_id = ?) "
+                    "  AND weight > 0",
+                    (r["id"], r["id"]),
+                )
+        else:
+            e_decayed += 1
+            if not dry_run:
+                con.execute(
+                    "UPDATE entities SET confidence = ?, updated_at = ? "
+                    "WHERE id = ?",
+                    (round(new_conf, 4), now, r["id"]),
+                )
+
+    if not dry_run:
+        rels_archived = con.execute(
+            "SELECT changes()"
+        ).fetchone()[0]
+
+    # -- Fact decay --
+    f_rows = _entity_facts_to_decay(con)
+    f_considered = len(f_rows)
+    f_decayed = 0
+    f_archived = 0
+
+    for f in f_rows:
+        effective_la = f["e_la"] or f["e_ua"]
+        if not effective_la:
+            continue
+        delta_days = _days_between(now, effective_la)
+        if delta_days < half_life_days:
+            continue
+        new_conf = f["confidence"] * math.exp(-k * delta_days)
+        if new_conf < archive_threshold:
+            f_archived += 1
+            if not dry_run:
+                con.execute(
+                    "UPDATE entity_facts SET valid_to = ?, "
+                    "  confidence = 0.0 "
+                    "WHERE id = ?",
+                    (now, f["id"]),
+                )
+        else:
+            f_decayed += 1
+            if not dry_run:
+                con.execute(
+                    "UPDATE entity_facts SET confidence = ? WHERE id = ?",
+                    (round(new_conf, 4), f["id"]),
+                )
+
+    if not dry_run:
+        con.commit()
+
+    return {
+        "entities_considered": e_considered,
+        "entities_decayed": e_decayed,
+        "entities_archived": e_archived,
+        "facts_considered": f_considered,
+        "facts_decayed": f_decayed,
+        "facts_archived": f_archived,
+        "relationships_archived": rels_archived,
+        "dry_run": dry_run,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Cycle orchestrator
 # ---------------------------------------------------------------------------
 
@@ -566,11 +726,11 @@ def run_dream_cycle(
     """Run the requested sub-cycles in order.
 
     Args:
-        cycles: any combination of "dedup", "contradiction", "decay".
+        cycles: any combination of "dedup", "contradiction", "decay", "entity_decay".
             Default: ("dedup", "contradiction") — the daily sub-cycles.
-            Use ("decay",) for the weekly decay run.
-        half_life_days: for the decay cycle. Default 7 (per spec).
-        archive_threshold: for the decay cycle. Default 0.1 (per spec).
+            Use ("decay", "entity_decay") for the weekly decay run.
+        half_life_days: for the decay cycles. Default 7 (per spec).
+        archive_threshold: for the decay cycles. Default 0.1 (per spec).
         dry_run: if True, no writes happen, only reports.
 
     Returns:
@@ -584,7 +744,7 @@ def run_dream_cycle(
     """
     import time
 
-    valid = {"dedup", "contradiction", "decay"}
+    valid = {"dedup", "contradiction", "decay", "entity_decay"}
     unknown = set(cycles) - valid
     if unknown:
         raise ValueError(
@@ -616,6 +776,13 @@ def run_dream_cycle(
                 archive_threshold=archive_threshold,
                 dry_run=dry_run,
             )
+        if "entity_decay" in cycles:
+            out["cycles"]["entity_decay"] = entity_decay(
+                con,
+                half_life_days=half_life_days,
+                archive_threshold=archive_threshold,
+                dry_run=dry_run,
+            )
     finally:
         con.close()
 
@@ -637,22 +804,22 @@ def main() -> int:
         # Apply dedup + contradiction to the live DB
         python3 -m lib.ichor.entities.dream --execute
 
-        # Apply all three (dedup, contradiction, decay)
+        # Apply all four (dedup, contradiction, decay, entity_decay)
         python3 -m lib.ichor.entities.dream --cycle=all --execute
 
-        # Just the weekly decay, with custom half-life
-        python3 -m lib.ichor.entities.dream --cycle=decay \\
+        # Just the weekly decay + entity_decay
+        python3 -m lib.ichor.entities.dream --cycle=decay,entity_decay \
             --half-life-days=14 --execute
     """
     parser = argparse.ArgumentParser(
-        description="Ichor ER Graph dream cycle (dedup / contradiction / decay).",
+        description="Ichor ER Graph dream cycle (dedup / contradiction / decay / entity_decay).",
     )
     parser.add_argument(
         "--cycle",
         default="dedup,contradiction",
         help=(
             "Comma-separated sub-cycles to run. "
-            "Valid: dedup, contradiction, decay, all. "
+            "Valid: dedup, contradiction, decay, entity_decay, all. "
             "Default: dedup,contradiction (the daily pair)."
         ),
     )
@@ -671,7 +838,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.cycle == "all":
-        cycles = ("dedup", "contradiction", "decay")
+        cycles = ("dedup", "contradiction", "decay", "entity_decay")
     else:
         cycles = tuple(c.strip() for c in args.cycle.split(",") if c.strip())
 
@@ -707,6 +874,16 @@ def main() -> int:
                 f"decayed={out['decayed']} "
                 f"archived={out['archived']} "
                 f"skipped_fresh={out['skipped_fresh']}"
+            )
+        elif name == "entity_decay":
+            print(
+                f"  entity_decay: entities_considered={out['entities_considered']} "
+                f"entities_decayed={out['entities_decayed']} "
+                f"entities_archived={out['entities_archived']} "
+                f"facts_considered={out['facts_considered']} "
+                f"facts_decayed={out['facts_decayed']} "
+                f"facts_archived={out['facts_archived']} "
+                f"rels_archived_cascade={out['relationships_archived']}"
             )
     return 0
 

@@ -1,0 +1,52 @@
+workflow:
+  id: morning-briefing
+  name: "Daily Morning Briefing"
+  version: "1.1.0"
+  description: "Automated daily briefing assembled by Thoth, supplemented by last30days, summarized by Hermes, formatted by Iris"
+  context:
+    required: []
+    optional: [date]
+
+  steps:
+    - id: active-goals
+      god: thoth
+      skill: inject-goals
+      action: inject
+      output: goals_preamble
+      timeout: 30s
+
+    - id: last30days-research
+      god: thoth
+      skill: last30days
+      action: research
+      input: "Research these topics in the last 30 days: multi-agent AI, MCP server, Claude Code, AI agent framework, TheoForge. Return X/Reddit engagement data per topic."
+      output: l30_signals
+      timeout: 5m
+
+    - id: dawn-patrol
+      god: thoth
+      skill: dawn-patrol
+      input_from: last30days-research
+      output: daily_intel
+      timeout: 10m
+
+    - id: summarize
+      god: hermes
+      action: summarize
+      input_from: dawn-patrol
+      gates: [state_gate]
+      output: briefing_summary
+      timeout: 5m
+
+    - id: digest-format
+      god: iris
+      skill: digest-format
+      input_from: summarize
+      output: formatted_digest
+      timeout: 5m
+
+    - id: deliver
+      type: nats_publish
+      subject: "subspace.konan.inbox"
+      input_from: digest-format
+      message: "Daily briefing ready: ${workflow_id}"

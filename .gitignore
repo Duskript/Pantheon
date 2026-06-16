@@ -56,8 +56,6 @@ scripts/pantheon-export
 canvas-and-the-world-fell-away.md
 project-ideas.md
 notes/
-plans/
-**/plans/
 u55-fix.sh
 webui/static/god_glow_screenshot.jpg
 
@@ -67,7 +65,6 @@ webui/static/prospect-pipeline.md
 # Runtime state — never committed
 data/
 heartbeat_state.json
-shared/
 
 # Large binary assets (use SVG + HTML instead)
 pantheon-logo.png
@@ -131,3 +128,143 @@ webui/static/assets/
 *.bak
 *.bak.*
 *.bak-*
+
+# =============================================================================
+# Added 2026-06-15 — Conductor v2 partial tracking (Option C)
+# =============================================================================
+# Track only conductor/v2/ (engine + tests) and conductor/scripts/ (Brief 1+2
+# deliverables + their tests). Gitignore v1 server/runtime/state/pending/etc.
+# Other Pantheon instances bootstrap these via the install pipeline.
+
+# v1 conductor server (replaced by v2; kept locally for reference)
+conductor/conductor_server.py
+conductor/conductor-server.py
+conductor/conductor-poll-all.py
+conductor/conductor-service.py
+conductor/conductor-session-start.py
+conductor/conductor.service
+
+# Runtime state (workflow JSONs, handoff queue, webhooks, dispatch)
+conductor/state/
+conductor/pending/
+conductor/_dispatch/
+conductor/_quarantine/
+conductor/_webhooks/
+
+# Bridge-test workflow fixtures (320 one-off test runs that leaked to disk)
+conductor/workflows/bridge-test-*.yaml
+
+# Internal positioning doc + PDF (instance-specific)
+conductor/theoforge-positioning.md
+conductor/theoforge-positioning.pdf
+
+# Caches
+conductor/__pycache__/
+conductor/**/__pycache__/
+conductor/.pytest_cache/
+
+# Conductor v1 server-only files (docs, nats, rules — kept locally)
+conductor/docs/
+conductor/nats/
+conductor/rules/
+
+# Bundle outputs and handoffs
+conductor-package/
+conductor-package.tar.gz
+conductor-package.zip
+dist/
+exports/
+archives/
+caddy-deploy/
+tallon-handoff.md
+.auditorium-*/
+
+# L2 corpus pipeline scripts (daily-loop, not hand-written code)
+scripts/run_l2_full_corpus.py
+scripts/resume_l2_full_corpus.py
+scripts/run_l2_corpus_wrapper.py
+scripts/populate_reference_knowledge.py
+scripts/diag_nats_listen.py
+scripts/l2_provider.json
+scripts/pantheon-webhook-bridge.py
+
+# n8n password reset scripts (consolidate into reset_n8n_password.py)
+scripts/reset_host_n8n_pass.py
+scripts/reset_host_n8n_pass2.py
+scripts/update_n8n_pass.py
+scripts/sync-iris-to-relay7.sh
+scripts/upload_logo.py
+scripts/clawforge-issue-client-token.py
+
+# Daily tech-debt reports (output, not source)
+reports/tech-debt-*.json
+reports/tech-debt-*.tsv
+reports/tech-debt-*-summary.md
+reports/tech-debt-*-issues.json
+reports/tech-debt-*-filed.json
+reports/tech_debt_filer_*.py
+reports/tech_debt_scanner_*.py
+
+# Pipeline + scratch
+pipeline.py
+qa-reviews/
+.hermes-synthesis-design-references.md
+
+# god-templates: instance-generated, not part of upstream
+god-template/
+
+# =============================================================================
+# Exception (2026-06-15) — track the canonical build docs, not the runtime state
+# =============================================================================
+# shared/ and plans/ are gitignored because they hold runtime state, BUT
+# they ALSO hold canonical Conductor v2 build artifacts (briefs, plans, results).
+# We explicitly un-ignore those. Keep this section surgical.
+
+# Conductor v2 build docs (briefs, QA briefs, results, changelog, split proposals)
+!shared/active/conductor-*.md
+!shared/active/conductor-*.txt
+!shared/active/conductor-v2-*.md
+
+# Conductor v2 build plans (NOT personal planning — these are the spec)
+!plans/conductor-v2/
+
+# Earlier briefs that shipped before the gitignore rule was added
+!shared/active/2026-06-11.md
+!shared/active/INDEX.md
+
+# =============================================================================
+# Added 2026-06-15 — surgical shared/ and plans/ runtime ignores
+# =============================================================================
+# shared/ and plans/ contain BOTH canonical build artifacts (briefs, plans,
+# decisions) AND instance-specific runtime (digests, handoffs, pending queue).
+# We track the former, ignore the latter.
+
+# shared/ runtime: auto-generated digests, instance handoffs, pending queue
+shared/DIGEST.md
+shared/CONTEXT.md
+shared/CONTEXT_konan.md
+shared/CONTEXT_*.md
+shared/handoffs/
+shared/pending/
+shared/digest/
+shared/lead-schema.md
+shared/mercer-*.md
+shared/ledger-prototype.html
+shared/pantheon-architecture.html
+shared/athenaeum-writes.md
+shared/google-io-2026-integration-map.md
+shared/n8n-workflows/
+shared/archive/
+
+# plans/ runtime: hermes-ui-merge work, export-modal scratch, rebrand notes
+plans/hermes-ui-merge-*.md
+plans/olympus-ui-migration-plan.md
+plans/export-modal-build-plan.md
+plans/goal-pantheon-rebrand.md
+plans/templates/
+
+# User-attributed decision log (per-user, not canonical)
+shared/decisions/konan/
+
+# athenaeum-writes (running log, not source)
+shared/athenaeum-writes.md

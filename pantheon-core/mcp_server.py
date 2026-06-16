@@ -23,15 +23,24 @@ from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
 # Constants
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 _REAL_HOME = os.path.expanduser("~")
+_PANTHEON_HOME = Path(f"{_REAL_HOME}/pantheon")
 _ATHENAEUM_ROOT = Path(f"{_REAL_HOME}/athenaeum")
 _CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 _MESSAGES_DIR = Path(f"{_REAL_HOME}/pantheon/gods/messages")
 _PANTHEON_DIR = Path(f"{_REAL_HOME}/pantheon")
 _HADES_REPORTS = Path(f"{_REAL_HOME}/athenaeum/Codex-Pantheon/reports")
 _EMBEDDABLE_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
+
+# Ensure `~ / pantheon` is on sys.path at module import time so `import
+# conductor.*` works when the MCP server is launched outside the Pantheon
+# rootdir (e.g. as a systemd %h-shifted service). This used to live inside
+# _conductor_dispatch (Thoth Minor #3, Step 1.7 polish). One-time path
+# injection — keep idempotent.
+if _PANTHEON_HOME.exists() and str(_PANTHEON_HOME) not in sys.path:
+    sys.path.insert(0, str(_PANTHEON_HOME))
 
 # Load env vars from ~/.hermes/.env and profile-specific .env files
 for env_file in [
@@ -258,6 +267,7 @@ mcp = FastMCP(
 Available systems:
 - **Athenaeum** — file-based knowledge store with Codex-partitioned semantic search
 - **Messaging** — inter-god message delivery via file-based inboxes
+- **Conductor** — workflow + reaction engine (10 endpoints: submit_handoff, check_inbox, ack_handoff, get_workflow_state, list_pending, list_rules, list_workflows, abort_workflow, cleanup, start_workflow)
 - **Ichor Brief** — query-less recall: 'what should I know right now?' — ranked context from conversation memory
 - **Ichor Graph** — multi-hop NL graph queries: 'what tools does Hermes use?' — relation inference + entity resolution + path walking
 - **Skills** — shared executable skills hub at athenaeum/skills/
@@ -363,6 +373,47 @@ def athenaeum_search(
                 "score": score,
                 "created_at": r["created_at"] or "",
             })
+
+        # Also search reference_knowledge (curated athenaeum concepts).
+        # The table has no FTS5 index (only idx_ref_slug), so we use LIKE
+        # against title/body/brief/outline. The populated content is short
+        # (a few KB per codex INDEX.md) so LIKE is fast enough for the
+        # ~30-row table. FTS5 would be the right answer at scale.
+        ref_query_terms = [t.rstrip('*') for t in safe_terms]
+        if ref_query_terms:
+            like_clauses_per_term = []
+            params = []
+            for t in ref_query_terms:
+                like = f"%{t}%"
+                like_clauses_per_term.append(
+                    "(title LIKE ? OR body LIKE ? OR brief LIKE ? OR outline LIKE ?)"
+                )
+                params.extend([like, like, like, like])
+            ref_sql = f"""
+                SELECT id, title, body, source, brief, outline
+                FROM reference_knowledge
+                WHERE {" OR ".join(like_clauses_per_term)}
+                LIMIT ?
+            """
+            params.append(limit)
+            ref_rows = conn.execute(ref_sql, params).fetchall()
+            for r in ref_rows:
+                # Use 0.6 as a default mid-tier score for reference rows.
+                # (Better than dropping the data; ranking can be refined
+                # later when there's a fuller signal set.)
+                content_preview = (r["brief"] or r["body"] or "")[:2000] or "(empty)"
+                results.append({
+                    "content": content_preview,
+                    "source": r["source"] or f"reference:{r['id']}",
+                    "codex": "athenaeum-reference",
+                    "event_type": "reference_knowledge",
+                    "score": 0.6,
+                    "created_at": "",
+                })
+
+        # Re-rank merged results by score, cap to limit.
+        results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        results = results[:limit]
 
         return json.dumps({"results": results, "total": len(results)}, indent=2)
 
@@ -1333,33 +1384,427 @@ def ichor_forge(
 # ═══════════════════════════════════════════════════════════════════════════
 
 @mcp.tool(
-    description="[P4b STUB] Replaced by athenaeum_graph_search (WARM table). Returns a stub response — graph.db deleted in P4b, multi-hop NL queries need to be reimplemented on the new 5-tier schema.",
+    description="Multi-hop graph query against the Ichor entity-relationship layer (ER-P3). Resolves `query` to a known entity, then returns its neighborhood subgraph (nodes, edges, stats) using the new 5-tier schema. Replaces the P4b stub — the entity-relationship layer is now live."
 )
 def ichor_graph_query(
     query: str,
-    hops: int = 0,
+    hops: int = 2,
     max_results: int = 30,
     output_markdown: bool = False,
 ) -> str:
-    """ichor_graph_query stub — graph.db removed in P4b.
+    """Multi-hop graph query via lib.ichor.entities.traversal.
 
-    The natural-language multi-hop graph query engine lived in
-    lib/ichor_graph_query.py, which was deleted. Replacement should:
-      1. Parse NL queries to extract entity names + relation types
-      2. Look up entities in warm_entities by name LIKE
-      3. Walk related_to (1-hop, since we have no graph edges)
-      4. Optionally cross-reference cold_events for the same name
+    Resolves the free-form `query` to a known entity name using
+    athenaeum_graph_search, then walks the entity-relationship graph
+    via the new 5-tier schema (entities / relationships / warm_entities).
+    The entity layer was added in 2026-06-12's Ichor refactor and was
+    latent until this tool was wired in.
 
-    For now, this returns a stub. Use:
-      - athenaeum_graph_search for entity/relationship lookup
-      - athenaeum_search for content search (FTS5)
+    Args:
+        query: Entity name or free-form phrase. Resolved to the top
+            athenaeum_graph_search hit (best-effort fuzzy match).
+        hops: Traversal depth (1..7). Clamped to 7. Default 2.
+        max_results: Cap on returned nodes/edges in markdown mode.
+        output_markdown: If True, render as human-readable text instead
+            of JSON.
+
+    Returns:
+        JSON or markdown rendering of:
+          {nodes: [...], edges: [...], stats: {...}, resolved_from: query}
     """
-    return json.dumps({
-        "error": "ichor_graph_query is a stub in P4b",
-        "reason": "lib/ichor_graph_query.py deleted with graph.db",
-        "fallback": ["athenaeum_graph_search", "athenaeum_search"],
-        "note": f"Original query: {query!r}",
-    }, indent=2)
+    # Lazy import — the entities package is heavy (loads 7 submodules)
+    # and we don't want to pay the cost on every mcp_server startup.
+    try:
+        import sqlite3 as _sqlite3
+        from lib.ichor.entities import graph_query as _er_graph_query  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _er_get_conn  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+            "fallback": "athenaeum_graph_search",
+        }, indent=2)
+
+    # Resolve query → entity name. Two-stage lookup:
+    #   1. entities.name (clean L1/L2-extracted entities, ER-P1+)
+    #   2. warm_entities.name LIKE (noisy P4b fragments, fallback only)
+    # The previous single-stage warm_entities lookup was the bottleneck
+    # that made every query return 0/0: warm_entities is full of
+    # sentence fragments, so LIKE 'Marvin' matched a fragment that
+    # wasn't in the new entities table.
+    resolved_name = None
+    resolution_source = None
+    try:
+        from lib.ichor.entities.schema import get_conn as _resolve_conn  # type: ignore[import-untyped]
+        _rc = _resolve_conn()
+        try:
+            # Stage 1: exact or prefix match against clean entities.
+            # The new ER layer stores the names that graph_query can
+            # actually walk, so this is the high-precision path.
+            _row = _rc.execute(
+                "SELECT name FROM entities "
+                "WHERE name = ? OR name LIKE ? "
+                "ORDER BY confidence DESC LIMIT 1",
+                (query, f"{query}%"),
+            ).fetchone()
+            if _row:
+                resolved_name = _row[0]
+                resolution_source = "entities_exact_or_prefix"
+            else:
+                # Stage 2: substring fallback against warm_entities
+                # (noisy but covers entities that haven't been promoted
+                # to the new layer yet).
+                # warm_entities columns: name, importance, trust, related_to
+                # (no `confidence` column — the package spec used different naming)
+                _row = _rc.execute(
+                    "SELECT name FROM warm_entities WHERE name LIKE ? "
+                    "ORDER BY importance DESC, trust DESC LIMIT 1",
+                    (f"%{query}%",),
+                ).fetchone()
+                if _row:
+                    resolved_name = _row[0]
+                    resolution_source = "warm_entities_like"
+        finally:
+            _rc.close()
+    except Exception as exc:
+        resolution_source = f"resolve_failed: {exc!r}"
+
+    if not resolved_name:
+        return json.dumps({
+            "error": "entity_not_found",
+            "query": query,
+            "suggestion": "Use athenaeum_graph_search to discover entity names first.",
+        }, indent=2)
+
+    # Clamp depth to the package's absolute max.
+    depth = max(1, min(int(hops or 2), 7))
+    # min_confidence defaults to 0.1 inside the package; we let it.
+
+    try:
+        conn = _er_get_conn()
+        try:
+            result = _er_graph_query(conn, resolved_name, depth=depth)
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "graph_query_failed",
+            "entity": resolved_name,
+            "depth": depth,
+            "detail": str(exc),
+        }, indent=2)
+
+    # Add resolution provenance so callers can see what we matched.
+    if isinstance(result, dict):
+        result = dict(result)
+        result["resolved_from"] = query
+        result["resolved_entity"] = resolved_name
+        result["resolution_source"] = resolution_source
+
+    if output_markdown:
+        # Render compact markdown — caller asked for human-readable.
+        nodes = result.get("nodes", []) if isinstance(result, dict) else []
+        edges = result.get("edges", []) if isinstance(result, dict) else []
+        stats = result.get("stats", {}) if isinstance(result, dict) else {}
+        lines = [
+            f"# Graph neighborhood: {resolved_name}",
+            f"_resolved from: {query!r} (depth={depth}, source={resolution_source})_",
+            "",
+            f"**Stats:** {stats}",
+            "",
+            f"## Nodes ({len(nodes)})",
+        ]
+        for n in nodes[:max_results]:
+            lines.append(f"- {n.get('name', n.get('id', '?'))} ({n.get('type', '?')})")
+        lines.append("")
+        lines.append(f"## Edges ({len(edges)})")
+        for e in edges[:max_results]:
+            lines.append(
+                f"- {e.get('source', '?')} —[{e.get('type', '?')}]→ "
+                f"{e.get('target', '?')} (conf={e.get('confidence', '?')})"
+            )
+        return "\n".join(lines)
+
+    return json.dumps(result, indent=2, default=str)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tool: ichor_l2_stats
+# ═══════════════════════════════════════════════════════════════════════════
+
+@mcp.tool(
+    description="Read-only stats on the L2 entity/relationship extractor (ER-P2). Shows how many provisional entities and relationships exist, how many LLM extractions have been logged, and how many distinct types are in use. Cheap — pure SQL count queries against the live ichor.db."
+)
+def ichor_l2_stats() -> str:
+    """L2 extraction stats. No side effects.
+
+    Returns:
+        JSON with: llm_extractions_logged, provisional_entities,
+        provisional_relationships, llm_entity_types. Plus a
+        derivation from cold_events count for context.
+    """
+    try:
+        from lib.ichor.entities import l2_stats as _l2_stats  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+        }, indent=2)
+
+    try:
+        conn = _get_conn()
+        try:
+            stats = _l2_stats(conn)
+            # Augment with raw table counts for context
+            stats["_raw_counts"] = {
+                "entities": conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0],
+                "entity_facts": conn.execute("SELECT COUNT(*) FROM entity_facts").fetchone()[0],
+                "entity_types": conn.execute("SELECT COUNT(*) FROM entity_types").fetchone()[0],
+                "relationships": conn.execute("SELECT COUNT(*) FROM relationships").fetchone()[0],
+                "relationship_types": conn.execute("SELECT COUNT(*) FROM relationship_types").fetchone()[0],
+                "extraction_log": conn.execute("SELECT COUNT(*) FROM extraction_log").fetchone()[0],
+                "cold_events": conn.execute("SELECT COUNT(*) FROM cold_events").fetchone()[0],
+            }
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "l2_stats_failed",
+            "detail": str(exc),
+        }, indent=2)
+
+    return json.dumps(stats, indent=2, default=str)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tool: ichor_extract_entities
+# ═══════════════════════════════════════════════════════════════════════════
+
+@mcp.tool(
+    description="Run one incremental pass of the L2 LLM entity/relationship extractor (ER-P2). Reads up to `batch_size` cold events past `last_event_id`, calls the configured LLM, stores extracted entities + relationships as provisional. Use `dry_run=true` to build the prompt without calling the LLM (debug). Without an API key in the env, returns a clean error envelope rather than crashing."
+)
+def ichor_extract_entities(
+    last_event_id: int = 0,
+    batch_size: int = 25,
+    provider: str = "minimax",
+    model: str = "",
+    dry_run: bool = False,
+    session_id: str = "",
+) -> str:
+    """Run one L2 extraction pass.
+
+    Args:
+        last_event_id: Process cold events with id > this. Use the
+            highest id from a prior `ichor_extract_entities` call's
+            `last_event_id_after`, or 0 to start fresh.
+        batch_size: Cap on events per call. Default 25 (matches the
+            package's "every 25 turns" cadence). Max 200.
+        provider: Hermes provider name (must exist in
+            ~/.hermes/config.yaml providers.<name>). Default
+            "minimax" — the active profile.
+        model: Optional model override. Default = provider's
+            default_model from config.
+        dry_run: If True, build the prompt and return it without
+            calling the LLM. Useful for debugging the prompt
+            construction and validating the wiring.
+        session_id: Optional tag stored with extraction_log entries
+            so you can correlate runs to sessions.
+
+    Returns:
+        JSON with: events_in_batch, last_event_id_after, stored
+        counts (entity_types_created, rel_types_created,
+        entities_created, relationships_created,
+        extraction_logs_inserted), and any parse_warnings from the
+        LLM response. On error: structured error envelope.
+    """
+    # Clamp batch_size to a sensible upper bound.
+    batch_size = max(1, min(int(batch_size or 25), 200))
+
+    try:
+        sys.path.insert(0, str(Path.home() / "pantheon"))  # 2026-06-14: was missing here, broke lib.ichor.* imports
+        from lib.ichor.entities import extract_incremental  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
+        from lib.ichor.llm import _resolve_llm_provider  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+        }, indent=2)
+
+    # Resolve provider config from Hermes. The package's
+    # extract_incremental requires a non-None provider_cfg.
+    provider_cfg = _resolve_llm_provider("marvin") or _resolve_llm_provider(provider)
+    if not isinstance(provider_cfg, dict):
+        return json.dumps({
+            "error": "llm_provider_not_configured",
+            "provider": provider,
+            "fix": f"Add a `providers.{provider}` block to ~/.hermes/config.yaml with api/default_model/api_key, "
+                   f"or set the {provider.upper()}_API_KEY env var.",
+        }, indent=2)
+
+    # Surface the no-key condition explicitly so callers don't see a
+    # 401 buried in a stack trace.
+    import os as _os
+    api_key = provider_cfg.get("api_key") or _os.environ.get(
+        f"{(provider_cfg.get('name') or provider).upper()}_API_KEY", ""
+    )
+    if not api_key:
+        return json.dumps({
+            "error": "llm_provider_no_api_key",
+            "provider": provider_cfg.get("name", provider),
+            "api_base": provider_cfg.get("api", ""),
+            "default_model": provider_cfg.get("default_model", ""),
+            "fix": f"Set the {(provider_cfg.get('name') or provider).upper()}_API_KEY env var, "
+                   f"or add api_key to providers.{provider} in ~/.hermes/config.yaml.",
+            "hint": "Re-run with dry_run=true to validate wiring without a key.",
+        }, indent=2)
+
+    if dry_run:
+        # Build the prompt that _would_ go to the LLM, return it
+        # without calling. Useful for debugging the prompt shape
+        # and for confirming the wiring reaches extract_batch.
+        try:
+            from lib.ichor.entities.l2_llm import build_prompt, _events_for_batch  # type: ignore[import-untyped]
+        except Exception as exc:
+            return json.dumps({
+                "error": "dry_run_import_failed",
+                "detail": str(exc),
+            }, indent=2)
+        try:
+            conn = _get_conn()
+            try:
+                rows = _events_for_batch(conn, int(last_event_id), batch_size)
+            finally:
+                conn.close()
+        except Exception as exc:
+            return json.dumps({
+                "error": "dry_run_fetch_failed",
+                "detail": str(exc),
+            }, indent=2)
+        if not rows:
+            return json.dumps({
+                "dry_run": True,
+                "events_in_batch": 0,
+                "last_event_id_before": last_event_id,
+                "last_event_id_after": last_event_id,
+                "skipped": "no events past last_event_id",
+            }, indent=2)
+        texts = [r["raw_text"] for r in rows]
+        prompt = build_prompt(texts)
+        return json.dumps({
+            "dry_run": True,
+            "events_in_batch": len(rows),
+            "last_event_id_before": last_event_id,
+            "last_event_id_after": int(rows[-1]["id"]),
+            "prompt_chars": len(prompt),
+            "prompt_preview": prompt[:500] + ("..." if len(prompt) > 500 else ""),
+            "would_call": {
+                "provider": provider_cfg.get("name", provider),
+                "api": provider_cfg.get("api", ""),
+                "model": model or provider_cfg.get("default_model", ""),
+            },
+        }, indent=2)
+
+    # Real call path.
+    try:
+        conn = _get_conn()
+        try:
+            result = extract_incremental(
+                conn,
+                last_event_id=int(last_event_id),
+                batch_size=batch_size,
+                provider_cfg=provider_cfg,
+                model=model or None,
+                session_id=session_id or None,
+            )
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "extract_incremental_failed",
+            "last_event_id": last_event_id,
+            "batch_size": batch_size,
+            "detail": str(exc),
+        }, indent=2)
+
+    return json.dumps(result, indent=2, default=str)
+
+
+@mcp.tool(
+    description="Finalize an L2 entity/relationship extraction session. Flips provisional=1 → 0 for entities/relationships created in this session, so they become part of the canonical graph. Use after a long extraction run (e.g., ichor_extract_entities over many batches) to commit the results. Without an LLM API key in the env, returns a clean error envelope rather than crashing."
+)
+def ichor_l2_finalize(
+    last_event_id: int = 0,
+    provider: str = "opencode-go",
+    model: str = "deepseek-v4-flash",
+    session_id: str = "l2-finalize",
+) -> str:
+    """Finalize an L2 extraction session.
+
+    Flips provisional=1 → 0 for any entities/relationships whose
+    most recent extraction_log row falls in the residual range
+    (past last_event_id). Use this after a long incremental
+    extraction (e.g., 700+ batches) to commit the results to the
+    canonical graph.
+
+    Args:
+        last_event_id: The id used as the upper bound of the prior
+            extraction. The finalize pass processes events with id
+            > last_event_id as non-provisional residuals, then flips
+            provisional=1 rows from prior runs in the same session
+            to provisional=0.
+        provider: LLM provider name (must exist in
+            ~/.hermes/config.yaml). Default "opencode-go".
+        model: Model name. Default "deepseek-v4-flash".
+        session_id: Tag for the finalization pass's extraction_log
+            entries. Default "l2-finalize".
+
+    Returns:
+        JSON with: events_processed, entities_flipped, relationships_flipped,
+        residual_counts (entities_created, relationships_created), parse_warnings.
+    """
+    try:
+        sys.path.insert(0, str(Path.home() / "pantheon"))  # 2026-06-14: was missing here, broke lib.ichor.* imports
+        from lib.ichor.entities import finalize  # type: ignore[import-untyped]
+        from lib.ichor.entities.schema import get_conn as _get_conn  # type: ignore[import-untyped]
+        from lib.ichor.llm import _resolve_llm_provider  # type: ignore[import-untyped]
+    except Exception as exc:
+        return json.dumps({
+            "error": "entities_layer_unavailable",
+            "detail": str(exc),
+        }, indent=2)
+
+    # Resolve provider config.
+    provider_cfg = _resolve_llm_provider("marvin") or _resolve_llm_provider(provider)
+    if not isinstance(provider_cfg, dict):
+        return json.dumps({
+            "error": "llm_provider_not_configured",
+            "provider": provider,
+            "fix": f"Add a `providers.{provider}` block to ~/.hermes/config.yaml with api/default_model/api_key, "
+                   f"or set the {provider.upper()}_API_KEY env var.",
+        }, indent=2)
+
+    try:
+        conn = _get_conn()
+        try:
+            result = finalize(
+                conn,
+                last_event_id=int(last_event_id),
+                provider_cfg=provider_cfg,
+                model=model or None,
+                session_id=session_id or None,
+            )
+        finally:
+            conn.close()
+    except Exception as exc:
+        return json.dumps({
+            "error": "finalize_failed",
+            "last_event_id": last_event_id,
+            "detail": str(exc),
+        }, indent=2)
+
+    return json.dumps(result, indent=2, default=str)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1897,7 +2342,121 @@ def athenaeum_graph_search(
         conn.close()
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# Phase 1 Step 1.1 — start_workflow MCP tool.
+# Mints a wf_* workflow instance via the v2 engine and returns the instance
+# dict. See BUILD-PLAN.md §1.1. Other Conductor surfaces (submit_handoff,
+# ack_handoff, etc.) are deliberately NOT exposed here — they belong to
+# follow-up steps. The `context` arg is a JSON string so callers without
+# nested-dict MCP support can pass `'{"k":"v"}'`.
+
+
+def _conductor_dispatch(fn_name: str, **kwargs) -> str:
+    """Call a conductor module-level function and JSON-serialize the result.
+    Returns an error envelope on any exception.
+
+    sys.path injection is done at module import time (see Constants block
+    above) — Thoth Minor #3, Step 1.7 polish. This function no longer
+    touches sys.path per call.
+    """
+    try:
+        # P1 hotfix (2026-06-16, Phase 4 Step 4.4): the v1 module
+        # `conductor.conductor_server` is gitignored from the PR tree
+        # (Option C operator call), so any fresh clone fails this import
+        # with ModuleNotFoundError and the MCP tool silently returns an
+        # error envelope for every call. Route through the v2 engine
+        # instead — `ConductorEngine.start_workflow_sync` is the
+        # daemon-free variant explicitly designed for MCP bridge callers
+        # (engine.py docstring: "The MCP bridge
+        # (conductor.conductor_server.start_workflow) and any other
+        # out-of-process caller ... should call this"). It returns a
+        # `WorkflowInstance` which we serialize via `.to_dict()` so the
+        # JSON shape matches the documented MCP contract
+        # (workflow_id, definition_id, status, current_step, state_file,
+        # started_at).
+        #
+        # Status alias: v2 uses status="in_progress" internally; the MCP
+        # contract asks for "running" (engine.py:782-787 keeps the v2
+        # default stable and lets the bridge be the alias).
+        from conductor.v2.engine import ConductorEngine
+        from dataclasses import asdict, is_dataclass
+        engine = ConductorEngine()
+        inst = engine.start_workflow_sync(
+            workflow_def_id=kwargs.get("workflow_id", ""),
+            context=kwargs.get("context"),
+            initiator=kwargs.get("initiator", "hermes"),
+            original_request=kwargs.get("original_request", ""),
+        )
+        # WorkflowInstance is a dataclass — to_dict() is the canonical
+        # serializer; fall back to asdict if it doesn't have one.
+        result = inst.to_dict() if hasattr(inst, "to_dict") else (
+            asdict(inst) if is_dataclass(inst) else dict(inst.__dict__)
+        )
+        # MCP contract: status should be "running" not "in_progress".
+        if isinstance(result, dict) and result.get("status") == "in_progress":
+            result["status"] = "running"
+        # MCP contract also expects "state_file" (path under state/) —
+        # derive it from the workflow_id so callers can `cat` it.
+        if isinstance(result, dict) and "workflow_id" in result:
+            result.setdefault(
+                "state_file",
+                f"state/{result['workflow_id']}.json",
+            )
+            # started_at alias for the v1 contract (v2 uses "created").
+            result.setdefault("started_at", result.get("created", ""))
+        return json.dumps(result, indent=2, default=str)
+    except Exception as exc:
+        # Thoth Minor #2, Step 1.7 polish: drop str(exc) from the error
+        # envelope — it can leak credentials/paths/internal state. Keep
+        # type name only; callers branch on type if they need more.
+        return json.dumps({
+            "error": f"conductor_{fn_name} failed: {type(exc).__name__}"
+        }, indent=2)
+
+
+@mcp.tool(
+    description="[Conductor v2] Start a new workflow instance. Mints a wf_* id, "
+    "writes the state file to state/, and returns the instance dict "
+    "(workflow_id, definition_id, status, current_step, state_file, started_at).",
+)
+def conductor_start_workflow(
+    workflow_id: str,
+    context: str = "{}",
+    original_request: str = "",
+    # Thoth Minor #1, Step 1.7 polish: introspect $USER when the caller
+    # doesn't pass an explicit initiator. If $USER is empty (e.g. systemd
+    # service with no User= set, some sandboxes), fall back to 'hermes'
+    # so we never record an empty-string audit-trail value.
+    initiator: str = "",
+) -> str:
+    if not initiator:
+        initiator = os.environ.get("USER") or "hermes"
+    """Start a new workflow instance via the v2 engine.
+
+    Args:
+        workflow_id: Workflow definition id (e.g. 'morning-briefing'). Must
+            match a yaml file under conductor/workflows/.
+        context: JSON-encoded dict of context_bag values. Pass '{}' for none.
+        original_request: Free-text reason; stored on the instance for audit.
+        initiator: God or user name. Default 'hermes' for MCP-driven starts.
+
+    Returns:
+        JSON with workflow_id (wf_...), definition_id, status ('running'),
+        current_step, state_file, started_at.
+    """
+    import json as _json
+    try:
+        ctx_obj = _json.loads(context) if context else {}
+    except _json.JSONDecodeError as e:
+        return _json.dumps({"error": f"invalid context JSON: {e}"}, indent=2)
+    return _conductor_dispatch(
+        "start_workflow",
+        workflow_id=workflow_id,
+        context=ctx_obj,
+        original_request=original_request,
+        initiator=initiator,
+    )
+
+
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════
 

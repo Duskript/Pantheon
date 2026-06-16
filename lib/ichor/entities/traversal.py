@@ -314,6 +314,29 @@ def graph_query(
                       "avg_confidence": 0.0, "max_depth_reached": 0},
         }
 
+    # Touch all visited entities. This provides the recency signal
+    # for the decay cycle. Without it, every query looks like 'no
+    # access' and the decay cycle would archive everything.
+    touched: set[int] = set()
+    for s in starts:
+        conn.execute(
+            "UPDATE entities SET last_accessed = datetime('now') "
+            "WHERE id = ? AND status = 'active'",
+            (s["id"],),
+        )
+        touched.add(s["id"])
+    for p in paths:
+        for hop in p.get("path", []):
+            if isinstance(hop, dict):
+                hid = hop.get("id")
+                if hid and hid not in touched:
+                    conn.execute(
+                        "UPDATE entities SET last_accessed = datetime('now') "
+                        "WHERE id = ? AND status = 'active'",
+                        (hid,),
+                    )
+                    touched.add(hid)
+
     # Build nodes from starts + every node mentioned in any path
     node_ids: set[int] = set()
     for s in starts:

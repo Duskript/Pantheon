@@ -262,7 +262,7 @@ def parse_extraction(raw: str) -> dict[str, Any]:
 
 # Default LLM call. Importable for direct use, but tests should inject
 # their own call_fn to avoid network calls and keep tests deterministic.
-def _default_call_llm(prompt: str, provider_cfg: dict, model: str | None = None, timeout: float = 30.0) -> str:
+def _default_call_llm(prompt: str, provider_cfg: dict, model: str | None = None, timeout: float = 180.0) -> str:
     """Use the OpenAI-compatible chat completions endpoint from
     `lib.ichor.llm._call_llm`."""
     # Imported lazily so the module can be loaded without that dep
@@ -487,7 +487,7 @@ def extract_batch(
     *,
     model: str | None = None,
     call_fn: Optional[Callable[..., str]] = None,
-    timeout: float = 30.0,
+    timeout: float = 180.0,
 ) -> dict[str, Any]:
     """One LLM extraction pass over a batch of texts. Returns the parsed
     shape (entities/relationships/relationship_types). Does NOT write

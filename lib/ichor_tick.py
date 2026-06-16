@@ -65,6 +65,16 @@ _TICK_STATE = _HOME / ".hermes" / "ichor_tick_state.json"
 _OVERLAP_GUARD_PATH = _HOME / ".hermes" / "ichor_tick_overlap.json"
 _TICK_LOG = _HOME / ".hermes" / "ichor_tick.log"
 
+# L2 LLM extraction cursor + tuning knobs. The L2 step iterates over
+# cold_events, extracting entities/relationships via LLM. State persists
+# across ticks so we never re-process the same event range.
+_L2_EXTRACT_STATE = _HOME / ".hermes" / "ichor_l2_extract_state.json"
+_L2_EXTRACT_BATCH_SIZE = 10  # events per LLM call; small keeps each
+                            # batch under ~5s and respects the 30s
+                            # tick cap while leaving room for 6 other
+                            # steps.
+_L2_EXTRACT_TIME_BUDGET = 22.0  # sec; do not exceed this in the step
+
 
 # ---------------------------------------------------------------------------
 # Overlap guard
@@ -202,17 +212,167 @@ def _step_gather(dry_run: bool = True) -> Dict[str, Any]:
 
 
 def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
-    """Step 2: Tier A secondary pass on new content.
+    """Step 2: L2 LLM entity/relationship extraction.
 
-    Re-extracts structured events from session summaries that may
-    have been missed by the inline (session-time) extraction.
+    Iterates over `cold_events` past the persisted cursor in
+    `_L2_EXTRACT_STATE`, calling `extract_incremental` from
+    `lib.ichor.entities.l2_llm` in a loop. Each batch is one
+    LLM call. The cursor is persisted after every successful
+    batch so a crash mid-tick does not lose progress.
+
+    Safety:
+      - dry_run: no LLM call, no state write. Reports counts only.
+      - execute: resolves provider + key first; if either is
+        missing, returns {"skipped": "..."} and does not raise.
+      - Per-batch try/except so one bad batch does not abort the
+        rest of the loop.
+      - Time-boxed via _L2_EXTRACT_TIME_BUDGET to fit the parent
+        tick's 30s cap.
     """
-    extracted = 0
-    # In a full implementation this would iterate over new session
-    # summaries and re-run Tier A. For the daily tick, the inline
-    # Tier A already runs at session-end, so this is mostly a
-    # safety net for sessions that crashed mid-flight.
-    return {"events_extracted": extracted}
+    t0 = time.perf_counter()
+    
+    # Read cursor from state file. First-run behavior: seed the cursor
+    # to MAX(id) - 200 so the tick keeps up with NEW events (the LLM-
+    # patched prompt benefits from recent data ASAP) rather than
+    # burning the entire 22s budget catching up a multi-day historical
+    # backlog. The historical backlog is drained separately by
+    # scripts/run_l2_full_corpus.py (or the ichor_l2_finalize MCP tool).
+    cursor = 0
+    is_first_run = False
+    if _L2_EXTRACT_STATE.exists():
+        try:
+            cursor = int(json.loads(_L2_EXTRACT_STATE.read_text()).get("last_event_id", 0))
+        except (json.JSONDecodeError, OSError, ValueError) as e:
+            logger.warning("l2_extract: could not read state, treating as first run: %s", e)
+            cursor = 0
+            is_first_run = True
+    else:
+        is_first_run = True
+    
+    if is_first_run and cursor == 0:
+        try:
+            conn = sqlite3.connect(str(_ICHOR_DB))
+            try:
+                row = conn.execute("SELECT MAX(id) FROM cold_events").fetchone()
+            finally:
+                conn.close()
+            max_id = int(row[0]) if row and row[0] is not None else 0
+            # Seed 200 events back from the tip. Skip seeding if the
+            # table is empty (no events to process at all).
+            if max_id > 0:
+                cursor = max(0, max_id - 200)
+                logger.info(
+                    "l2_extract: first run, seeded cursor=%d (max_id=%d, will process last ~200 events)",
+                    cursor, max_id,
+                )
+        except sqlite3.Error as e:
+            logger.warning("l2_extract: could not seed cursor from cold_events: %s", e)
+    
+    if dry_run:
+        # No LLM call, no state write. Just report what would happen.
+        try:
+            conn = sqlite3.connect(str(_ICHOR_DB))
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM cold_events WHERE id > ?", (cursor,)
+                ).fetchone()
+            finally:
+                conn.close()
+        except sqlite3.Error as e:
+            return {"skipped": f"db_unavailable: {e}", "cursor": cursor}
+        residual = row[0] if row else 0
+        return {
+            "dry_run": True,
+            "cursor": cursor,
+            "residual_events": residual,
+            "would_call_batches": max(0, (residual + _L2_EXTRACT_BATCH_SIZE - 1) // _L2_EXTRACT_BATCH_SIZE),
+        }
+    
+    # Live path: resolve provider + key before spending any time.
+    try:
+        from lib.ichor.llm import _resolve_llm_provider
+        from lib.ichor.entities import extract_incremental
+        from lib.ichor.entities.schema import get_conn as _get_l2_conn
+    except Exception as e:
+        return {"skipped": f"l2_module_import_failed: {e}", "cursor": cursor}
+    
+    provider_cfg = _resolve_llm_provider("marvin") or _resolve_llm_provider("opencode-go")
+    if not isinstance(provider_cfg, dict):
+        return {"skipped": "llm_provider_not_configured", "cursor": cursor}
+    
+    import os as _os
+    provider_name = provider_cfg.get("name") or "opencode-go"
+    api_key = provider_cfg.get("api_key") or _os.environ.get(
+        f"{provider_name.upper()}_API_KEY", ""
+    )
+    if not api_key:
+        return {"skipped": f"no_api_key_for_{provider_name}", "cursor": cursor}
+    
+    # Loop: one LLM call per batch, persist cursor after each.
+    batches_run = 0
+    events_processed = 0
+    total_entities = 0
+    total_relationships = 0
+    last_error = None
+    
+    while True:
+        elapsed = time.perf_counter() - t0
+        if elapsed > _L2_EXTRACT_TIME_BUDGET:
+            break
+        try:
+            conn = _get_l2_conn()
+            try:
+                result = extract_incremental(
+                    conn,
+                    last_event_id=cursor,
+                    batch_size=_L2_EXTRACT_BATCH_SIZE,
+                    provider_cfg=provider_cfg,
+                    model=None,
+                    session_id="ichor-tick",
+                )
+            finally:
+                conn.close()
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {e}"
+            logger.warning("l2_extract: batch failed, stopping loop: %s", last_error)
+            break
+        
+        events_in_batch = int(result.get("events_in_batch", 0))
+        if events_in_batch == 0:
+            # Caught up; nothing more to do this tick.
+            break
+        
+        # Advance cursor + persist (crash-safe: state reflects last
+        # successfully-stored batch).
+        cursor = int(result.get("last_event_id_after", cursor))
+        try:
+            _L2_EXTRACT_STATE.write_text(
+                json.dumps({"last_event_id": cursor, "updated_at": datetime.now(timezone.utc).isoformat()})
+            )
+        except OSError as e:
+            logger.warning("l2_extract: could not persist cursor: %s", e)
+        
+        batches_run += 1
+        events_processed += events_in_batch
+        stored = result.get("stored", {})
+        total_entities += int(stored.get("entities_created", 0))
+        total_relationships += int(stored.get("relationships_created", 0))
+        
+        # If the batch returned fewer rows than we asked for, we caught up.
+        if events_in_batch < _L2_EXTRACT_BATCH_SIZE:
+            break
+    
+    out: Dict[str, Any] = {
+        "cursor": cursor,
+        "batches_run": batches_run,
+        "events_processed": events_processed,
+        "entities_created": total_entities,
+        "relationships_created": total_relationships,
+        "provider": provider_name,
+    }
+    if last_error:
+        out["last_error"] = last_error
+    return out
 
 
 def _step_analyze(dry_run: bool = True) -> Dict[str, Any]:

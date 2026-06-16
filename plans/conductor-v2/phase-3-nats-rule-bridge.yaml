@@ -1,0 +1,76 @@
+plan_id: phase-3-nats-rule-bridge
+parent: conductor-v2
+status: DONE
+completed_at: "2026-06-15"
+current_step: "3.2"
+steps_total: 2
+steps_done: 1
+steps_dropped: 1
+gods_involved: [marvin, thoth]
+test_count_final: "201/201 combined (36 v1 + 162 v2 incl 1 skipped + 1 slow E2E + 2 backbone)"
+
+steps:
+  - id: "3.1"
+    title: "Generic NATS rule (catch-all)"
+    status: DROPPED
+    god: marvin
+    decision: "Phase 3 REWORK #1: root cause was a 1-line defect in nats.py:_handle_msg, not a missing catch-all rule. 4 production rules + bonus tallon-incoming-message rule cover all production subjects without needing a >-glob catch-all (which fnmatch couldn't match anyway). Closed without code change beyond the Step 3.2 fix."
+    documentation: "Codex-Pantheon/DECISIONS.md 2026-06-15 entry"
+  - id: "3.2"
+    title: "Tallon deploy request (real fix: 1-line nats.py:_handle_msg defect)"
+    status: DONE
+    god: marvin
+    qa: thoth
+    completed_at: "2026-06-15"
+    verdict: SHIP
+    files_touched:
+      - "v2/nats.py:_handle_msg (L192, type=const fix: was 'type=payload.get(\"type\") or \"nats.message\"', now 'type=\"nats.message\"' const + payload's type preserved inside ev.payload['type']) + 20-line explanatory comment"
+      - "conductor/v2/tests/test_nats_bridge.py (new, 12 cases, 3 classes: TestNatsRuleMatch 6, TestNatsListenerToEngineBridge 2, TestSubjectMatcherSemantics 4)"
+    notes: "20-line comment documents the bug + date + session id + lock-in test name. Audit: this was a payload-rewrite defect where application-level type was overriding the routing discriminator."
+    qa_session: "20260615_013029_40eaee"
+
+file_dependency_map:
+  /home/kohan/pantheon/conductor/v2/nats.py:
+    role: load_bearing
+    depends_on: [enqueue_outbound_nats, _handle_msg (L192 type=const fix from Step 3.2)]
+    depended_on_by: [workflows/*.yaml, conductor daemon, all cross-Pantheon bridges]
+    touched_by: [step-3.2]
+  /home/kohan/pantheon/conductor/v2/tests/test_nats_bridge.py:
+    role: test
+    depends_on: [nats._handle_msg, RuleEngine.match]
+    depended_on_by: [pytest -q, every phase closeout]
+    touched_by: [step-3.2]
+    notes: 12 cases across 3 test classes. The lock-in for the breach class.
+
+body: |
+  # Phase 3 — NATS Rule Bridge (Cross-Pantheon Inbound)
+
+  ## Goal
+
+  Messages from Tallon's Pantheon on subspace.tallon.outgoing.> reach our conductor and trigger workflows. Currently they all get quarantined because no rule matches the NATS subjects.
+
+  ## Why third
+
+  Closes the cross-Pantheon-is-one-way gap. TheoForge / Tallon's deploys are the main use case.
+
+  ## Failable check
+
+  Publish a test message on subspace.tallon.outgoing.hephaestus from our side. Observe it match a rule, dispatch a workflow.
+
+  ## Test counts
+
+  - 36 v1 contract (unchanged)
+  - 162 v2 tests (grew 150→162 across this phase, +1 skipped for the dropped Step 3.1)
+  - 1 slow E2E (from Phase 2, unchanged)
+  - 2 backbone E2E (from Step 1.5, unchanged)
+  - Combined 201/201 pass
+
+  ## Step 3.1 → Step 3.2 story (Phase 3 REWORK #1)
+
+  Step 3.1 was originally written as add a catch-all rule. During implementation, Marvin found the real root cause was a 1-line defect in nats.py:_handle_msg: the listener was overwriting Event.type with the payload's application-level type field (e.g. deploy.request, workflow.complete), which made the rule's event_type: nats.message filter reject every well-formed application message. The fix was 1 line (type=const) + a 20-line explanatory comment + 12 lock-in tests. Step 3.1 closed as "no code change needed beyond 3.2."
+
+  ## Why this matters
+
+  Phase 3's defect is the same class as the Phase 4 sovereign-NATS breach: an outbound event had its routing discriminator overwritten by a payload field. Phase 3 closed the inbound side; Phase 4 closed the outbound side. The two fixes together mean NATS messages now have correct routing end-to-end.
+
+  — Hermes, 2026-06-15T17:45Z

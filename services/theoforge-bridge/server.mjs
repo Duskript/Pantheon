@@ -708,6 +708,17 @@ function handleIngestProspect(body) {
   // Don't let the caller overwrite the leadId with their own random value
   updated.leadId = leadId;
   atomicWriteJSON(fp, updated);
+  if (body?.notify === true || body?.category === "team_request") {
+    const summary = [
+      `category=${body?.category || "team_request"}`,
+      `page=${body?.page || body?.pagePath || "unknown"}`,
+      `name=${updated.lead_name || "(missing)"}`,
+      `email=${updated.lead_email}`,
+      updated.company ? `company=${updated.company}` : null,
+      body?.challenge ? `note=${String(body.challenge).slice(0, 300)}` : null,
+    ].filter(Boolean).join("\n");
+    notifyTelegram("warn", `team_request_${leadId}`, summary);
+  }
   // Form-intake email fires only on first form-capture (channel=form and
   // pipeline_stage was prospect before this upsert). Chat-channel updates
   // do NOT fire — the chat widget hits /ingest/prospect on every turn for
