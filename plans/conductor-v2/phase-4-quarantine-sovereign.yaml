@@ -1,11 +1,11 @@
 plan_id: phase-4-quarantine-sovereign
 parent: conductor-v2
 status: in_progress
-current_step: "4.4.briefs.brief_2_of_3"
-next_step: "4.4.briefs.brief_3_of_3"
+current_step: "4.4.briefs.brief_3_of_3"
+next_step: "4.5.briefs.brief_1_of_3"
 steps_total: 7
-steps_done: 3
-steps_pending: 4
+steps_done: 4
+steps_pending: 3
 gods_involved: [marvin, thoth, hephaestus]
 
 steps:
@@ -46,19 +46,21 @@ steps:
     qa_session: "20260615_164935_hermes"
   - id: "4.4"
     title: "Profile-bootstrap hook (prevent new skills from drifting)"
-    status: in_progress
+    status: DONE
     god: marvin
     qa: thoth
+    completed_at: "2026-06-16"
+    verdict: SHIP
     briefs_planned: 3
     briefs:
-      - brief_1_of_3: "Build deliverable: detect new canonical skills at gateway start"
-      - brief_2_of_3: "Dependency-ordered follow-on: create per-profile symlinks for new skills"
-      - brief_3_of_3: "Verification: fresh-gateway-start test, pytest, no regression on 95 existing symlinks"
+      - brief_1_of_3: "Build deliverable: detect new canonical skills at gateway start — SHIPPED (PR #33, commit 327aa44)"
+      - brief_2_of_3: "Dependency-ordered follow-on: create per-profile symlinks for new skills — SHIPPED (PR #33, commit fae8a68)"
+      - brief_3_of_3: "Wire detector/applier into gateway start + verify — SHIPPED (Brief 3, ~38 min, failure-mode test passed)"
     success_criteria:
-      - "New canonical SKILL.md → per-profile symlink created at next gateway start"
-      - "Pre-existing 95 symlinks untouched"
-      - "Failure mode: log + continue, don't block startup"
-    verification: "Drop a test canonical skill, restart any per-profile gateway, confirm symlink + readlink; pytest -q → still 193/193"
+      - "New canonical SKILL.md → per-profile symlink created at next gateway start — VERIFIED (1126 symlinks, 0 missing, failure-mode test passed)"
+      - "Pre-existing 95 symlinks untouched — VERIFIED (symlink count stable across restarts)"
+      - "Failure mode: log + continue, don't block startup — VERIFIED (broke apply.py, gateway still came up via ExecStartPre=- leading-dash syntax)"
+    verification: "pytest -q → 200/1-skip/0-fail; bash smoke test → 12/12; failure-mode test (mv apply.py away + restart) → gateway still active, journal shows 'No such file' warning, apply.py restored"
     out_of_scope:
       - "Spec Part 1 (YAML guardrails) — that's Step 4.6"
       - "Spec Part 3 (YAML validator) — that's Step 4.6"
