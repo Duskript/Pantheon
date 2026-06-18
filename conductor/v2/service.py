@@ -36,6 +36,8 @@ from .engine import (
 from .gateway import GatewayClient, GatewayConfig
 from .nats import NATSListener
 from .webhook import WebhookServer, DEFAULT_PORT as DEFAULT_WEBHOOK_PORT
+from .api_server import APIServer, DEFAULT_PORT as DEFAULT_API_PORT
+from .auth import resolve_api_key
 from .delivery import DeliveryRouter
 from .cron_scheduler import CronScheduler
 
@@ -74,6 +76,9 @@ class ConductorService:
         enable_nats: bool = True,
         enable_webhook: bool = True,
         webhook_port: int = DEFAULT_WEBHOOK_PORT,
+        enable_api: bool = True,
+        api_port: int = DEFAULT_API_PORT,
+        api_key: str = "",
         log_level: str = "INFO",
         cron_tick_interval: Optional[float] = None,
         rules: Optional["RuleEngine"] = None,
@@ -84,13 +89,19 @@ class ConductorService:
 
         Parameters
         ----------
-        enable_nats, enable_webhook
+        enable_nats, enable_webhook, enable_api
             Toggle the optional background listeners. Production runs
-            both; tests usually disable both to avoid needing the real
-            services.
-        webhook_port
-            Port the webhook HTTP server binds to (only used when
-            `enable_webhook=True`).
+            all three; tests usually disable them to avoid needing the
+            real services. The API server (enable_api) is the REST
+            surface for the Synergy SDK adapter — turn it on whenever
+            the Conductor UI is in use.
+        webhook_port, api_port
+            Port the HTTP servers bind to (only used when the
+            corresponding `enable_*=True`).
+        api_key
+            Bearer token shared by the API server, webhook, and live
+            stream (spec §6 — single source of truth). Empty string
+            disables auth across all three surfaces (dev mode).
         log_level
             Python logging level for the daemon. Defaults to INFO.
         cron_tick_interval
@@ -111,6 +122,18 @@ class ConductorService:
         self.enable_nats = enable_nats
         self.enable_webhook = enable_webhook
         self.webhook_port = webhook_port
+        # API server (REST + SSE for the Synergy SDK adapter).
+        self.enable_api = enable_api
+        self.api_port = api_port
+        # Shared bearer token across the three HTTP surfaces
+        # (api_server, webhook, live_stream). Uses the canonical
+        # resolve_api_key() helper so the .env file fallback
+        # (~/.hermes/.env, ~/pantheon/conductor/v2/.env) is honored
+        # the same way as the direct FastAPI/live_stream paths.
+        # Passing an explicit non-empty key (tests) still wins over
+        # the env; passing None or "" falls through to the full
+        # resolution chain.
+        self.api_key = resolve_api_key(api_key if api_key else None)
         # cron_tick_interval=None -> use the CronScheduler default (30s).
         # Tests pass 1.0 (or 0.1 for ultra-fast) to avoid waiting half a
         # minute per assertion.
@@ -131,6 +154,10 @@ class ConductorService:
         self.engine: Optional[ConductorEngine] = None
         self.nats: Optional[NATSListener] = None
         self.webhook: Optional[WebhookServer] = None
+        self.api: Optional[APIServer] = None
+        # live_stream is created in start() when enable_api=True.
+        # Default to None so status() works before start() is called.
+        self.live_stream: Optional[LiveStreamServer] = None
         self.delivery: Optional[DeliveryRouter] = None
         self.cron: Optional[CronScheduler] = None
         self._tasks: list[asyncio.Task] = []
@@ -151,14 +178,32 @@ class ConductorService:
             LOG.error(f"gateway health check failed: {e}")
             results["gateway"] = {"status": "unreachable", "error": str(e)}
 
-        # Engine
+        # Engine. The live_stream is wired when enable_api=True so
+        # the SSE endpoint has something to subscribe to. The same
+        # bearer key is used for live_stream auth (spec §6: one
+        # token, three surfaces). Lazy import to keep the daemon
+        # importable even if aiohttp isn't installed (the live
+        # stream is the only consumer of aiohttp).
+        live_stream = None
+        if self.enable_api:
+            from .live_stream import LiveStreamServer
+            live_stream = LiveStreamServer(api_key=self.api_key)
+            ls_status = await live_stream.start()
+            results["live_stream"] = ls_status
+        else:
+            results["live_stream"] = {"status": "disabled"}
+
         self.engine = ConductorEngine(
             gateway_client=self.gw,
             rules=self.rules,
             workflows=self.workflows,
             pending_dir=_pending_dir(),
             state_dir=_state_dir(),
+            live_stream=live_stream,
         )
+        # Cache the live_stream on `self` so stop() can tear it
+        # down (the engine doesn't own its lifecycle).
+        self.live_stream = live_stream
         active = self.engine.list_active()
         results["engine"] = {
             "status": "ready",
@@ -203,13 +248,35 @@ class ConductorService:
         else:
             results["nats"] = {"status": "disabled"}
 
-        # Webhook HTTP server (optional)
+        # Webhook HTTP server (optional). Pass the shared api_key so
+        # the webhook enforces the same bearer token the api_server
+        # and live_stream use (spec §6: single source of truth).
         if self.enable_webhook:
-            self.webhook = WebhookServer(port=self.webhook_port, pending_dir=_pending_dir())
+            self.webhook = WebhookServer(
+                port=self.webhook_port,
+                pending_dir=_pending_dir(),
+                api_key=self.api_key,
+            )
             wh_status = await self.webhook.start()
             results["webhook"] = wh_status
         else:
             results["webhook"] = {"status": "disabled"}
+
+        # API server (REST + SSE for the Synergy SDK adapter).
+        # Wired last so the engine + live_stream are up before the
+        # api_server starts accepting requests.
+        if self.enable_api:
+            self.api = APIServer(
+                port=self.api_port,
+                workflows_dir=_workflows_dir(),
+                state_dir=_state_dir(),
+                engine=self.engine,
+                api_key=self.api_key,
+            )
+            api_status = await self.api.start()
+            results["api"] = api_status
+        else:
+            results["api"] = {"status": "disabled"}
 
         return results
 
@@ -218,10 +285,18 @@ class ConductorService:
         LOG.info("conductor v2 shutting down…")
         if self._stop_event:
             self._stop_event.set()
+        if self.api:
+            await self.api.stop()
         if self.webhook:
             await self.webhook.stop()
         if self.nats:
             await self.nats.stop()
+        # Live stream is started before the engine (in start() we
+        # build it then pass it to the engine). Tear it down last
+        # so any in-flight broadcast (e.g. the engine emitting
+        # workflow.completed during stop) has a chance to land.
+        if self.live_stream:
+            await self.live_stream.stop()
         # Wait for tasks
         for t in self._tasks:
             t.cancel()
@@ -275,6 +350,12 @@ class ConductorService:
             "gateway": "connected" if self.gw and self.gw._client else "not started",
             "nats": "connected" if self.nats and self.nats.is_connected else ("disabled" if not self.enable_nats else "not connected"),
             "webhook": f"http://0.0.0.0:{self.webhook_port}" if self.enable_webhook else "disabled",
+            "api": f"http://0.0.0.0:{self.api_port}" if self.enable_api else "disabled",
+            "live_stream": (
+                f"ws://0.0.0.0:{self.live_stream.port}"
+                if self.live_stream and self.live_stream.is_running
+                else "disabled"
+            ),
             "rules_loaded": len(self.rules._rules),
             "workflows_loaded": len(self.workflows._workflows),
             "active_workflows": len(self.engine.list_active()) if self.engine else 0,
@@ -324,6 +405,9 @@ async def _run(args: argparse.Namespace) -> int:
         enable_nats=not args.no_nats,
         enable_webhook=not args.no_webhook,
         webhook_port=args.webhook_port,
+        enable_api=not args.no_api,
+        api_port=args.api_port,
+        api_key=args.api_key,
         log_level=args.log_level,
     )
     startup = await svc.start()
@@ -344,6 +428,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--no-nats", action="store_true", help="Disable NATS listener")
     parser.add_argument("--no-webhook", action="store_true", help="Disable webhook HTTP server")
     parser.add_argument("--webhook-port", type=int, default=DEFAULT_WEBHOOK_PORT, help=f"Webhook port (default {DEFAULT_WEBHOOK_PORT})")
+    parser.add_argument("--no-api", action="store_true", help="Disable REST API server (default: enabled)")
+    parser.add_argument("--api-port", type=int, default=DEFAULT_API_PORT, help=f"API server port (default {DEFAULT_API_PORT})")
+    parser.add_argument("--api-key", default="", help="Bearer token shared by API server, webhook, and live stream (default: $CONDUCTOR_API_KEY)")
     parser.add_argument("--log-level", default="INFO", help="Log level (DEBUG/INFO/WARNING/ERROR)")
     args = parser.parse_args(argv)
 

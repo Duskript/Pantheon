@@ -39,7 +39,7 @@ class TestServiceConstruction(unittest.TestCase):
     """Just construct a ConductorService — don't start it."""
 
     def test_default_construction(self):
-        svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False)
+        svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False, enable_api=False)
         self.assertTrue(svc.enable_nats is False)
         self.assertTrue(svc.enable_webhook is False)
         self.assertEqual(svc.webhook_port, 8088)
@@ -51,7 +51,7 @@ class TestServiceConstruction(unittest.TestCase):
         self.assertIsNotNone(svc.workflows)
 
     def test_status_before_start(self):
-        svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False)
+        svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False, enable_api=False)
         s = svc.status()
         self.assertEqual(s["engine"], "not started")
         self.assertEqual(s["webhook"], "disabled")
@@ -78,7 +78,7 @@ class TestServiceWithUnreachableGateway(unittest.IsolatedAsyncioTestCase):
             instance.__aexit__ = AsyncMock(return_value=None)
             instance.health = AsyncMock(side_effect=Exception("connection refused"))
             instance._client = MagicMock()
-            svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False)
+            svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False, enable_api=False)
             results = await svc.start()
         # Gateway reported unreachable
         self.assertEqual(results["gateway"]["status"], "unreachable")
@@ -115,6 +115,7 @@ class TestServiceWithMockGateway(unittest.IsolatedAsyncioTestCase):
             svc = svc_mod.ConductorService(
                 enable_nats=False,
                 enable_webhook=True,
+                enable_api=False,
                 webhook_port=18099,  # unused port to avoid conflicts
             )
             results = await svc.start()
@@ -136,7 +137,7 @@ class TestServiceWithMockGateway(unittest.IsolatedAsyncioTestCase):
             instance.__aexit__ = AsyncMock(return_value=None)
             instance.health = AsyncMock(return_value={"status": "ok"})
             instance._client = MagicMock()
-            svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False)
+            svc = svc_mod.ConductorService(enable_nats=False, enable_webhook=False, enable_api=False)
             await svc.start()
         # Some tasks were started (file watcher)
         self.assertGreater(len(svc._tasks), 0)

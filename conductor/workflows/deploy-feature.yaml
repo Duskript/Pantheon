@@ -50,6 +50,7 @@ workflow:
       type: nats_publish
       subject: "subspace.konan.outgoing.tallon"
       input_from: review
+      operator_approval_required: true
       message: "Feature ${workflow_id} implemented and reviewed, ready for Enterprise deploy"
 
     - id: project-manager
