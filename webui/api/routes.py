@@ -6456,8 +6456,8 @@ def handle_post(handler, parsed) -> bool:
         _entry = _dl_counts.get(god_name, {"downloads": 0})
         _entry["downloads"] = _entry.get("downloads", 0) + 1
         if "first_summoned" not in _entry:
-            from datetime import datetime as _dt
-            _entry["first_summoned"] = _dt.utcnow().isoformat() + "Z"
+            from datetime import datetime as _dt, timezone
+            _entry["first_summoned"] = _dt.now(timezone.utc).isoformat().replace("+00:00", "Z")
         _dl_counts[god_name] = _entry
         os.makedirs(os.path.dirname(_dl_path), exist_ok=True)
         with open(_dl_path, "w") as _f:
