@@ -1,0 +1,115 @@
+{
+	auto_https off
+}
+
+theoforgesolutions.com:80 {
+	# Public form endpoint. Relay-7 terminates the public request and forwards
+	# privately over Tailscale to Pantheon Conductor.
+	handle /webhook/* {
+		reverse_proxy 100.115.50.41:8088
+	}
+
+	# Hermes Desktop on cashyOS (Konan) - public bind, basic_auth on the serve
+	handle_path /desktop/* {
+		reverse_proxy 100.114.60.103:9119
+	}
+
+	# /demos and /demos/ (no trailing file) -> /demos/demos.html (canonical demos index)
+	handle /demos* {
+		redir /demos /demos/demos.html permanent
+		redir /demos/ /demos/demos.html permanent
+	}
+
+	# --- Ledger -> Talli rebrand (2026-06-25) ---
+	handle /ledger-product-page* {
+		redir /ledger-product-page /talli permanent
+		redir /ledger-product-page/ /talli/ permanent
+		redir /ledger-product-page/index.html /talli/ permanent
+		redir /ledger-product-page/modal.css /talli/modal.css permanent
+		redir /ledger-product-page/modal.js /talli/modal.js permanent
+		@ledger_product_sub path_regexp ^/ledger-product-page/(.+)$
+		header @ledger_product_sub Location "/talli/{re.1}"
+		respond @ledger_product_sub "" 301
+	}
+
+	# All /demos/ledger* redirects in one handle block (priority: high)
+	handle /demos/ledger* {
+		redir /demos/ledger /demos/talli permanent
+		redir /demos/ledger/ /demos/talli/ permanent
+		redir /demos/ledger.html /demos/talli.html permanent
+		@ledger_demos_sub path_regexp ^/demos/ledger/(.+)$
+		header @ledger_demos_sub Location "/demos/talli/{re.1}"
+		respond @ledger_demos_sub "" 301
+		@ledger_demos_dash path_regexp ^/demos/ledger-(.+)$
+		header @ledger_demos_dash Location "/demos/talli-{re.1}"
+		respond @ledger_demos_dash "" 301
+	}
+
+	# /demos/assets/ledger-* asset renames
+	handle /demos/assets/ledger* {
+		@ledger_asset path_regexp ^/demos/assets/ledger-(.+)$
+		header @ledger_asset Location "/demos/assets/talli-{re.1}"
+		respond @ledger_asset "" 301
+	}
+
+	# Static demo/product pages.
+	handle_path /demos/* {
+		root * /var/www/theoforge/demos-site
+		header Cache-Control "no-store, max-age=0"
+		file_server
+	}
+
+	# Talli product page.
+	handle /talli* {
+		redir /talli /talli/ permanent
+		redir /talli/ /talli/ permanent
+	}
+	handle_path /talli/* {
+		root * /var/www/theoforge/ledger-product-page
+		header Cache-Control "no-store, max-age=0"
+		file_server
+	}
+
+	# Archived v9 monolith
+	handle /account-landing* {
+		redir /account-landing /account-landing/ permanent
+		redir /account-landing/ /account-landing/ permanent
+	}
+	handle_path /account-landing/* {
+		reverse_proxy 127.0.0.1:4322
+	}
+
+	# Root: new front page (static file_server).
+	handle {
+		root * /var/www/theoforge
+		header Cache-Control "no-store, max-age=0"
+		file_server
+	}
+}
+
+webhooks.theoforgesolutions.com:80 {
+	handle_path /twilio-sms/* {
+		reverse_proxy 100.115.50.41:8090
+	}
+	handle /* {
+		reverse_proxy 100.115.50.41:8088
+	}
+}
+
+sms.theoforgesolutions.com:80 {
+	handle /* {
+		reverse_proxy 100.115.50.41:8090
+	}
+}
+
+nextcloud.theoforgesolutions.com:80 {
+	reverse_proxy 127.0.0.1:11000
+}
+
+# Ghost CMS blog
+blog.theoforgesolutions.com:80 {
+	reverse_proxy 127.0.0.1:2368 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto https
+	}
+}

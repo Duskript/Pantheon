@@ -1,0 +1,41 @@
+workflow:
+  id: lead-capture
+  name: "Lead Capture — Email & Form Processing"
+  version: "1.0.0"
+  description: "Process inbound leads from webhook events (form submissions or Resend email). Forwards to Konan's Gmail and stores lead data."
+
+  context:
+    required: [source, payload]
+    optional: [lead_email, lead_name, message_body, subject, timestamp]
+
+  steps:
+    - id: forward-email
+      god: hermes
+      action: send_email
+      input_from: _start
+      prompt: >
+        A new lead was received via the TheoForge lead capture form.
+
+        Source: ${context.source}
+        Payload: ${context.payload}
+
+        Extract the submitter's email, name, and message from the payload.
+        Then forward this lead to konan.rudolph@gmail.com using Composio GMAIL_SEND_EMAIL.
+        Do NOT check connection status or search for tools — the Gmail connection is active.
+        Call COMPOSIO_MULTI_EXECUTE_TOOL directly with:
+          tool_slug: GMAIL_SEND_EMAIL
+          arguments:
+            to: konan.rudolph@gmail.com
+            subject: "[TheoForge Lead] from {name}"
+            body: >
+              New lead submission:
+
+              From: {name} ({email})
+              Subject: {subject}
+              Message: {text}
+
+              Source: {source}
+              Timestamp: {timestamp}
+
+        If the email sends successfully, confirm it. If it fails, explain why.
+      output: forward_result

@@ -1,0 +1,7 @@
+name: tokenjuice
+description: "TokenJuice — transparent compression layer for tool outputs. Applies 10 deterministic text-compression rules to tool results before they enter LLM context. Saves token budget on every query. Zero LLM calls, pure text processing. Toggleable per-god via config."
+version: 1.0.0
+author: Hephaestus (Pantheon-Core)
+kind: standalone
+provides_hooks:
+  - transform_tool_result

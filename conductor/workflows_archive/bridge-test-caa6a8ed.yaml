@@ -1,0 +1,12 @@
+workflow:
+  context:
+    optional: []
+    required: []
+  id: bridge-test-caa6a8ed
+  name: Bridge test bridge-test-caa6a8ed
+  steps:
+  - god: thoth
+    id: step1
+    output: test result
+    timeout: 5m
+  version: 1.0.0

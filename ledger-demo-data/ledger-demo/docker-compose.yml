@@ -1,0 +1,377 @@
+# Theoforge Ledger — optimized single-tenant stack for one firm.
+#
+# Phase L0 rewrite (2026-06-21): 7-service, single-network, ~2.8 GB RAM
+# layout per ~/pantheon/plans/ledger-drift-remediation-plan.md §2.
+#
+# Topology (one bridge network: ledger-net):
+#
+#                    Traefik v3 (separate stack, infra/_templates/traefik/)
+#                              │
+#                              ▼
+#                  ┌────────────────────────┐
+#                  │      ledger-net        │
+#                  │   (external bridge)    │
+#                  └────────────────────────┘
+#        │          │          │         │          │          │
+#        ▼          ▼          ▼         ▼          ▼          ▼
+#     postgres    redis    frappe    docuseal  vaultwarden  conductor
+#       512M      128M      1G       256M       256M        128M
+#                              │          │
+#                              ▼          ▼
+#                         ┌────────────────────────┐
+#                         │     pantheon-core      │
+#                         │       512 MB           │
+#                         │ (Hermes + Practice Mgr │
+#                         │   god + Ichor + KB)    │
+#                         └────────────────────────┘
+#
+# Public subdomains (routed by Traefik):
+#   ledger.{DOMAIN}    Frappe/ERPNext
+#   sign.{DOMAIN}      DocuSeal (SQLite mode)
+#   vault.{DOMAIN}     Vaultwarden (built-in SQLite)
+#
+# Internal-only on ledger-net (reachable via Tailscale + docker network):
+#   postgres, redis, conductor, pantheon-core
+#
+# Brought up by provision-firm.sh after the Traefik stack is running.
+# All passwords come from .env (loaded by docker compose automatically
+# when the file lives next to this compose file).
+#
+# Required env vars (see .env.example):
+#   FIRM_SLUG, DOMAIN, ADMIN_EMAIL
+#   POSTGRES_PASSWORD, REDIS_PASSWORD, FRAPPE_ADMIN_PASSWORD
+#   DOCUSEAL_SECRET_KEY, VAULTWARDEN_ADMIN_TOKEN
+#   CONDUCTOR_ADMIN_TOKEN
+#   HERMES_SESSION_TOKEN, PRACTICE_MANAGER_API_KEY
+#
+# ─── Breaking change vs. previous version ──────────────────────────
+# This stack now uses ONE bridge network (`ledger-net`) instead of
+# the previous `${FIRM_SLUG}-internal` + `${FIRM_SLUG}-web` split.
+# The Traefik stack (infra/_templates/traefik/docker-compose.yml)
+# and provision-firm.sh must be updated in later phases (L1/L2) to
+# create + attach to `ledger-net`. Until they are, Traefik cannot
+# discover services on this network.
+---
+x-pg-env: &pg-env
+  POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+
+services:
+  # ─── PostgreSQL 16 (shared — Frappe + Conductor DBs) ────────────────
+  # Vaultwarden + DocuSeal + Pantheon Core use built-in SQLite and
+  # do NOT connect to this database. Compromise of postgres does not
+  # expose any of those.
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${FIRM_SLUG}-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-frappe}
+      POSTGRES_USER: ${POSTGRES_USER:-frappe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - ledger-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-frappe} -d ${POSTGRES_DB:-frappe}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── Redis 7 (cache + Frappe queue) ───────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ${FIRM_SLUG}-redis
+    restart: unless-stopped
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      - "--maxmemory"
+      - "128mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--save"
+      - "60 100"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ledger-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ─── ERPNext / Frappe ─────────────────────────────────────────────
+  # Custom image built from frappe_docker with the ledger_brand app
+  # installed (logo, color scheme, sidebar, demo client on first boot).
+  frappe-erpnext:
+    image: theoforge/erpnext:${FRAPPE_IMAGE_TAG:-v16.22.0-ledger-1}
+    container_name: ${FIRM_SLUG}-frappe
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *pg-env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      FRAPPE_ADMIN_PASSWORD: ${FRAPPE_ADMIN_PASSWORD:?FRAPPE_ADMIN_PASSWORD is required}
+      FRAPPE_SITE_NAME: ${FRAPPE_SITE_NAME:-ledger}
+      SITE_NAME: ${FRAPPE_SITE_NAME:-ledger}.${DOMAIN}
+      # Lets Frappe know it's behind a TLS-terminating proxy.
+      # Traefik sets X-Forwarded-Proto=https, and this lets Frappe
+      # serve absolute URLs with https:// without needing port 443
+      # inside the container.
+      FRAPPE_SITE_HTTP_TIMEOUT: 60
+    volumes:
+      - frappe_sites:/home/frappe/frappe-bench/sites
+      - frappe_apps:/home/frappe/frappe-bench/apps
+      - ./scripts/create-site.sh:/tmp/create-site.sh:ro
+    networks:
+      - ledger-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/method/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledger-net"
+      # The Frappe HTTP server lives on :8000 inside the container.
+      - "traefik.http.services.${FIRM_SLUG}-frappe.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${FIRM_SLUG}-frappe.rule=Host(`${LEDGER_HOST:-ledger.${DOMAIN}}`)"
+      - "traefik.http.routers.${FIRM_SLUG}-frappe.entrypoints=websecure"
+      - "traefik.http.routers.${FIRM_SLUG}-frappe.tls=true"
+      - "traefik.http.routers.${FIRM_SLUG}-frappe.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${FIRM_SLUG}-frappe.middlewares=secure-headers@file,frappe-buffer@file"
+      - "traefik.http.middlewares.frappe-buffer.buffering.maxrequestbodybytes=104857600"
+      - "traefik.http.middlewares.frappe-buffer.buffering.memrequestbodybytes=10485760"
+      - "traefik.http.middlewares.frappe-buffer.buffering.maxresponsebodybytes=104857600"
+
+  # ─── DocuSeal (SQLite mode — no separate database) ────────────────
+  # DATABASE_URL is intentionally NOT set. DocuSeal falls back to its
+  # built-in SQLite backend at /data/db.sqlite3. The docuseal-db
+  # container from the previous stack is gone.
+  docuseal:
+    image: docuseal/docuseal:latest
+    container_name: ${FIRM_SLUG}-docuseal
+    restart: unless-stopped
+    environment:
+      # No DATABASE_URL — SQLite mode (built-in DB).
+      SECRET_KEY: ${DOCUSEAL_SECRET_KEY:?DOCUSEAL_SECRET_KEY is required}
+      DOCUSEAL_URL: ${DOCUSEAL_URL:-https://sign.${DOMAIN}}
+      # Force HTTPS in generated URLs (Traefik terminates TLS upstream).
+      FORCE_HTTPS: "true"
+    volumes:
+      - docuseal_data:/data
+    networks:
+      - ledger-net
+    healthcheck:
+      # Use 127.0.0.1 (not localhost) to force IPv4 — the docuseal
+      # image only binds Puma to 0.0.0.0 (IPv4), so `localhost` resolves
+      # to [::1] (IPv6) and the healthcheck wget gets "connection
+      # refused". Caught 2026-06-21 in the ledger-demo provision.
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledger-net"
+      - "traefik.http.services.${FIRM_SLUG}-docuseal.loadbalancer.server.port=3000"
+      - "traefik.http.routers.${FIRM_SLUG}-docuseal.rule=Host(`${SIGN_HOST:-sign.${DOMAIN}}`)"
+      - "traefik.http.routers.${FIRM_SLUG}-docuseal.entrypoints=websecure"
+      - "traefik.http.routers.${FIRM_SLUG}-docuseal.tls=true"
+      - "traefik.http.routers.${FIRM_SLUG}-docuseal.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${FIRM_SLUG}-docuseal.middlewares=secure-headers@file,signing-rate-limit@file"
+
+  # ─── Vaultwarden (built-in SQLite — no DATABASE_URL) ──────────────
+  # The container defaults to /data/db.sqlite3 when DATABASE_URL is
+  # unset. The vaultwarden database is on a separate named volume
+  # and never connects to PostgreSQL. Compromise of postgres does
+  # not expose vault contents.
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: ${FIRM_SLUG}-vaultwarden
+    restart: unless-stopped
+    environment:
+      # Vaultwarden >= 1.30 requires the DOMAIN env var to be a full
+      # URL with the protocol prefix (e.g. "https://vault.example.com"),
+      # not just a bare hostname. The 2026-06-21 ledger-demo
+      # container crash-looped on "Error loading config: DOMAIN
+      # variable needs to contain the protocol (http, https)"
+      # because the previous default was just `vault.${DOMAIN}`.
+      # The default below also rewrites the protocol to https
+      # because Traefik terminates TLS upstream; vaultwarden
+      # needs to know its public-facing URL is https so it can
+      # generate correct invite links and password-reset URLs.
+      DOMAIN: ${VAULTWARDEN_DOMAIN:-https://vault.${DOMAIN}}
+      SIGNUPS_ALLOWED: "false"
+      INVITATIONS_ALLOWED: "true"
+      ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN:?VAULTWARDEN_ADMIN_TOKEN is required}
+      RSA_KEY_FILENAME: /data/vaultwarden.rsa
+      LOG_LEVEL: "info"
+      # Disable the vaultwarden banner / sentry integration; we own
+      # observability through Loki or journald, not upstream.
+      DISABLE_BANNER: "true"
+    volumes:
+      - vaultwarden_data:/data
+    networks:
+      - ledger-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:80/alive"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledger-net"
+      - "traefik.http.services.${FIRM_SLUG}-vaultwarden.loadbalancer.server.port=80"
+      - "traefik.http.routers.${FIRM_SLUG}-vaultwarden.rule=Host(`${VAULT_HOST:-vault.${DOMAIN}}`)"
+      - "traefik.http.routers.${FIRM_SLUG}-vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.${FIRM_SLUG}-vaultwarden.tls=true"
+      - "traefik.http.routers.${FIRM_SLUG}-vaultwarden.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${FIRM_SLUG}-vaultwarden.middlewares=secure-headers@file"
+
+  # ─── Pantheon Conductor (thin API for the operator dashboard) ────
+  # Internal-only: no Traefik public route. Reachable on
+  # ledger-net from Pantheon Core (which proxies operator
+  # actions), from Frappe (background workflows), and from
+  # Tailscale-attached operator machines.
+  conductor:
+    image: theoforge/conductor:latest
+    container_name: ${FIRM_SLUG}-conductor
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # The conductor image reads CONDUCTOR_PORT (just the port
+      # number, not a bind spec). The previous CONDUCTOR_BIND=...
+      # form was silently ignored, leaving the conductor on its
+      # default port 8080 while the healthcheck probed :7100.
+      # Fixed 2026-06-21 in the ledger-demo provision.
+      CONDUCTOR_PORT: ${CONDUCTOR_PORT:-7100}
+      CONDUCTOR_ADMIN_TOKEN: ${CONDUCTOR_ADMIN_TOKEN:?CONDUCTOR_ADMIN_TOKEN is required}
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/conductor"
+      FIRM_SLUG: ${FIRM_SLUG}
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - conductor_data:/data
+    networks:
+      - ledger-net
+    healthcheck:
+      # Use 127.0.0.1 to force IPv4 (aiohttp binds 0.0.0.0 only).
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${CONDUCTOR_PORT:-7100}/healthz', timeout=3).read()\"     || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ─── Pantheon Core (Hermes + Practice Manager god + Ichor + KB) ───
+  # New in Phase L0. Single container that runs the Hermes Agent
+  # runtime, the Practice Manager god profile (conversational AI for
+  # the firm operator), Ichor (god memory, SQLite-backed), and the
+  # Athenaeum (firm knowledge base, markdown + FTS5).
+  #
+  # Internal-only: no Traefik public route. Reachable on
+  # ledger-net:8787 from Tailscale-attached operator machines and
+  # from Frappe (which the Practice Manager god talks to via REST).
+  pantheon-core:
+    image: theoforge/pantheon-core:${PANTHEON_CORE_IMAGE_TAG:-ledger-1}
+    container_name: ${FIRM_SLUG}-pantheon-core
+    restart: unless-stopped
+    depends_on:
+      frappe-erpnext:
+        condition: service_healthy
+    environment:
+      HERMES_SESSION_TOKEN: ${HERMES_SESSION_TOKEN:?HERMES_SESSION_TOKEN is required}
+      PRACTICE_MANAGER_API_KEY: ${PRACTICE_MANAGER_API_KEY:?PRACTICE_MANAGER_API_KEY is required}
+      ATHENAEUM_PATH: ${ATHENAEUM_PATH:-/data/athenaeum}
+      ICHOR_DB_PATH: ${ICHOR_DB_PATH:-/data/ichor/ichor.db}
+      # Frappe REST endpoint — Practice Manager god talks to this.
+      FRAPPE_URL: http://frappe-erpnext:8000
+      FRAPPE_SITE_NAME: ${FRAPPE_SITE_NAME:-ledger}
+      DOMAIN: ${DOMAIN}
+      FIRM_SLUG: ${FIRM_SLUG}
+    volumes:
+      - pantheon_data:/data
+    networks:
+      - ledger-net
+    healthcheck:
+      # Hermes Agent gateway is on :8787 per Phase L9 verification gate.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  postgres_data:
+    name: ${FIRM_SLUG}-postgres-data
+  redis_data:
+    name: ${FIRM_SLUG}-redis-data
+  frappe_sites:
+    name: ${FIRM_SLUG}-frappe-sites
+  frappe_apps:
+    name: ${FIRM_SLUG}-frappe-apps
+  docuseal_data:
+    name: ${FIRM_SLUG}-docuseal-data
+  vaultwarden_data:
+    name: ${FIRM_SLUG}-vaultwarden-data
+  conductor_data:
+    name: ${FIRM_SLUG}-conductor-data
+  pantheon_data:
+    name: ${FIRM_SLUG}-pantheon-data
+
+# ─── Network ────────────────────────────────────────────────────────
+# Single external bridge. Created by provision-firm.sh (future L2
+# patch) and attached to by the Traefik stack (future L1 patch).
+# Until those patches land, Traefik cannot discover services here —
+# this is the deliberate L0 simplification per the drift remediation
+# plan §2 "Optimized Service Topology".
+networks:
+  ledger-net:
+    name: ledger-net
+    external: true

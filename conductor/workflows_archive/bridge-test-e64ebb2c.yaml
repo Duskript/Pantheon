@@ -1,0 +1,12 @@
+workflow:
+  context:
+    optional: []
+    required: []
+  id: bridge-test-e64ebb2c
+  name: Bridge test bridge-test-e64ebb2c
+  steps:
+  - god: thoth
+    id: step1
+    output: test result
+    timeout: 5m
+  version: 1.0.0

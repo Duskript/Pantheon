@@ -1,0 +1,106 @@
+{
+  "comment": "Pantheon Cron Job Manifest \u2014 all cron jobs managed by install-pantheon.sh",
+  "created": "2026-05-21",
+  "hermes_cron_jobs": [
+    {
+      "name": "Hades Nightly Consolidation",
+      "schedule": "0 0 * * *",
+      "deliver": "local",
+      "skills": [
+        "pantheon-operations"
+      ],
+      "prompt": "Run the Hades nightly consolidation pipeline (includes session prune as final step). python3 ~/pantheon/pantheon-core/hades/main.py --full\n\nLAST STEP: hermes session prune --agent-id hermes-agent --days 14",
+      "enabled_toolsets": [
+        "terminal",
+        "file"
+      ]
+    },
+    {
+      "name": "Athenaeum entity extraction (pre-Hades)",
+      "schedule": "45 23 * * *",
+      "deliver": "local",
+      "prompt": "Run the Athenaeum entity extraction pipeline. python3 ~/athenaeum/scripts/extract-entities.py",
+      "workdir": "/home/konan/athenaeum"
+    },
+    {
+      "name": "Ichor Forge \u2014 Nightly Harness Analysis",
+      "schedule": "30 23 * * *",
+      "deliver": "local",
+      "skills": [
+        "ichor-harness-engineering"
+      ],
+      "prompt": "Run the Ichor Forge nightly analysis cycle. python3 ~/pantheon/pantheon-core/ichor/forge.py",
+      "enabled_toolsets": [
+        "terminal"
+      ]
+    },
+    {
+      "name": "Ichor Structural Extractor",
+      "schedule": "*/15 * * * *",
+      "deliver": "local",
+      "prompt": "Run the deterministic Ichor structural extractor for the newest session transcripts and configured git repos. python3 ~/pantheon/scripts/structural_extractor.py --session-dir ~/.hermes/sessions --project-dir ~/pantheon --project-dir ~/athenaeum",
+      "workdir": "/home/konan/pantheon",
+      "enabled_toolsets": [
+        "terminal",
+        "file"
+      ]
+    },
+    {
+      "name": "Morning Briefing",
+      "schedule": "0 6 * * *",
+      "deliver": "local",
+      "skills": [
+        "pantheon-operations"
+      ],
+      "prompt": "Compose an energetic morning briefing for Konan delivered in fast-talking Hermes style.",
+      "script": "morning-briefing.py"
+    },
+    {
+      "name": "Thoth Dawn Patrol",
+      "schedule": "0 0 * * *",
+      "deliver": "local",
+      "skills": [
+        "pantheon-operations"
+      ],
+      "prompt": "You are Thoth, Pantheon's intelligence analyst. Synthesize the raw dawn patrol findings above into a structured intelligence briefing. Group by category (Papers, GitHub Projects, MCP Servers, Model News). For each item, note relevance to Pantheon: HIGH (directly useful), MEDIUM (influence or idea), or LOW (interesting context). Flag anything that could be a threat or risk (vendor deprecation, security advisory). Write the final briefing to ~/athenaeum/reports/dawn-patrol/$(date +%Y-%m-%d).md",
+      "script": "dawn-patrol.py",
+      "enabled_toolsets": [
+        "terminal",
+        "file"
+      ]
+    }
+  ],
+  "system_crontab_entries": [
+    {
+      "schedule": "0 */2 * * *",
+      "command": "cd ~/pantheon && python3 pantheon-core/gods/hestia.py >> ~/pantheon/logs/hestia.log 2>&1",
+      "description": "Hestia periodic maintenance every 2 hours"
+    },
+    {
+      "schedule": "*/5 * * * *",
+      "command": "cd ~/pantheon && python3 scripts/the-fates.py >> ~/pantheon/logs/the-fates.log 2>&1",
+      "description": "The Fates event processing every 5 minutes"
+    },
+    {
+      "schedule": "0 7 * * *",
+      "command": "cd ~/pantheon && scripts/hades --save \"~/athenaeum/Codex-Pantheon/reports/hades-$(date +\\%Y-\\%m-\\%d).md\" >> ~/pantheon/logs/hades.log 2>&1",
+      "description": "Hades daily report at 7 AM"
+    },
+    {
+      "schedule": "55 5 * * *",
+      "command": "cd ~/pantheon && python3 scripts/ichor_health_guardian.py >> ~/pantheon/logs/ichor-health-guardian.log 2>&1",
+      "description": "Ichor health guardian daily pre-briefing check"
+    },
+    {
+      "schedule": "0 6 * * *",
+      "command": "cd ~/pantheon && python3 scripts/comparison_report.py --write >> ~/pantheon/logs/comparison-report.log 2>&1",
+      "description": "Pantheon comparison report daily aggregation"
+    }
+  ],
+  "merged_jobs": [
+    {
+      "name": "Session Prune (cron + old)",
+      "status": "REMOVED \u2014 merged into Hades Nightly Consolidation as last step (2026-05-31)"
+    }
+  ]
+}

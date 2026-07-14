@@ -1,0 +1,40 @@
+workflow:
+  id: bug-fix
+  name: "Bug Fix Pipeline"
+  version: "1.0.0"
+  description: "Rapid bug fix from triage through deploy with review gate"
+
+  context:
+    required: [bug_report, reproduction_steps]
+    optional: [severity, affected_systems]
+
+  steps:
+    - id: triage
+      god: hermes
+      action: triage
+      output: triage_report
+      timeout: 15m
+
+    - id: fix
+      god: marvin
+      skill: systematic-debugging
+      input_from: triage
+      gates: [logic_gate]
+      output: fix
+      timeout: 2h
+
+    - id: review
+      god: hephaestus
+      skill: code-review
+      input_from: fix
+      gates: [logic_gate]
+      output: reviewed_fix
+      timeout: 1h
+
+    - id: deploy
+      god: marvin
+      skill: shipping-and-launch
+      input_from: review
+      gates: [state_gate]
+      output: deployed
+      timeout: 30m

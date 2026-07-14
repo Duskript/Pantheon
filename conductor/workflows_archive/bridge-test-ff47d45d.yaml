@@ -1,0 +1,12 @@
+workflow:
+  context:
+    optional: []
+    required: []
+  id: bridge-test-ff47d45d
+  name: Bridge test bridge-test-ff47d45d
+  steps:
+  - god: thoth
+    id: step1
+    output: test result
+    timeout: 5m
+  version: 1.0.0

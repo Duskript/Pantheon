@@ -1,0 +1,19 @@
+[Unit]
+Description=Clawforge Messenger - cross-instance god request handler
+After=network-online.target clawforge-proxy.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/__USER__/.hermes/hermes-agent/venv/bin/python /home/__USER__/pantheon/scripts/clawforge-messenger.py daemon
+WorkingDirectory=/home/__USER__
+Environment="PATH=/home/__USER__/.hermes/hermes-agent/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HERMES_HOME=/home/__USER__/.hermes"
+Environment="VIRTUAL_ENV=/home/__USER__/.hermes/hermes-agent/venv"
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

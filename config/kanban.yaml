@@ -1,0 +1,55 @@
+# pantheon/config/kanban.yaml
+# Operator-facing knobs for the kanban dispatcher and the
+# spec-to-cards pipeline. Read on every dispatch tick and at
+# spec-decomposition time. Changes take effect on the next
+# dispatcher poll (default 60s).
+#
+# Schema is intentionally flat: every knob here is something an
+# operator should be able to change without a code review. If you
+# find yourself wanting to add a deep-nested config tree, write
+# a Hermes skill instead.
+
+kanban:
+  dispatcher:
+    # How often the dispatcher polls for ready tasks. Lower = snappier
+    # but more CPU. 60s is the sweet spot for a single-machine Pantheon.
+    interval_seconds: 60
+
+    # HARD CAP on simultaneous tasks per god profile. If Marvin is
+    # already running 4 cards, the 5th waits — even if total budget
+    # is available. Prevents one profile from monopolizing the system.
+    max_parallel_per_assignee: 4
+
+    # HARD CAP on simultaneous tasks across the whole Pantheon. Caps
+    # total resource contention regardless of per-profile distribution.
+    max_parallel_total: 12
+
+    # Default max_loc_delta if a card doesn't specify one. Cards can
+    # still override (up to 100) — this is just the fallback.
+    default_max_loc_delta: 30
+
+    # Hard cap on max_loc_delta. Cards above this are rejected at
+    # validation time. Mirrors MAX_LOC_DELTA_HARD_CAP in
+    # hermes_cli/kanban_contract.py — keep in sync.
+    max_loc_delta_hard_cap: 100
+
+    # Conflict-check mode:
+    #   "mechanical" — auto-detect same-output-file conflicts and
+    #                  inject conflicts_with into the cards.
+    #   "off"        — skip conflict detection (legacy behavior).
+    conflict_check: mechanical
+
+  contracts:
+    # Minimum number of out_of_scope entries per card. Cards below
+    # this are rejected. Default is 3 (matches STANDARD_OUT_OF_SCOPE
+    # in hermes_cli/kanban_contract.py).
+    require_out_of_scope_min: 3
+
+    # Whether every card must have a working verify command. If true,
+    # cards without a verify.command are rejected at validation time.
+    require_verify_command: true
+
+    # If a rendered worker prompt exceeds this many bytes, the
+    # renderer logs a warning. Drift signal: prompts should be terse,
+    # not narrative. 2KB is the empirical ceiling for clean cards.
+    render_prompt_max_bytes: 2048

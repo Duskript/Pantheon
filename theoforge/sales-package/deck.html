@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TheoForge — Invoice & Onboarding Automation</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/dracula.css">
+  <style>
+    .reveal {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .reveal h1 { font-size: 2.8em; font-weight: 800; letter-spacing: -0.02em; }
+    .reveal h2 { font-size: 1.8em; font-weight: 700; letter-spacing: -0.01em; }
+    .reveal h3 { font-size: 1.3em; font-weight: 600; }
+    .reveal p, .reveal li { font-size: 0.9em; line-height: 1.5; }
+    .reveal li { margin-bottom: 0.3em; }
+    
+    .highlight { color: #ff79c6; }
+    .accent { color: #50fa7b; }
+    .warn { color: #f1fa8c; }
+    .pain { color: #ff5555; }
+    .small { font-size: 0.7em; }
+    .price { font-size: 2.2em; font-weight: 800; color: #50fa7b; }
+    .price-sub { font-size: 0.6em; font-weight: 400; color: #8be9fd; }
+    
+    .tier-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .tier-card {
+      background: rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      text-align: left;
+    }
+    .tier-card h3 { margin-top: 0; margin-bottom: 8px; }
+    .tier-card .price-big { font-size: 1.8em; font-weight: 800; }
+    .tier-card.premium { border-color: #ff79c6; background: rgba(255,121,198,0.08); }
+    .tier-card.popular { border-color: #50fa7b; background: rgba(80,250,123,0.08); }
+    .tier-card .badge {
+      display: inline-block;
+      background: #50fa7b;
+      color: #282a36;
+      font-size: 0.6em;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+    }
+    .tier-card ul { list-style: none; padding: 0; margin: 12px 0 0; }
+    .tier-card ul li { font-size: 0.75em; margin-bottom: 4px; padding-left: 0; }
+    .tier-card ul li::before { content: "✅ "; }
+
+    .col-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      text-align: left;
+    }
+    .col-2-left { padding-right: 20px; }
+    .col-2-right { padding-left: 20px; border-left: 1px solid rgba(255,255,255,0.15); }
+
+    .metric-big {
+      font-size: 2.5em;
+      font-weight: 800;
+      color: #50fa7b;
+      line-height: 1;
+    }
+    .metric-label {
+      font-size: 0.7em;
+      color: #8be9fd;
+      margin-bottom: 12px;
+    }
+
+    .slug { font-style: italic; color: #6272a4; }
+    .row { display: flex; gap: 16px; align-items: center; margin: 8px 0; }
+    .step-num {
+      background: #ff79c6;
+      color: #282a36;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.8em;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- SLIDE 1: Title -->
+      <section data-background="#1a1b2e">
+        <h1>TheoForge</h1>
+        <h3 style="color:#8be9fd;">Invoice & Onboarding Automation</h3>
+        <p class="small" style="margin-top:40px;">For service businesses tired of chasing payments and manual admin</p>
+        <p class="small slug">"Never chase a payment again. New clients onboarded in 24 hours."</p>
+      </section>
+
+      <!-- SLIDE 2: The Problem — Invoicing -->
+      <section data-background="#1a1b2e">
+        <h2 class="pain">⚡ The Problem: Invoicing</h2>
+        <div class="col-2">
+          <div class="col-2-left">
+            <p style="font-weight:600;">What it looks like right now:</p>
+            <ul>
+              <li>🔴 Finish job → manually create invoice → email it → wait</li>
+              <li>🔴 40% of invoices paid late</li>
+              <li>🔴 3+ hours/week chasing payments</li>
+              <li>🔴 Follow-ups forgotten → cash flow tight</li>
+              <li>🔴 Reconciliation is a weekend chore</li>
+            </ul>
+          </div>
+          <div class="col-2-right">
+            <div class="metric-big">3+ hrs</div>
+            <div class="metric-label">PER WEEK CHASING PAYMENTS</div>
+            <div class="metric-big">40%</div>
+            <div class="metric-label">OF INVOICES PAID LATE</div>
+            <div class="metric-big">$15.6K</div>
+            <div class="metric-label">LOST ANNUALLY PER OWNER</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 3: The Problem — Onboarding -->
+      <section data-background="#1a1b2e">
+        <h2 class="pain">⚡ The Problem: Client Onboarding</h2>
+        <div class="col-2">
+          <div class="col-2-left">
+            <p style="font-weight:600;">What it looks like right now:</p>
+            <ul>
+              <li>🔴 Client says yes → email forms → wait for reply</li>
+              <li>🔴 Schedule intake → do intake → create contract</li>
+              <li>🔴 Send contract → wait for signature → enter data</li>
+              <li>🔴 Delegate tasks → remind team → chase again</li>
+              <li class="pain" style="margin-top:12px;"><strong>2 weeks from "yes" to "started"</strong></li>
+            </ul>
+          </div>
+          <div class="col-2-right">
+            <div class="metric-big">1-2 wks</div>
+            <div class="metric-label">TO ONBOARD A NEW CLIENT</div>
+            <div class="metric-big">70%</div>
+            <div class="metric-label">OF ONBOARDING TASKS ARE MANUAL DATA ENTRY</div>
+            <div class="metric-big">15-20%</div>
+            <div class="metric-label">OF CLIENTS CHURN BEFORE COMPLETING ONBOARDING</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 4: Who This Is For -->
+      <section data-background="#1a1b2e">
+        <h2>🎯 Who This Is For</h2>
+        <blockquote style="border-left: 4px solid #ff79c6; padding-left: 20px; margin: 20px 0; font-size: 1.1em;">
+          "We only work with service businesses doing <span class="highlight">$250K-$5M/year</span>."
+        </blockquote>
+        <div class="col-2" style="margin-top: 20px;">
+          <div>
+            <p style="font-weight:600; color:#50fa7b;">✅ You are:</p>
+            <ul>
+              <li>Cleaning, plumbing, HVAC, electrical</li>
+              <li>Lawn care, photography, event planning</li>
+              <li>Property management, handyman</li>
+              <li>Any service business with recurring invoices</li>
+            </ul>
+          </div>
+          <div>
+            <p style="font-weight:600; color:#ff5555;">❌ Not for you if:</p>
+            <ul>
+              <li>Solo freelancer sending 5 invoices/mo</li>
+              <li>You have a full-time admin already</li>
+              <li>You want DIY spreadsheets</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 5: Solution — Invoice Automation -->
+      <section data-background="#1a1b2e">
+        <h2>✅ The Solution: Invoice Automation</h2>
+        <p>Your invoicing runs on autopilot. Here's exactly what happens:</p>
+        <div style="text-align: left; margin-top: 20px;">
+          <div class="row"><span class="step-num">1</span> <strong>Auto-Generate</strong> — Invoice created from job data automatically</div>
+          <div class="row"><span class="step-num">2</span> <strong>Auto-Send</strong> — Goes to client the moment work is marked complete</div>
+          <div class="row"><span class="step-num">3</span> <strong>Smart Follow-Ups</strong> — Email + text: Day 1, 7, 14, 30</div>
+          <div class="row"><span class="step-num">4</span> <strong>Payment Reconciliation</strong> — Paid flags, overdue escalates</div>
+          <div class="row"><span class="step-num">5</span> <strong>Weekly Report</strong> — Monday morning: who paid, who hasn't</div>
+        </div>
+        <p class="accent" style="margin-top: 24px;">⬇ 3 hours/week → 15 minutes/week</p>
+      </section>
+
+      <!-- SLIDE 6: Solution — Onboarding Engine -->
+      <section data-background="#1a1b2e">
+        <h2>✅ The Solution: Client Onboarding Engine</h2>
+        <p>New clients go from "yes" to "onboarded" in <span class="accent">24 hours</span>.</p>
+        <div style="text-align: left; margin-top: 20px;">
+          <div class="row"><span class="step-num">1</span> <strong>Intake Form</strong> — Client fills ONE form. Everything captured.</div>
+          <div class="row"><span class="step-num">2</span> <strong>E-Sign Contract</strong> — Auto-generated from intake data, sent, signed</div>
+          <div class="row"><span class="step-num">3</span> <strong>Auto-Schedule</strong> — Client picks a time, calendar books itself</div>
+          <div class="row"><span class="step-num">4</span> <strong>Welcome Sequence</strong> — Email + SMS triggers automatically</div>
+          <div class="row"><span class="step-num">5</span> <strong>CRM + Tasks</strong> — Data entered, team notified, all auto-populated</div>
+        </div>
+        <p class="accent" style="margin-top: 24px;">⬇ 2 weeks → 24 hours</p>
+      </section>
+
+      <!-- SLIDE 7: The 3 Tiers -->
+      <section data-background="#1a1b2e">
+        <h2>📦 The 3 Tiers</h2>
+        <p class="small">Dan Martell framework: Clear tiers, clear deliverables, no asterisks</p>
+        <div class="tier-grid">
+          <div class="tier-card">
+            <h3>🥉 Starter</h3>
+            <div class="price-big accent">$444</div>
+            <div class="price-sub">one-time</div>
+            <ul>
+              <li>One workflow — invoice OR onboarding</li>
+              <li>48-hour setup</li>
+              <li>30-min setup call</li>
+              <li>30 days support</li>
+              <li>Your current tools integrated</li>
+            </ul>
+          </div>
+          <div class="tier-card popular">
+            <div class="badge">MOST POPULAR</div>
+            <h3>🥈 Growth</h3>
+            <div class="price-big" style="color:#50fa7b;">$997</div>
+            <div class="price-sub">per month</div>
+            <ul>
+              <li>Both workflows live</li>
+              <li>New automation every month</li>
+              <li>Monthly strategy review</li>
+              <li>Priority support (4hr response)</li>
+              <li>Performance dashboard</li>
+            </ul>
+          </div>
+          <div class="tier-card premium">
+            <h3>🥇 Ecosystem</h3>
+            <div class="price-big" style="color:#ff79c6;">$5,000</div>
+            <div class="price-sub">per month</div>
+            <ul>
+              <li>Every workflow automated</li>
+              <li>Private dedicated infrastructure</li>
+              <li>Team training + documentation</li>
+              <li>24/7 monitoring + uptime SLA</li>
+              <li>Senior dedicated lead</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 8: The Math (Dan's Public Math) -->
+      <section data-background="#1a1b2e">
+        <h2>📐 The Math</h2>
+        <p class="small">Dan Martell's Public Math — work backwards from the goal</p>
+        <div class="col-2" style="margin-top: 20px;">
+          <div>
+            <div class="metric-big">$6,000/mo</div>
+            <div class="metric-label">TIME VALUE OF 15 HOURS/ WEEK SAVED</div>
+            <div class="metric-big" style="margin-top:16px;">$997/mo</div>
+            <div class="metric-label">GROWTH TIER COST</div>
+            <div class="metric-big" style="color:#ff79c6; margin-top:16px;">~5x ROI</div>
+            <div class="metric-label">RETURN ON INVESTMENT — MONTH 1</div>
+          </div>
+          <div>
+            <p style="font-weight:600;">Goal: $2K/month → $10K/month</p>
+            <ul>
+              <li><strong>Starter ($444):</strong> 5 clients = $2,220</li>
+              <li><strong>Growth ($997/mo):</strong> 2 clients = $1,994/mo</li>
+              <li><strong>Ecosystem ($5K/mo):</strong> 1 client = $5,000/mo</li>
+              <li style="margin-top:12px; color:#f1fa8c;">Stack all three = $9,214/mo</li>
+            </ul>
+            <p style="margin-top: 16px; font-size:0.8em; color:#6272a4;">
+              Chris Kerner: "Stack small streams." One vending machine → ten machines. One client → ten clients.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 9: Setup Process -->
+      <section data-background="#1a1b2e">
+        <h2>⚙️ How It Works</h2>
+        <p class="small">From message to live in under a week</p>
+        <div style="text-align: left; margin-top: 20px;">
+          <div class="row"><span class="step-num">1</span> You message: "I'm interested in Starter"</div>
+          <div class="row"><span class="step-num">2</span> We send a 5-min questionnaire about your tools</div>
+          <div class="row"><span class="step-num">3</span> We build your first workflow (we do the work)</div>
+          <div class="row"><span class="step-num">4</span> 30-min setup call — connect accounts, walk through</div>
+          <div class="row"><span class="step-num">5</span> Live. You're saving time. Payments arrive faster.</div>
+        </div>
+        <p class="accent" style="margin-top: 24px;">⬇ No technical skills needed. We handle everything.</p>
+      </section>
+
+      <!-- SLIDE 10: CTA / Next Steps -->
+      <section data-background="#1a1b2e">
+        <h1>Ready?</h1>
+        <p style="font-size: 1.2em;">Reply with one of these:</p>
+        <div style="margin: 30px 0;">
+          <p style="font-size: 1.1em; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+            "<span class="accent">Starter</span> — I want invoice automation"
+          </p>
+          <p style="font-size: 1.1em; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-top: 10px;">
+            "<span class="accent">Starter</span> — I want client onboarding"
+          </p>
+          <p style="font-size: 1.1em; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-top: 10px;">
+            "<span class="highlight">Tell me more about Growth</span>"
+          </p>
+        </div>
+        <p class="small">No high-pressure sales. No discovery call needed.<br>We respond within 4 hours.</p>
+        <p class="small slug" style="margin-top: 20px;">Built on TheoForge — the visual workflow automation platform for service businesses.</p>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    Reveal.initialize({
+      controls: true,
+      controlsLayout: 'bottom-right',
+      controlsTutorial: false,
+      progress: true,
+      center: true,
+      hash: true,
+      transition: 'fade',
+      width: 1200,
+      height: 700,
+      margin: 0.08,
+      backgroundColor: '#1a1b2e'
+    });
+  </script>
+</body>
+</html>

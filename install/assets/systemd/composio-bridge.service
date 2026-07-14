@@ -1,0 +1,17 @@
+[Unit]
+Description=Composio OAuth Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/npm start
+WorkingDirectory=%h/pantheon/composio-bridge
+Restart=always
+RestartSec=10
+Environment="PATH=/usr/bin:/home/konan/.nvm/versions/node/v22.12.0/bin"
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

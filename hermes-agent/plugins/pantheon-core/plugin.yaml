@@ -1,0 +1,11 @@
+name: pantheon-core
+version: "1.0.0"
+description: "Pantheon lifecycle hooks for Hermes — Phase B plugin with comparison-mode logging and opt-in memory, gate, inbox, and session-finalize hooks."
+author: Hermes (Pantheon-Core)
+kind: standalone
+provides_hooks:
+  - pre_llm_call
+  - pre_tool_call
+  - post_tool_call
+  - on_session_start
+  - on_session_finalize

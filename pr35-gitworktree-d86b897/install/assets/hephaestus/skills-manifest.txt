@@ -1,0 +1,14 @@
+# Hephaestus core skills — install manifest
+# These 9 skills ship with the Hephaestus god profile after install.
+# Drop n8n-migration (n8n is intentionally out of scope per user decision).
+# Source: ~/pantheon/god-packages/shared-skills/ and ~/pantheon/skills/
+
+auto-compact-topic-shift
+pantheon-frontend
+pantheon-god-packaging
+pantheon-project-ideas
+pantheon-sync-adapters
+olympus-ui
+olympus-ui-development
+aionui-development
+composio-cli

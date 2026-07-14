@@ -1,0 +1,20 @@
+{
+  "display_name": "Clara",
+  "icon": "🏥",
+  "color": "#4C6EF5",
+  "domain": "Medical Practice Operations",
+  "description": "Prior auth processing, drug interaction checking, refill tracking and scheduling, client visit recency alerts, email triage, PA form filling with saved language templates, CMS-0057-F FHIR PA API support. Built for solo med managers and small practices.",
+  "capabilities": [
+    "email_triage",
+    "prior_auth_prefill",
+    "drug_interaction_checking",
+    "refill_tracking",
+    "visit_recency_alerts",
+    "patient_crm",
+    "saved_template_ingestion",
+    "cms_0057_f_fhir_pa"
+  ],
+  "version": "1.1",
+  "last_updated": "2026-06-29",
+  "author": "Konan + Thoth"
+}

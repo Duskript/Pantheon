@@ -1,0 +1,15 @@
+{
+  "abort_on_fail": true,
+  "completion_target": null,
+  "context_bag": {},
+  "created": "2026-06-14T23:39:43.655378Z",
+  "current_step": "active-goals",
+  "definition_id": "morning-briefing",
+  "definition_version": "1.1.0",
+  "dispatched_to": null,
+  "initiator": "hermes",
+  "original_request": "PM inspect",
+  "status": "in_progress",
+  "step_history": [],
+  "workflow_id": "wf_e8621c40"
+}

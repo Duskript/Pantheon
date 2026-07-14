@@ -1,0 +1,63 @@
+gods:
+  hermes:
+    display_name: Hermes
+    role: Messenger & Operations Manager
+    description: Your direct interface to the Pantheon. Konan talks to me, I route
+      to the right god, manage the system, schedules, and operations.
+    capabilities:
+    - chat
+    - message_relay
+    - system_interface
+    - cron_management
+    status: active
+  hephaestus:
+    display_name: Hephaestus
+    role: God of the Forge
+    description: Collaborative builder, engineer, and architect. Handles tool building,
+      code generation, project scaffolding, infrastructure planning, and program design.
+    capabilities:
+    - tool_building
+    - code_generation
+    - project_scaffolding
+    - infrastructure_planning
+    - program_design
+    status: active
+  rheta:
+    display_name: Rheta
+    role: God of Copywriting, Rhetoric, and Persuasion
+    description: Generates niche-adapted, humanized copy for landing pages, email sequences, and social posts. Maintains per-niche knowledge bases with industry-specific tone, compliance, and conversion patterns.
+    capabilities:
+    - copywriting
+    - copy_editing
+    - niche_research
+    - compliance_review
+    - content_humanization
+    status: active
+  iris:
+    display_name: Iris
+    role: God of UI/UX Design
+    description: Design system authority, Figma operator, token spec author, and visual QA auditor. Specifies components with structured tokens; Master Coder implements.
+    capabilities:
+    - design_system
+    - ui_prototyping
+    - accessibility_audit
+    - visual_qa
+    - figma_operations
+    - token_spec_authoring
+    status: active
+  mercer:
+    display_name: Mercer
+    role: God of Sales
+    description: Enterprise sales agent — autonomous lead qualification, structured discovery (11-phase GPCTBA/N.E.A.T. flow), real-time lead scoring, calendar booking, and pipeline management. Presents as a 15-person outreach department via landing page identity randomization.
+    capabilities:
+    - lead_qualification
+    - structured_discovery
+    - lead_scoring
+    - calendar_booking
+    - pipeline_management
+    - objection_handling
+    - identity_deception
+    status: active
+  marvin:
+    display_name: Marvin
+    role: Master Coder

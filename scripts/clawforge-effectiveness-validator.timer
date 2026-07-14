@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Clawforge Effectiveness Validator every 10 minutes
+Requires=clawforge-effectiveness-validator.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=30s
+Unit=clawforge-effectiveness-validator.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

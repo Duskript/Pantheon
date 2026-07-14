@@ -1,0 +1,455 @@
+[    4647ms] [WARNING] The resource https://fonts.googleapis.com/css2?family=Google+Symbols:opsz,wght,FILL,GRAD,ROND@40..48,300,0..1,0,50&display=block was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://antigravity.google/docs/cli-features:0
+[    4647ms] [WARNING] The resource https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,slnt,wdth,wght,ROND@8..144,-10..0,25..150,400..500,0..100&display=swap was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://antigravity.google/docs/cli-features:0
+[    9662ms] [WARNING] The resource https://fonts.googleapis.com/css2?family=Google+Symbols:opsz,wght,FILL,GRAD,ROND@40..48,300,0..1,0,50&display=block was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://antigravity.google/docs/cli-features:0
+[    9662ms] [WARNING] The resource https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,slnt,wdth,wght,ROND@8..144,-10..0,25..150,400..500,0..100&display=swap was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://antigravity.google/docs/cli-features:0
+[16484678ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/olympus/node_modules/.vite/deps/react-dom_client.js?v=93353f51:14337
+[16484841ms] [ERROR] A bad HTTP response code (404) was received when fetching the script. @ :0
+[16484901ms] Failed to register a ServiceWorker for scope ('http://localhost:5173/') with script ('http://localhost:5173/sw.js'): A bad HTTP response code (404) was received when fetching the script.
+[41809576ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5173/olympus/@vite/client:992
+[41884718ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-CdrWKgyS.js:19
+[41885176ms] [ERROR] Access to fetch at 'https://pantheon.tail164759.ts.net/api/gods' from origin 'http://localhost:5173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:5173/olympus/:0
+[41885178ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://pantheon.tail164759.ts.net/api/gods:0
+[41885278ms] [INFO] Olympus UI is ready for offline use @ http://localhost:5173/olympus/assets/index-CdrWKgyS.js:19
+[41937160ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-CdrWKgyS.js:19
+[41937369ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://pantheon.tail164759.ts.net/api/gods:0
+[41940370ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-oi_cBXiQ.js:19
+[42181422ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-oi_cBXiQ.js:19
+[42184791ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-BDCi9Is_.js:19
+[43058664ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-BDCi9Is_.js:19
+[45043064ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-BDCi9Is_.js:19
+[45046407ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-BxNXs1Dm.js:18
+[75399519ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://d3gk2c5xim1je2.cloudfront.net/v7.1.0/regular/life-buoy.svg:0
+[75401647ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75406523ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/platform/overview:0
+[75406523ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/platform/overview:0
+[75406523ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/platform/overview:0
+[75410423ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/platform/overview:0
+[75410423ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/platform/overview:0
+[75410424ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/platform/overview:0
+[75411423ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://d3gk2c5xim1je2.cloudfront.net/v7.1.0/regular/life-buoy.svg:0
+[75413157ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75418069ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-types:0
+[75418069ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-types:0
+[75418069ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-types:0
+[75422464ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://d3gk2c5xim1je2.cloudfront.net/v7.1.0/regular/life-buoy.svg:0
+[75424679ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75429434ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75433202ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/overview:0
+[75433202ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/overview:0
+[75433202ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/overview:0
+[75437209ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/overview:0
+[75437210ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/overview:0
+[75437210ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/overview:0
+[75438550ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://d3gk2c5xim1je2.cloudfront.net/v7.1.0/regular/life-buoy.svg:0
+[75440704ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75444762ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-operations/add:0
+[75444762ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-operations/add:0
+[75444762ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-operations/add:0
+[75448607ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-operations/add:0
+[75448607ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-operations/add:0
+[75448607ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/core-concepts/memory-operations/add:0
+[75455968ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75458402ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.letta.com/memory/overview:0
+[75458855ms] [LOG] [astro-mermaid] No mermaid diagrams found on this page, skipping mermaid.js load @ https://docs.letta.com/_astro/page.C9JfqEUd.js:4
+[75470574ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75472482ms] [LOG] [astro-mermaid] No mermaid diagrams found on this page, skipping mermaid.js load @ https://docs.letta.com/_astro/page.C9JfqEUd.js:4
+[75486124ms] [LOG] [astro-mermaid] No mermaid diagrams found on this page, skipping mermaid.js load @ https://docs.letta.com/_astro/page.C9JfqEUd.js:4
+[75490372ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://docs.mem0.ai/cdn-cgi/rum?:0
+[75495324ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/features/custom-instructions:0
+[75495324ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/features/custom-instructions:0
+[75495324ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/features/custom-instructions:0
+[75499218ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/e4af272ccee01ff0-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/features/custom-instructions:0
+[75499218ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/bb3ef058b751a6ad-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/features/custom-instructions:0
+[75499218ms] [WARNING] The resource https://docs.mem0.ai/mintlify-assets/_next/static/media/c4b700dcb2187787-s.p.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://docs.mem0.ai/open-source/features/custom-instructions:0
+[75500104ms] [LOG] [astro-mermaid] No mermaid diagrams found on this page, skipping mermaid.js load @ https://docs.letta.com/_astro/page.C9JfqEUd.js:4
+[75513926ms] [LOG] [astro-mermaid] No mermaid diagrams found on this page, skipping mermaid.js load @ https://docs.letta.com/_astro/page.C9JfqEUd.js:4
+[75516617ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.github.com/repos/langchain-ai/langmem/releases/latest:0
+[75558007ms] [LOG] [astro-mermaid] No mermaid diagrams found on this page, skipping mermaid.js load @ https://docs.letta.com/_astro/page.C9JfqEUd.js:4
+[75600239ms] [WARNING] Did not find element expected to be parsed from: <link rel=expect href="#_R_"> @ https://help.getzep.com/overview:535
+[75602935ms] [WARNING] Failed to create WebGPU Context Provider @ https://static.reo.dev/3c7800996e6ffac/177.reo.js:1
+[75605998ms] [LOG] 
+%cBuilt with %c %c
+%cCheck out https://buildwithfern.com
+ font-size:14px;color:#1da32b; font-size:1px;padding:22px 0 2px 88px;background:url(data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjMWRhMzJiIiB2aWV3Qm94PSIwIDAgNjA0IDE2NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0yOTUuMjk0IDBIMjU1Ljg2MUgyNTUuODM2QzIzNC4wNDcgMCAyMjEuNDM3IDExLjQ2NjEgMjIxLjQzNyAzMy40ODNWNDcuMjM3MkgxOTMuMjQyVjc1LjIwMzNIMjIxLjQzN1YxNjAuNUgyNTMuNTQ3Vjc1LjIwMzNIMjg4LjQwNFY0Ny4yMzcySDI1My41NDdWMzcuMzcyOEMyNTMuNTQ3IDMwLjcxMTggMjU3LjIwOCAyNy45NjYxIDI2My44NyAyNy45NjYxSDI5NS4yOTRWMFpNMzQ1LjI2IDQzLjgwODFDMzExLjc3NyA0My44MDgxIDI4OC44NDQgNjcuMTk3OSAyODguODQ0IDEwMy4xOThIMjg4Ljg3QzI4OC44NyAxMzkuODg0IDMxMS44MDIgMTYzLjk2IDM0Ni40MyAxNjMuOTZDMzc1LjMxMSAxNjMuOTYgMzkyLjcyNyAxNDkuMjkxIDM5OS4zODggMTI2LjgxNkgzNjYuNTkxQzM2My41OTEgMTMzLjAyIDM1Ni45NTUgMTM3LjM2NyAzNDYuNjMzIDEzNy4zNjdDMzMxLjI3NyAxMzcuMzY3IDMyMS44NyAxMjkuNTYyIDMyMC40OTcgMTE1LjM1SDQwMC43NjFDNDAxLjIxOSAxMTAuNTQ1IDQwMS40NDcgMTA2LjQwMSA0MDEuNDQ3IDEwMi4yODNDNDAxLjQ0NyA2Ni4yODI2IDM3OC43NDQgNDMuODA4MSAzNDUuMjYgNDMuODA4MVpNMzY5LjEwOCA5MC41ODc3VjkxLjA0NTNIMzIwLjI2OUMzMjEuMTg0IDc3Ljc0ODcgMzI5LjY3NSA2OS4wMjg0IDM0NS4yNiA2OS4wMjg0QzM2MC44NDUgNjkuMDI4NCAzNjkuMTA4IDc3Ljc0ODcgMzY5LjEwOCA5MC41ODc3Wk00MTIuNjY4IDQ3LjIzMjFINDQwLjg2M1Y2Ny4xODk4QzQ0My42MDkgNTQuMzUwOCA0NTIuNzg3IDQ3LjIzMjEgNDY3LjIyNyA0Ny4yMzIxSDQ4Ny40MTRWNTEuMTIyQzQ4Ny40MTQgNjQuNDE4NiA0NzYuNjM0IDc1LjE5ODIgNDYzLjMzOCA3NS4xOTgyQzQ1MC43MjcgNzUuMTk4MiA0NDQuNzUzIDgxLjYzMDQgNDQ0Ljc1MyA5NC40Njk0VjE2MC41Mkg0MTIuNjQyVjQ3LjIzMjFINDEyLjY2OFpNNTI2LjkzOSA0Ny4yNEg0OTguNzQ0SDQ5OC43MTlWMTYwLjUwM0g1MzAuODI5Vjk2LjA3ODlDNTMwLjgyOSA4MS42MzgyIDUzOS4zMjEgNzIuNjg5MSA1NTIuMTYgNzIuNjg5MUM1NjQuOTk5IDcyLjY4OTEgNTcxLjg4OSA4MC4wMzY2IDU3MS44ODkgOTUuMTYzN1YxNjAuNTI4SDYwNFY5MS43MzE1QzYwNCA2MS43MDYxIDU4Ni41NTkgNDMuODA3OCA1NTguODIxIDQzLjgwNzhDNTQ1Ljc1MyA0My44MDc4IDUzMy42MDEgNDguODQxNyA1MjYuOTM5IDU4LjcwNjFWNDcuMjRaIi8+CjxwYXRoIGQ9Ik0xNDkuMzgzIDgwLjIyMjJDMTM4LjU5NCA3MS4xMDEgMTIyLjM0MSA2Ny40NDQ1IDEwNy45MzYgNzguMDkyNUMxMDcuMjczIDc4LjU3NDcgMTA2LjQ0OSA3Ny43NTEgMTA2Ljk1MiA3Ny4xMDgxQzExMC4zNjcgNzIuNzA4MiAxMTQuMzI1IDY3Ljk2NjggMTE3LjUxOSA2My4yMDUzQzEyMC43NzQgNTguMzIzMyAxMjUuNjM2IDU0LjgyNzUgMTMxLjI0MSA1My4xMTk4QzE2MS4wNzYgNDQuMDc5IDE1Mi4xMTYgMCAxNTIuMTE2IDBDMTUyLjExNiAwIDEwNi4wMjcgMi45NzM0MiAxMTEuNzEzIDQyLjczMjlDMTEyLjY1NyA0OS4zODI5IDExMC44ODkgNTYuMTUzNSAxMDYuNzMxIDYxLjQzNzRDMTAxLjYyOCA2Ny44ODY1IDk1LjcwMDggNzQuMDU0MyA5MS40MDE0IDc4LjUxNDRDOTAuNDk3MyA3OS40Mzg2IDg4Ljk3MDUgNzguNTU0NiA4OS4zMzIxIDc3LjMwOUM5My40OTA5IDYzLjMwNTggOTYuNTI0NiA0MS42NDggODIuMTE5NSAyNy42ODVMNjEuODQ4IDEwLjg0OUw1Ny45NTA0IDE1Ljk5MjJDNDYuMzU4MSAzMS4yODEyIDQ5Ljc1MzQgNTIuODM4NSA2NS4wNjI1IDY0LjQxMDhDNzMuODQyMiA3MS4wNDA3IDc3LjgyMDEgNzguMjUzMyA3Ny4xOTczIDg2LjE2OUM3Ni44MTU2IDkwLjkxMDQgNzQuNjY1OSA5NS4zNTA1IDcxLjQ1MTQgOTguODY2M0M2NS40MDQxIDEwNS40OTYgNTkuNzU4NiAxMTIuNjA4IDU1LjM5ODkgMTIwLjg0NkM1NC43OTYyIDEyMS45OTEgNTMuMDQ4MyAxMjEuNTQ5IDUzLjEwODYgMTIwLjI0M0M1My43MzE0IDEwNi42NDEgNTIuNDI1NSA3NS45ODMgMjkuNTIyMSA2NS4wMzM2TDMuODg2MzUgNTUuMTI4OUwxLjg5NzM3IDYxLjA1NTZDLTQuNTUxNzQgODAuMTgyIDUuOTk1ODggMTAwLjYxNCAyNS4xMDIxIDEwNy4xMDRDNDEuNzE3MSAxMTIuNzQ5IDQ3LjY0MzkgMTIzLjQ1NyA0My42NDU4IDEzOS41MUM0My40NjUgMTQwLjA5MiA0MC41NzIgMTU2LjYyNyA0MC45NzM4IDE2My45Nkg1OS4zOTY5QzYwLjAxOTggMTUyLjU4OSA3MS45NTM2IDE0NS4xMTUgODIuMzAwMyAxNDkuNzU2Qzg1LjIxMzUgMTUxLjA2MiA4OC4yMDcgMTUyLjkzIDkxLjI4MDkgMTU1LjM0MUMxMDcuNzU1IDE2OC4zMiAxMzIuMDI1IDE2NS4yNDYgMTQ0Ljk4MyAxNDguNzUyTDE0OC42OCAxNDQuMDVMMTI1LjM3NSAxMjcuMzE1QzEwOS4zODMgMTE0LjczOCA4OC4wNDYzIDEyMC40MjQgNzIuMjU1IDEzMS4xOTJDNzAuOTI5IDEzMi4wOTYgNjkuMjQxNCAxMzAuNjUgNjkuOTg0NyAxMjkuMjAzQzg5LjA3MDkgOTEuNzU0MiAxMTMuODgzIDkxLjgzNDYgMTIzLjYwNyAxMDAuMTUyQzEzNS40IDExMC4yMzggMTUzLjI2MSAxMDguNDI5IDE2My4yNjYgOTYuNTk2MUwxNjYuMTM5IDkzLjIwMDdMMTQ5LjM2MyA4MC4yMjIySDE0OS4zODNaIi8+Cjwvc3ZnPg==) no-repeat;background-size:contain;background-position:center;  margin-block:4px;font-size:11px;color:#1da32b; @ https://app.buildwithfern.com/_next/static/chunks/0uy.olw3lui3z.js?dpl=dpl_ELgd1JwU1u5abRUKZXVjrpEDQAXN:5
+[75607615ms] [LOG] handleDropdowns - starting observer @ https://files.buildwithfern.com/zep.docs.buildwithfern.com/2026-05-24T06:22:40.435Z/js/disable-curl-dropdown.js:1
+[75607882ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://help.getzep.com/graphiti/graphiti?_rsc=7t7Vp5QENsfcj7Dt:0
+[75612015ms] [WARNING] Did not find element expected to be parsed from: <link rel=expect href="#_R_"> @ https://help.getzep.com/concepts:535
+[75613506ms] [LOG] 
+%cBuilt with %c %c
+%cCheck out https://buildwithfern.com
+ font-size:14px;color:#1da32b; font-size:1px;padding:22px 0 2px 88px;background:url(data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjMWRhMzJiIiB2aWV3Qm94PSIwIDAgNjA0IDE2NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0yOTUuMjk0IDBIMjU1Ljg2MUgyNTUuODM2QzIzNC4wNDcgMCAyMjEuNDM3IDExLjQ2NjEgMjIxLjQzNyAzMy40ODNWNDcuMjM3MkgxOTMuMjQyVjc1LjIwMzNIMjIxLjQzN1YxNjAuNUgyNTMuNTQ3Vjc1LjIwMzNIMjg4LjQwNFY0Ny4yMzcySDI1My41NDdWMzcuMzcyOEMyNTMuNTQ3IDMwLjcxMTggMjU3LjIwOCAyNy45NjYxIDI2My44NyAyNy45NjYxSDI5NS4yOTRWMFpNMzQ1LjI2IDQzLjgwODFDMzExLjc3NyA0My44MDgxIDI4OC44NDQgNjcuMTk3OSAyODguODQ0IDEwMy4xOThIMjg4Ljg3QzI4OC44NyAxMzkuODg0IDMxMS44MDIgMTYzLjk2IDM0Ni40MyAxNjMuOTZDMzc1LjMxMSAxNjMuOTYgMzkyLjcyNyAxNDkuMjkxIDM5OS4zODggMTI2LjgxNkgzNjYuNTkxQzM2My41OTEgMTMzLjAyIDM1Ni45NTUgMTM3LjM2NyAzNDYuNjMzIDEzNy4zNjdDMzMxLjI3NyAxMzcuMzY3IDMyMS44NyAxMjkuNTYyIDMyMC40OTcgMTE1LjM1SDQwMC43NjFDNDAxLjIxOSAxMTAuNTQ1IDQwMS40NDcgMTA2LjQwMSA0MDEuNDQ3IDEwMi4yODNDNDAxLjQ0NyA2Ni4yODI2IDM3OC43NDQgNDMuODA4MSAzNDUuMjYgNDMuODA4MVpNMzY5LjEwOCA5MC41ODc3VjkxLjA0NTNIMzIwLjI2OUMzMjEuMTg0IDc3Ljc0ODcgMzI5LjY3NSA2OS4wMjg0IDM0NS4yNiA2OS4wMjg0QzM2MC44NDUgNjkuMDI4NCAzNjkuMTA4IDc3Ljc0ODcgMzY5LjEwOCA5MC41ODc3Wk00MTIuNjY4IDQ3LjIzMjFINDQwLjg2M1Y2Ny4xODk4QzQ0My42MDkgNTQuMzUwOCA0NTIuNzg3IDQ3LjIzMjEgNDY3LjIyNyA0Ny4yMzIxSDQ4Ny40MTRWNTEuMTIyQzQ4Ny40MTQgNjQuNDE4NiA0NzYuNjM0IDc1LjE5ODIgNDYzLjMzOCA3NS4xOTgyQzQ1MC43MjcgNzUuMTk4MiA0NDQuNzUzIDgxLjYzMDQgNDQ0Ljc1MyA5NC40Njk0VjE2MC41Mkg0MTIuNjQyVjQ3LjIzMjFINDEyLjY2OFpNNTI2LjkzOSA0Ny4yNEg0OTguNzQ0SDQ5OC43MTlWMTYwLjUwM0g1MzAuODI5Vjk2LjA3ODlDNTMwLjgyOSA4MS42MzgyIDUzOS4zMjEgNzIuNjg5MSA1NTIuMTYgNzIuNjg5MUM1NjQuOTk5IDcyLjY4OTEgNTcxLjg4OSA4MC4wMzY2IDU3MS44ODkgOTUuMTYzN1YxNjAuNTI4SDYwNFY5MS43MzE1QzYwNCA2MS43MDYxIDU4Ni41NTkgNDMuODA3OCA1NTguODIxIDQzLjgwNzhDNTQ1Ljc1MyA0My44MDc4IDUzMy42MDEgNDguODQxNyA1MjYuOTM5IDU4LjcwNjFWNDcuMjRaIi8+CjxwYXRoIGQ9Ik0xNDkuMzgzIDgwLjIyMjJDMTM4LjU5NCA3MS4xMDEgMTIyLjM0MSA2Ny40NDQ1IDEwNy45MzYgNzguMDkyNUMxMDcuMjczIDc4LjU3NDcgMTA2LjQ0OSA3Ny43NTEgMTA2Ljk1MiA3Ny4xMDgxQzExMC4zNjcgNzIuNzA4MiAxMTQuMzI1IDY3Ljk2NjggMTE3LjUxOSA2My4yMDUzQzEyMC43NzQgNTguMzIzMyAxMjUuNjM2IDU0LjgyNzUgMTMxLjI0MSA1My4xMTk4QzE2MS4wNzYgNDQuMDc5IDE1Mi4xMTYgMCAxNTIuMTE2IDBDMTUyLjExNiAwIDEwNi4wMjcgMi45NzM0MiAxMTEuNzEzIDQyLjczMjlDMTEyLjY1NyA0OS4zODI5IDExMC44ODkgNTYuMTUzNSAxMDYuNzMxIDYxLjQzNzRDMTAxLjYyOCA2Ny44ODY1IDk1LjcwMDggNzQuMDU0MyA5MS40MDE0IDc4LjUxNDRDOTAuNDk3MyA3OS40Mzg2IDg4Ljk3MDUgNzguNTU0NiA4OS4zMzIxIDc3LjMwOUM5My40OTA5IDYzLjMwNTggOTYuNTI0NiA0MS42NDggODIuMTE5NSAyNy42ODVMNjEuODQ4IDEwLjg0OUw1Ny45NTA0IDE1Ljk5MjJDNDYuMzU4MSAzMS4yODEyIDQ5Ljc1MzQgNTIuODM4NSA2NS4wNjI1IDY0LjQxMDhDNzMuODQyMiA3MS4wNDA3IDc3LjgyMDEgNzguMjUzMyA3Ny4xOTczIDg2LjE2OUM3Ni44MTU2IDkwLjkxMDQgNzQuNjY1OSA5NS4zNTA1IDcxLjQ1MTQgOTguODY2M0M2NS40MDQxIDEwNS40OTYgNTkuNzU4NiAxMTIuNjA4IDU1LjM5ODkgMTIwLjg0NkM1NC43OTYyIDEyMS45OTEgNTMuMDQ4MyAxMjEuNTQ5IDUzLjEwODYgMTIwLjI0M0M1My43MzE0IDEwNi42NDEgNTIuNDI1NSA3NS45ODMgMjkuNTIyMSA2NS4wMzM2TDMuODg2MzUgNTUuMTI4OUwxLjg5NzM3IDYxLjA1NTZDLTQuNTUxNzQgODAuMTgyIDUuOTk1ODggMTAwLjYxNCAyNS4xMDIxIDEwNy4xMDRDNDEuNzE3MSAxMTIuNzQ5IDQ3LjY0MzkgMTIzLjQ1NyA0My42NDU4IDEzOS41MUM0My40NjUgMTQwLjA5MiA0MC41NzIgMTU2LjYyNyA0MC45NzM4IDE2My45Nkg1OS4zOTY5QzYwLjAxOTggMTUyLjU4OSA3MS45NTM2IDE0NS4xMTUgODIuMzAwMyAxNDkuNzU2Qzg1LjIxMzUgMTUxLjA2MiA4OC4yMDcgMTUyLjkzIDkxLjI4MDkgMTU1LjM0MUMxMDcuNzU1IDE2OC4zMiAxMzIuMDI1IDE2NS4yNDYgMTQ0Ljk4MyAxNDguNzUyTDE0OC42OCAxNDQuMDVMMTI1LjM3NSAxMjcuMzE1QzEwOS4zODMgMTE0LjczOCA4OC4wNDYzIDEyMC40MjQgNzIuMjU1IDEzMS4xOTJDNzAuOTI5IDEzMi4wOTYgNjkuMjQxNCAxMzAuNjUgNjkuOTg0NyAxMjkuMjAzQzg5LjA3MDkgOTEuNzU0MiAxMTMuODgzIDkxLjgzNDYgMTIzLjYwNyAxMDAuMTUyQzEzNS40IDExMC4yMzggMTUzLjI2MSAxMDguNDI5IDE2My4yNjYgOTYuNTk2MUwxNjYuMTM5IDkzLjIwMDdMMTQ5LjM2MyA4MC4yMjIySDE0OS4zODNaIi8+Cjwvc3ZnPg==) no-repeat;background-size:contain;background-position:center;  margin-block:4px;font-size:11px;color:#1da32b; @ https://app.buildwithfern.com/_next/static/chunks/0uy.olw3lui3z.js?dpl=dpl_ELgd1JwU1u5abRUKZXVjrpEDQAXN:5
+[75685538ms] [WARNING] Did not find element expected to be parsed from: <link rel=expect href="#_R_"> @ https://help.getzep.com/concepts:535
+[75689509ms] [LOG] 
+%cBuilt with %c %c
+%cCheck out https://buildwithfern.com
+ font-size:14px;color:#1da32b; font-size:1px;padding:22px 0 2px 88px;background:url(data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjMWRhMzJiIiB2aWV3Qm94PSIwIDAgNjA0IDE2NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0yOTUuMjk0IDBIMjU1Ljg2MUgyNTUuODM2QzIzNC4wNDcgMCAyMjEuNDM3IDExLjQ2NjEgMjIxLjQzNyAzMy40ODNWNDcuMjM3MkgxOTMuMjQyVjc1LjIwMzNIMjIxLjQzN1YxNjAuNUgyNTMuNTQ3Vjc1LjIwMzNIMjg4LjQwNFY0Ny4yMzcySDI1My41NDdWMzcuMzcyOEMyNTMuNTQ3IDMwLjcxMTggMjU3LjIwOCAyNy45NjYxIDI2My44NyAyNy45NjYxSDI5NS4yOTRWMFpNMzQ1LjI2IDQzLjgwODFDMzExLjc3NyA0My44MDgxIDI4OC44NDQgNjcuMTk3OSAyODguODQ0IDEwMy4xOThIMjg4Ljg3QzI4OC44NyAxMzkuODg0IDMxMS44MDIgMTYzLjk2IDM0Ni40MyAxNjMuOTZDMzc1LjMxMSAxNjMuOTYgMzkyLjcyNyAxNDkuMjkxIDM5OS4zODggMTI2LjgxNkgzNjYuNTkxQzM2My41OTEgMTMzLjAyIDM1Ni45NTUgMTM3LjM2NyAzNDYuNjMzIDEzNy4zNjdDMzMxLjI3NyAxMzcuMzY3IDMyMS44NyAxMjkuNTYyIDMyMC40OTcgMTE1LjM1SDQwMC43NjFDNDAxLjIxOSAxMTAuNTQ1IDQwMS40NDcgMTA2LjQwMSA0MDEuNDQ3IDEwMi4yODNDNDAxLjQ0NyA2Ni4yODI2IDM3OC43NDQgNDMuODA4MSAzNDUuMjYgNDMuODA4MVpNMzY5LjEwOCA5MC41ODc3VjkxLjA0NTNIMzIwLjI2OUMzMjEuMTg0IDc3Ljc0ODcgMzI5LjY3NSA2OS4wMjg0IDM0NS4yNiA2OS4wMjg0QzM2MC44NDUgNjkuMDI4NCAzNjkuMTA4IDc3Ljc0ODcgMzY5LjEwOCA5MC41ODc3Wk00MTIuNjY4IDQ3LjIzMjFINDQwLjg2M1Y2Ny4xODk4QzQ0My42MDkgNTQuMzUwOCA0NTIuNzg3IDQ3LjIzMjEgNDY3LjIyNyA0Ny4yMzIxSDQ4Ny40MTRWNTEuMTIyQzQ4Ny40MTQgNjQuNDE4NiA0NzYuNjM0IDc1LjE5ODIgNDYzLjMzOCA3NS4xOTgyQzQ1MC43MjcgNzUuMTk4MiA0NDQuNzUzIDgxLjYzMDQgNDQ0Ljc1MyA5NC40Njk0VjE2MC41Mkg0MTIuNjQyVjQ3LjIzMjFINDEyLjY2OFpNNTI2LjkzOSA0Ny4yNEg0OTguNzQ0SDQ5OC43MTlWMTYwLjUwM0g1MzAuODI5Vjk2LjA3ODlDNTMwLjgyOSA4MS42MzgyIDUzOS4zMjEgNzIuNjg5MSA1NTIuMTYgNzIuNjg5MUM1NjQuOTk5IDcyLjY4OTEgNTcxLjg4OSA4MC4wMzY2IDU3MS44ODkgOTUuMTYzN1YxNjAuNTI4SDYwNFY5MS43MzE1QzYwNCA2MS43MDYxIDU4Ni41NTkgNDMuODA3OCA1NTguODIxIDQzLjgwNzhDNTQ1Ljc1MyA0My44MDc4IDUzMy42MDEgNDguODQxNyA1MjYuOTM5IDU4LjcwNjFWNDcuMjRaIi8+CjxwYXRoIGQ9Ik0xNDkuMzgzIDgwLjIyMjJDMTM4LjU5NCA3MS4xMDEgMTIyLjM0MSA2Ny40NDQ1IDEwNy45MzYgNzguMDkyNUMxMDcuMjczIDc4LjU3NDcgMTA2LjQ0OSA3Ny43NTEgMTA2Ljk1MiA3Ny4xMDgxQzExMC4zNjcgNzIuNzA4MiAxMTQuMzI1IDY3Ljk2NjggMTE3LjUxOSA2My4yMDUzQzEyMC43NzQgNTguMzIzMyAxMjUuNjM2IDU0LjgyNzUgMTMxLjI0MSA1My4xMTk4QzE2MS4wNzYgNDQuMDc5IDE1Mi4xMTYgMCAxNTIuMTE2IDBDMTUyLjExNiAwIDEwNi4wMjcgMi45NzM0MiAxMTEuNzEzIDQyLjczMjlDMTEyLjY1NyA0OS4zODI5IDExMC44ODkgNTYuMTUzNSAxMDYuNzMxIDYxLjQzNzRDMTAxLjYyOCA2Ny44ODY1IDk1LjcwMDggNzQuMDU0MyA5MS40MDE0IDc4LjUxNDRDOTAuNDk3MyA3OS40Mzg2IDg4Ljk3MDUgNzguNTU0NiA4OS4zMzIxIDc3LjMwOUM5My40OTA5IDYzLjMwNTggOTYuNTI0NiA0MS42NDggODIuMTE5NSAyNy42ODVMNjEuODQ4IDEwLjg0OUw1Ny45NTA0IDE1Ljk5MjJDNDYuMzU4MSAzMS4yODEyIDQ5Ljc1MzQgNTIuODM4NSA2NS4wNjI1IDY0LjQxMDhDNzMuODQyMiA3MS4wNDA3IDc3LjgyMDEgNzguMjUzMyA3Ny4xOTczIDg2LjE2OUM3Ni44MTU2IDkwLjkxMDQgNzQuNjY1OSA5NS4zNTA1IDcxLjQ1MTQgOTguODY2M0M2NS40MDQxIDEwNS40OTYgNTkuNzU4NiAxMTIuNjA4IDU1LjM5ODkgMTIwLjg0NkM1NC43OTYyIDEyMS45OTEgNTMuMDQ4MyAxMjEuNTQ5IDUzLjEwODYgMTIwLjI0M0M1My43MzE0IDEwNi42NDEgNTIuNDI1NSA3NS45ODMgMjkuNTIyMSA2NS4wMzM2TDMuODg2MzUgNTUuMTI4OUwxLjg5NzM3IDYxLjA1NTZDLTQuNTUxNzQgODAuMTgyIDUuOTk1ODggMTAwLjYxNCAyNS4xMDIxIDEwNy4xMDRDNDEuNzE3MSAxMTIuNzQ5IDQ3LjY0MzkgMTIzLjQ1NyA0My42NDU4IDEzOS41MUM0My40NjUgMTQwLjA5MiA0MC41NzIgMTU2LjYyNyA0MC45NzM4IDE2My45Nkg1OS4zOTY5QzYwLjAxOTggMTUyLjU4OSA3MS45NTM2IDE0NS4xMTUgODIuMzAwMyAxNDkuNzU2Qzg1LjIxMzUgMTUxLjA2MiA4OC4yMDcgMTUyLjkzIDkxLjI4MDkgMTU1LjM0MUMxMDcuNzU1IDE2OC4zMiAxMzIuMDI1IDE2NS4yNDYgMTQ0Ljk4MyAxNDguNzUyTDE0OC42OCAxNDQuMDVMMTI1LjM3NSAxMjcuMzE1QzEwOS4zODMgMTE0LjczOCA4OC4wNDYzIDEyMC40MjQgNzIuMjU1IDEzMS4xOTJDNzAuOTI5IDEzMi4wOTYgNjkuMjQxNCAxMzAuNjUgNjkuOTg0NyAxMjkuMjAzQzg5LjA3MDkgOTEuNzU0MiAxMTMuODgzIDkxLjgzNDYgMTIzLjYwNyAxMDAuMTUyQzEzNS40IDExMC4yMzggMTUzLjI2MSAxMDguNDI5IDE2My4yNjYgOTYuNTk2MUwxNjYuMTM5IDkzLjIwMDdMMTQ5LjM2MyA4MC4yMjIySDE0OS4zODNaIi8+Cjwvc3ZnPg==) no-repeat;background-size:contain;background-position:center;  margin-block:4px;font-size:11px;color:#1da32b; @ https://app.buildwithfern.com/_next/static/chunks/0uy.olw3lui3z.js?dpl=dpl_ELgd1JwU1u5abRUKZXVjrpEDQAXN:5
+[75691182ms] [LOG] handleDropdowns - starting observer @ https://files.buildwithfern.com/zep.docs.buildwithfern.com/2026-05-24T06:22:40.435Z/js/disable-curl-dropdown.js:1
+[75696381ms] [WARNING] Did not find element expected to be parsed from: <link rel=expect href="#_R_"> @ https://help.getzep.com/context-types:535
+[75697807ms] [LOG] 
+%cBuilt with %c %c
+%cCheck out https://buildwithfern.com
+ font-size:14px;color:#1da32b; font-size:1px;padding:22px 0 2px 88px;background:url(data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjMWRhMzJiIiB2aWV3Qm94PSIwIDAgNjA0IDE2NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0yOTUuMjk0IDBIMjU1Ljg2MUgyNTUuODM2QzIzNC4wNDcgMCAyMjEuNDM3IDExLjQ2NjEgMjIxLjQzNyAzMy40ODNWNDcuMjM3MkgxOTMuMjQyVjc1LjIwMzNIMjIxLjQzN1YxNjAuNUgyNTMuNTQ3Vjc1LjIwMzNIMjg4LjQwNFY0Ny4yMzcySDI1My41NDdWMzcuMzcyOEMyNTMuNTQ3IDMwLjcxMTggMjU3LjIwOCAyNy45NjYxIDI2My44NyAyNy45NjYxSDI5NS4yOTRWMFpNMzQ1LjI2IDQzLjgwODFDMzExLjc3NyA0My44MDgxIDI4OC44NDQgNjcuMTk3OSAyODguODQ0IDEwMy4xOThIMjg4Ljg3QzI4OC44NyAxMzkuODg0IDMxMS44MDIgMTYzLjk2IDM0Ni40MyAxNjMuOTZDMzc1LjMxMSAxNjMuOTYgMzkyLjcyNyAxNDkuMjkxIDM5OS4zODggMTI2LjgxNkgzNjYuNTkxQzM2My41OTEgMTMzLjAyIDM1Ni45NTUgMTM3LjM2NyAzNDYuNjMzIDEzNy4zNjdDMzMxLjI3NyAxMzcuMzY3IDMyMS44NyAxMjkuNTYyIDMyMC40OTcgMTE1LjM1SDQwMC43NjFDNDAxLjIxOSAxMTAuNTQ1IDQwMS40NDcgMTA2LjQwMSA0MDEuNDQ3IDEwMi4yODNDNDAxLjQ0NyA2Ni4yODI2IDM3OC43NDQgNDMuODA4MSAzNDUuMjYgNDMuODA4MVpNMzY5LjEwOCA5MC41ODc3VjkxLjA0NTNIMzIwLjI2OUMzMjEuMTg0IDc3Ljc0ODcgMzI5LjY3NSA2OS4wMjg0IDM0NS4yNiA2OS4wMjg0QzM2MC44NDUgNjkuMDI4NCAzNjkuMTA4IDc3Ljc0ODcgMzY5LjEwOCA5MC41ODc3Wk00MTIuNjY4IDQ3LjIzMjFINDQwLjg2M1Y2Ny4xODk4QzQ0My42MDkgNTQuMzUwOCA0NTIuNzg3IDQ3LjIzMjEgNDY3LjIyNyA0Ny4yMzIxSDQ4Ny40MTRWNTEuMTIyQzQ4Ny40MTQgNjQuNDE4NiA0NzYuNjM0IDc1LjE5ODIgNDYzLjMzOCA3NS4xOTgyQzQ1MC43MjcgNzUuMTk4MiA0NDQuNzUzIDgxLjYzMDQgNDQ0Ljc1MyA5NC40Njk0VjE2MC41Mkg0MTIuNjQyVjQ3LjIzMjFINDEyLjY2OFpNNTI2LjkzOSA0Ny4yNEg0OTguNzQ0SDQ5OC43MTlWMTYwLjUwM0g1MzAuODI5Vjk2LjA3ODlDNTMwLjgyOSA4MS42MzgyIDUzOS4zMjEgNzIuNjg5MSA1NTIuMTYgNzIuNjg5MUM1NjQuOTk5IDcyLjY4OTEgNTcxLjg4OSA4MC4wMzY2IDU3MS44ODkgOTUuMTYzN1YxNjAuNTI4SDYwNFY5MS43MzE1QzYwNCA2MS43MDYxIDU4Ni41NTkgNDMuODA3OCA1NTguODIxIDQzLjgwNzhDNTQ1Ljc1MyA0My44MDc4IDUzMy42MDEgNDguODQxNyA1MjYuOTM5IDU4LjcwNjFWNDcuMjRaIi8+CjxwYXRoIGQ9Ik0xNDkuMzgzIDgwLjIyMjJDMTM4LjU5NCA3MS4xMDEgMTIyLjM0MSA2Ny40NDQ1IDEwNy45MzYgNzguMDkyNUMxMDcuMjczIDc4LjU3NDcgMTA2LjQ0OSA3Ny43NTEgMTA2Ljk1MiA3Ny4xMDgxQzExMC4zNjcgNzIuNzA4MiAxMTQuMzI1IDY3Ljk2NjggMTE3LjUxOSA2My4yMDUzQzEyMC43NzQgNTguMzIzMyAxMjUuNjM2IDU0LjgyNzUgMTMxLjI0MSA1My4xMTk4QzE2MS4wNzYgNDQuMDc5IDE1Mi4xMTYgMCAxNTIuMTE2IDBDMTUyLjExNiAwIDEwNi4wMjcgMi45NzM0MiAxMTEuNzEzIDQyLjczMjlDMTEyLjY1NyA0OS4zODI5IDExMC44ODkgNTYuMTUzNSAxMDYuNzMxIDYxLjQzNzRDMTAxLjYyOCA2Ny44ODY1IDk1LjcwMDggNzQuMDU0MyA5MS40MDE0IDc4LjUxNDRDOTAuNDk3MyA3OS40Mzg2IDg4Ljk3MDUgNzguNTU0NiA4OS4zMzIxIDc3LjMwOUM5My40OTA5IDYzLjMwNTggOTYuNTI0NiA0MS42NDggODIuMTE5NSAyNy42ODVMNjEuODQ4IDEwLjg0OUw1Ny45NTA0IDE1Ljk5MjJDNDYuMzU4MSAzMS4yODEyIDQ5Ljc1MzQgNTIuODM4NSA2NS4wNjI1IDY0LjQxMDhDNzMuODQyMiA3MS4wNDA3IDc3LjgyMDEgNzguMjUzMyA3Ny4xOTczIDg2LjE2OUM3Ni44MTU2IDkwLjkxMDQgNzQuNjY1OSA5NS4zNTA1IDcxLjQ1MTQgOTguODY2M0M2NS40MDQxIDEwNS40OTYgNTkuNzU4NiAxMTIuNjA4IDU1LjM5ODkgMTIwLjg0NkM1NC43OTYyIDEyMS45OTEgNTMuMDQ4MyAxMjEuNTQ5IDUzLjEwODYgMTIwLjI0M0M1My43MzE0IDEwNi42NDEgNTIuNDI1NSA3NS45ODMgMjkuNTIyMSA2NS4wMzM2TDMuODg2MzUgNTUuMTI4OUwxLjg5NzM3IDYxLjA1NTZDLTQuNTUxNzQgODAuMTgyIDUuOTk1ODggMTAwLjYxNCAyNS4xMDIxIDEwNy4xMDRDNDEuNzE3MSAxMTIuNzQ5IDQ3LjY0MzkgMTIzLjQ1NyA0My42NDU4IDEzOS41MUM0My40NjUgMTQwLjA5MiA0MC41NzIgMTU2LjYyNyA0MC45NzM4IDE2My45Nkg1OS4zOTY5QzYwLjAxOTggMTUyLjU4OSA3MS45NTM2IDE0NS4xMTUgODIuMzAwMyAxNDkuNzU2Qzg1LjIxMzUgMTUxLjA2MiA4OC4yMDcgMTUyLjkzIDkxLjI4MDkgMTU1LjM0MUMxMDcuNzU1IDE2OC4zMiAxMzIuMDI1IDE2NS4yNDYgMTQ0Ljk4MyAxNDguNzUyTDE0OC42OCAxNDQuMDVMMTI1LjM3NSAxMjcuMzE1QzEwOS4zODMgMTE0LjczOCA4OC4wNDYzIDEyMC40MjQgNzIuMjU1IDEzMS4xOTJDNzAuOTI5IDEzMi4wOTYgNjkuMjQxNCAxMzAuNjUgNjkuOTg0NyAxMjkuMjAzQzg5LjA3MDkgOTEuNzU0MiAxMTMuODgzIDkxLjgzNDYgMTIzLjYwNyAxMDAuMTUyQzEzNS40IDExMC4yMzggMTUzLjI2MSAxMDguNDI5IDE2My4yNjYgOTYuNTk2MUwxNjYuMTM5IDkzLjIwMDdMMTQ5LjM2MyA4MC4yMjIySDE0OS4zODNaIi8+Cjwvc3ZnPg==) no-repeat;background-size:contain;background-position:center;  margin-block:4px;font-size:11px;color:#1da32b; @ https://app.buildwithfern.com/_next/static/chunks/0uy.olw3lui3z.js?dpl=dpl_ELgd1JwU1u5abRUKZXVjrpEDQAXN:5
+[109494436ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:14337
+[109494989ms] [ERROR] %o
+
+%s
+
+%s
+ Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object.
+
+Check the render method of `Lazy`.
+    at createFiberFromTypeAndProps (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:2817:21)
+    at createFiberFromElement (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:2828:11)
+    at reconcileChildFibersImpl (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:3813:373)
+    at http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:3869:28
+    at reconcileChildren (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:5386:46)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:5574:4)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:8325:37) The above error occurred in the <Lazy> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:5273
+[109494990ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:6623
+[109494991ms] [WARNING] Warning: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object.
+
+Check the render method of `Lazy`. @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:6624
+[109532971ms] [ERROR] [vite] TypeError: route.init is not a function
+    at http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:2961:11
+    at http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:850:14
+    at parseSegments (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:581:11)
+    at parseSegments (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:703:58)
+    at processRouteTree (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:849:2)
+    at RouterCore.buildRouteTree (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:2960:19)
+    at RouterCore.update (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:2929:36)
+    at new RouterCore (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:3623:8)
+    at new Router (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:6756:3)
+    at createRouter (http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-DTcpo4gn.js?v=42b6f5d8:6752:9) @ http://127.0.0.1:5175/@vite/client:928
+[109532972ms] [ERROR] [vite] Failed to reload /src/router.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[109570196ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:5175/@vite/client:992
+[109577655ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:14337
+[109590215ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=42b6f5d8:14337
+[109882582ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[109952747ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110073035ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110248803ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5175/src/components/shell/SidebarRail.tsx?t=1779756753158:0
+[110248804ms] [ERROR] [vite] Failed to reload /src/components/shell/SidebarRail.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[110285153ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110290878ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110310864ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110428607ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110446513ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: pinnedSessions is not defined
+    at SidebarDrawer (http://127.0.0.1:5175/src/components/shell/SidebarDrawer.tsx?t=1779756950795:370:7)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <SidebarDrawer> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[110446515ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[110446516ms] [WARNING] Warning: pinnedSessions is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[110452372ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: pinnedSessions is not defined
+    at SidebarDrawer (http://127.0.0.1:5175/src/components/shell/SidebarDrawer.tsx?t=1779756956649:371:7)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <SidebarDrawer> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[110452374ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[110452375ms] [WARNING] Warning: pinnedSessions is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[110459100ms] [ERROR] Each child in a list should have a unique "key" prop.%s%s See https://react.dev/link/warning-keys for more information. 
+
+Check the render method of `div`.  It was passed a child from SidebarDrawer. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12936
+[110517405ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110544398ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110604088ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110787366ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110797720ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[110836087ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: modelBadgeStyle is not defined
+    at ChatView (http://127.0.0.1:5175/src/components/chat/ChatView.tsx?t=1779757340356:364:13)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <ChatView> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[110836089ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[110836089ms] [WARNING] Warning: modelBadgeStyle is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[110936654ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111299169ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111304272ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111390777ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111420925ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: toggleSidebar is not defined
+    at SidebarRail (http://127.0.0.1:5175/src/components/shell/SidebarRail.tsx?t=1779757925209:133:16)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <SidebarRail> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[111420926ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[111420927ms] [WARNING] Warning: toggleSidebar is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[111475980ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111612156ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111624006ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111634045ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111750847ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111756169ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111805247ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[111814046ms] [ERROR] Each child in a list should have a unique "key" prop.%s%s See https://react.dev/link/warning-keys for more information. 
+
+Check the render method of `SkillsPanel`.  @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12936
+[112035116ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[112086172ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[112220114ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[112277357ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[112487080ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:5175/@vite/client:992
+[112487701ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[112496886ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:5175/@vite/client:992
+[112505518ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[113260210ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: Lightbulb is not defined
+    at SidebarRail (http://127.0.0.1:5175/src/components/shell/SidebarRail.tsx?t=1779759764479:199:13)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <SidebarRail> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[113260211ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[113260212ms] [WARNING] Warning: Lightbulb is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[113263166ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: Bell is not defined
+    at SidebarRail (http://127.0.0.1:5175/src/components/shell/SidebarRail.tsx?t=1779759767471:227:43)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <SidebarRail> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[113263168ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[113263169ms] [WARNING] Warning: Bell is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[118551446ms] [ERROR] [vite] SyntaxError: The requested module '/node_modules/.vite/deps/lucide-react.js?v=cd09e55e' does not provide an export named 'ArrowsUpDown' @ http://127.0.0.1:5175/@vite/client:928
+[118551447ms] [ERROR] [vite] Failed to reload /src/components/shell/SidebarDrawer.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[118555747ms] [ERROR] [vite] SyntaxError: The requested module '/node_modules/.vite/deps/lucide-react.js?v=cd09e55e' does not provide an export named 'ArrowsUpDown' @ http://127.0.0.1:5175/@vite/client:928
+[118555748ms] [ERROR] [vite] Failed to reload /src/components/shell/SidebarDrawer.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[118560118ms] [ERROR] [vite] SyntaxError: The requested module '/node_modules/.vite/deps/lucide-react.js?v=cd09e55e' does not provide an export named 'ArrowsUpDown' @ http://127.0.0.1:5175/@vite/client:928
+[118560119ms] [ERROR] [vite] Failed to reload /src/components/shell/SidebarDrawer.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[118564546ms] [ERROR] [vite] SyntaxError: The requested module '/node_modules/.vite/deps/lucide-react.js?v=cd09e55e' does not provide an export named 'ArrowsUpDown' @ http://127.0.0.1:5175/@vite/client:928
+[118564547ms] [ERROR] [vite] Failed to reload /src/components/shell/SidebarDrawer.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[118567327ms] [ERROR] [vite] SyntaxError: The requested module '/node_modules/.vite/deps/lucide-react.js?v=cd09e55e' does not provide an export named 'ArrowsUpDown' @ http://127.0.0.1:5175/@vite/client:928
+[118567328ms] [ERROR] [vite] Failed to reload /src/components/shell/SidebarDrawer.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[118797898ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: ArrowsUpDown is not defined
+    at SidebarDrawer (http://127.0.0.1:5175/src/components/shell/SidebarDrawer.tsx?t=1779765302191:391:43)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <SidebarDrawer> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[118797900ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[118797901ms] [WARNING] Warning: ArrowsUpDown is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[119525959ms] [ERROR] %o
+
+%s
+
+%s
+ ReferenceError: imgError is not defined
+    at SidebarDrawer (http://127.0.0.1:5175/src/components/shell/SidebarDrawer.tsx?t=1779766030240:325:39)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:12868:12)
+    at renderWithHooks (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:4213:19)
+    at updateFunctionComponent (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5569:16)
+    at beginWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:6140:20)
+    at runWithFiberInDEV (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:851:66)
+    at performUnitOfWork (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8429:92)
+    at workLoopSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8325:37)
+    at renderRootSync (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:8309:6)
+    at performWorkOnRoot (http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:7994:27) The above error occurred in the <SidebarDrawer> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://127.0.0.1:5175/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:5273
+[119525961ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6623
+[119525961ms] [WARNING] Warning: imgError is not defined @ http://127.0.0.1:5175/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6624
+[119533460ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5175/src/components/shell/SidebarDrawer.tsx?t=1779766037805:0
+[119533462ms] [ERROR] [vite] Failed to reload /src/components/shell/SidebarDrawer.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[121516004ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5175/src/components/shell/GodPicker.tsx?t=1779768020360:0
+[121516006ms] [ERROR] [vite] Failed to reload /src/components/shell/GodPicker.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[125206030ms] [ERROR] [vite] SyntaxError: The requested module '/src/lib/api-client.ts?t=1779767904216' does not provide an export named 'submitToSummons' @ http://127.0.0.1:5175/@vite/client:928
+[125206032ms] [ERROR] [vite] Failed to reload /src/components/shell/GodEditModal.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[126113717ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5175/src/components/chat/ChatView.tsx?t=1779772618070:0
+[126113721ms] [ERROR] [vite] Failed to reload /src/components/chat/ChatView.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[126125749ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5175/src/components/chat/ChatView.tsx?t=1779772630066:0
+[126125755ms] [ERROR] [vite] Failed to reload /src/components/chat/ChatView.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:5175/@vite/client:928
+[126990509ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-BxNXs1Dm.js:18
+[127494794ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-BxNXs1Dm.js:18
+[128292789ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/:3288
+[128293208ms] [ERROR] Loading the stylesheet 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css' violates the following Content Security Policy directive: "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked. @ http://localhost:8787/:3309
+[128293499ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:8787/api/git-info:0
+[128294632ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128295066ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/sessions:0
+[128295372ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128308189ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128323202ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128325668ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128338468ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128353205ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128355633ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128368279ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128383235ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128385617ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128398289ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128413184ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128415616ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128428290ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128443206ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128445627ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128458193ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128473191ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128475615ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128488185ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128503212ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128505614ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128518204ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128533189ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128535685ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128548187ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128563311ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128565625ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128578196ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128593186ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128595613ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128608191ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128623258ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128625623ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128638205ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128653227ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128655617ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128668186ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128683204ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128685616ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128698271ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128713188ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128715616ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128728188ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128743245ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128745662ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128758311ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128773176ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128775644ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128788403ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128803503ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128805869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128818214ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128833624ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128835877ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128848448ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128863508ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128865768ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128878287ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128893365ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128895639ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128908401ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128923244ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128925716ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128938202ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128953253ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128955623ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128968198ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128983226ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128985625ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[128998194ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129013196ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129015693ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129028209ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129043261ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129045625ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129058189ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129073283ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129075637ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129088197ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129103232ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129105653ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129118209ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129133228ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129135734ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129148202ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129163219ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129165629ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129178390ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129193280ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129195618ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129208329ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129223216ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129225626ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129238198ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8787/api/gods/hermes/icon:0
+[129252076ms] [INFO] PWA service worker registered: /olympus/sw.js ServiceWorkerRegistration @ http://localhost:5173/olympus/assets/index-BxNXs1Dm.js:18
+[129311989ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/olympus/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[129312232ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129312233ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129322734ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/olympus/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[129322900ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129322901ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129337263ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129337264ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129350293ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/olympus/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[129350426ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129350427ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129443676ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5173/olympus/@vite/client:992
+[129456817ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/olympus/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[129457020ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129457020ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129473009ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/olympus/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[129473166ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129473167ms] [WARNING] Warning: A notFoundError was encountered on the route with ID "__root__", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these to avoid TanStack Router's overly generic defaultNotFoundComponent (<p>Not Found</p>) @ http://localhost:5173/olympus/node_modules/.vite/deps/index.dev-5WgkLfh7.js?v=cd09e55e:6232
+[129500037ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/olympus/node_modules/.vite/deps/react-dom_client.js?v=cd09e55e:14337
+[153291001ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5173/olympus/@vite/client:992

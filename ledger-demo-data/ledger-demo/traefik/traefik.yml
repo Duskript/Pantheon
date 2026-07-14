@@ -1,0 +1,131 @@
+# Traefik static configuration — entrypoints, providers, log level.
+# Hot-reload-friendly dynamic config lives in ./dynamic/ (tls.yml,
+# middlewares.yml, etc.).
+#
+# Reference: https://doc.traefik.io/traefik/v3.4/reference/static-configuration/
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# ─── Entrypoints ────────────────────────────────────────────────────
+# web        :80   plain HTTP, redirects to websecure
+# websecure  :443  public TLS, terminates Let's Encrypt certs
+# traefik    :8080 internal-only (Tailscale/operator), dashboard + ping
+#
+# The dashboard MUST stay off the public web. Port :8080 is bound on
+# the host's interface but only reachable from Tailscale-attached
+# operator machines or from inside the ledger-net docker network.
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+    http:
+      middlewares:
+        - secure-headers@file
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "${DOMAIN}"
+            sans:
+              - "*.${DOMAIN}"
+
+  traefik:
+    address: ":8080"
+
+# ─── Providers ──────────────────────────────────────────────────────
+# Docker provider reads labels from sibling containers. exposedbydefault
+# is FALSE — every service must opt in with traefik.enable=true.
+# File provider watches ./dynamic/ for hot-reloadable TLS resolvers,
+# middlewares, and any non-Docker routers.
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    # Phase L2 (2026-06-21): aligned with the optimized single-network
+    # topology. The Docker provider must point at the same network the
+    # main stack uses (`ledger-net`) so that the IP's it picks for
+    # Service URL's resolve from the Traefik container. Was previously
+    # `${FIRM_SLUG}-internal` (the legacy per-firm split network).
+    network: "ledger-net"
+    watch: true
+
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+
+# ─── Let's Encrypt ──────────────────────────────────────────────────
+# DNS-01 challenge via Cloudflare is the default — wildcard certs are
+# only available with DNS-01, and *.theoforge.app is exactly that case.
+# Override to httpChallenge if you can't use DNS-01.
+#
+# Required env vars (set in .env):
+#   CLOUDFLARE_DNS_API_TOKEN  scoped to Zone:DNS:Edit on ${DOMAIN}
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${ACME_EMAIL}"
+      storage: "/letsencrypt/acme.json"
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      dnsChallenge:
+        provider: cloudflare
+        delayBeforeCheck: "30s"
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+        # The Cloudflare API token is injected via docker-compose
+        # `environment:` (TRAEFIK's CLI flag system cannot read the
+        # file provider's environment).
+# NOTE: certificatesDuration was a Traefik v2.x field and was removed
+# in v3.x — the cert lifetime is fixed at 90 days by Let's Encrypt.
+# Including the field makes Traefik v3.4 reject the config with
+# "field not found, node: certificatesDuration", which is exactly
+# the crash-loop we saw on 2026-06-21. Do not re-add it.
+
+# ─── Logging ────────────────────────────────────────────────────────
+# JSON access logs go to stdout (picked up by `docker logs`). For
+# production, mount a log driver and ship to Loki / journald.
+
+log:
+  # Levels: DEBUG, INFO, WARN, ERROR. Switch to DEBUG when chasing
+  # routing oddities, WARN once a firm is stable. filePath is empty
+  # so logs go to stdout — picked up by `docker logs` or a sidecar
+  # log driver (loki / journald). Traefik v3 rotated the file sink
+  # out; for size-based rotation configure your Docker logging
+  # driver (json-file with max-size) instead.
+  level: "INFO"
+  format: "common"
+  filePath: ""
+
+accessLog:
+  format: "common"
+  filePath: ""
+  fields:
+    defaultMode: "keep"
+    headers:
+      defaultMode: "drop"
+      names:
+        X-Forwarded-For: "keep"
+        X-Real-Ip: "keep"
+
+api:
+  dashboard: true
+  insecure: false
+
+# NOTE: the `experimental.http3` field was removed in Traefik v3.4.
+# HTTP/3 support now lives under each entrypoint's `http3` key in
+# the static config. The old "experimental.http3: false" form was
+# rejected with "field not found, node: http3" on 2026-06-21. Do not
+# re-add it here — re-enable HTTP/3 per-entrypoint when the operator
+# wants h3.

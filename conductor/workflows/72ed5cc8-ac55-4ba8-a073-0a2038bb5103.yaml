@@ -1,0 +1,14 @@
+id: 72ed5cc8-ac55-4ba8-a073-0a2038bb5103
+name: 72ed5cc8-ac55-4ba8-a073-0a2038bb5103
+version: 0.1.0
+description: "Empty canvas \u2014 drag a node to start authoring"
+context:
+  required: []
+  optional: []
+steps:
+- id: start
+  type: trigger
+  trigger_kind: manual
+  config: {}
+  on_error:
+    on_final_failure: fail_workflow

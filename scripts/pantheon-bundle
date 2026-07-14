@@ -1,0 +1,534 @@
+#!/usr/bin/env python3
+"""
+pantheon-bundle — Export a god as a marketplace-ready package.
+
+Usage:
+    pantheon-bundle <god-id>                          Export (skills included by default)
+    pantheon-bundle <god-id> --with-codex             Include entire codex
+    pantheon-bundle <god-id> --with-codex reference/  Include only specific codex folders
+    pantheon-bundle <god-id> --no-skills              Exclude custom skills
+    pantheon-bundle <god-id> --dry-run                Validate only, no bundle
+    pantheon-bundle <god-id> --output ./dir/          Custom output directory
+
+The god must be installed (in the registry + installed package dir).
+The bundle collects: god.yaml, harness.yaml, SOUL.md, god.json, icon.png,
+optional skills/ and codex/ subfolders, and generates marketplace.yaml + README.md.
+
+Exits non-zero on validation failure.
+"""
+import json
+import os
+import shutil
+import sys
+import tarfile
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(script_dir, "lib")
+sys.path.insert(0, lib_dir)
+
+from pantheon_sdk import (
+    INSTALLED_DIR,
+    PANTHEON_DIR,
+    ATHENAEUM_DIR,
+    HARNESSES_DIR,
+    get_installed_path,
+    is_installed,
+    get_registry,
+    registry_find,
+    print_header,
+    print_summary,
+)
+
+# ── Constants ────────────────────────────────────────────────────────
+
+HOME = os.path.expanduser("~")
+HERMES_PROFILES_DIR = os.path.join(HOME, ".hermes", "profiles")
+GOD_PACKAGES_DIR = os.path.join(PANTHEON_DIR, "god-packages")
+
+EXCLUDED_CODEX_DIRS = {"sessions", "archive"}
+AUTO_EXCLUDED_FILES = {".env", "auth.json", "gateway_state.json", "gateway.lock"}
+AUTO_EXCLUDED_DIRS = {"__pycache__", ".git", "logs", "sessions", "cron", "platforms",
+                      "webui_state", "workspace", "sandboxes", "skins"}
+
+
+# ── Validation ───────────────────────────────────────────────────────
+
+class ValidationReport:
+    def __init__(self):
+        self.errors = []
+        self.warnings = []
+
+    def ok(self, msg):
+        print(f"  ✅ {msg}")
+
+    def warn(self, msg):
+        self.warnings.append(msg)
+        print(f"  ⚠️  {msg}")
+
+    def err(self, msg):
+        self.errors.append(msg)
+        print(f"  ❌ {msg}")
+
+    def is_valid(self):
+        return len(self.errors) == 0
+
+
+def validate_god(god_id, report, registry_entry):
+    """Validate that the god is in a state to be exported."""
+    god_id_clean = god_id.replace("god-", "")
+
+    # Registry entry
+    if not registry_entry:
+        report.err(f"God '{god_id}' not found in registry.")
+        return
+
+    name = registry_entry.get("name", god_id_clean)
+    version = registry_entry.get("version", "unknown")
+
+    report.ok(f"Found in registry — {name} v{version}")
+
+    # Installed package
+    pkg_path = get_installed_path(god_id)
+    if not os.path.isdir(pkg_path):
+        # Check god-packages as fallback
+        pkg_path = os.path.join(GOD_PACKAGES_DIR, god_id)
+    if not os.path.isdir(pkg_path):
+        report.err(f"God package not found at {get_installed_path(god_id)} or {pkg_path}")
+        return
+
+    report.ok(f"Package found at {pkg_path}")
+
+    # god.yaml
+    god_yaml = os.path.join(pkg_path, "god.yaml")
+    pkg_version = "unknown"
+    if not os.path.isfile(god_yaml):
+        report.err("Missing god.yaml — required manifest")
+    else:
+        try:
+            with open(god_yaml) as f:
+                gy = yaml.safe_load(f)
+            if gy and gy.get("version"):
+                pkg_version = gy["version"]
+        except Exception:
+            pass
+        report.ok("god.yaml present")
+
+    # harness.yaml
+    harness_path = os.path.join(pkg_path, "harness.yaml")
+    alt_harness = os.path.join(HARNESSES_DIR, f"{god_id}-base.yaml")
+    if not os.path.isfile(harness_path) and not os.path.isfile(alt_harness):
+        report.warn("No harness.yaml in package — checking installed harness")
+        if os.path.isfile(alt_harness):
+            report.ok(f"Harness found at {alt_harness}")
+    else:
+        harness_source = harness_path if os.path.isfile(harness_path) else alt_harness
+        report.ok("Harness present")
+
+    # Profile
+    profile_path = os.path.join(HERMES_PROFILES_DIR, god_id_clean)
+    if not os.path.isdir(profile_path):
+        report.err(f"No Hermes profile found at {profile_path}")
+        return
+
+    report.ok(f"Profile found at {profile_path}")
+
+    # SOUL.md
+    soul_path = os.path.join(profile_path, "SOUL.md")
+    if not os.path.isfile(soul_path):
+        report.err("Missing SOUL.md — god identity definition required")
+    else:
+        soul_size = os.path.getsize(soul_path)
+        report.ok(f"SOUL.md present ({soul_size:,} bytes)")
+
+    # god.json (display config)
+    god_json_path = os.path.join(profile_path, "god.json")
+    if not os.path.isfile(god_json_path):
+        report.warn("No god.json — display name, color, and icon won't be exported")
+    else:
+        try:
+            with open(god_json_path) as f:
+                gd = json.load(f)
+            if not gd.get("display_name"):
+                report.warn("god.json is missing display_name")
+            else:
+                report.ok(f"Display config: {gd.get('display_name')} — color: {gd.get('color', 'none')}")
+        except (json.JSONDecodeError, OSError):
+            report.warn("god.json exists but couldn't be parsed")
+
+    # Icon
+    icon_path = os.path.join(profile_path, "icon.png")
+    if os.path.isfile(icon_path):
+        icon_size = os.path.getsize(icon_path)
+        report.ok(f"Icon present ({icon_size:,} bytes)")
+    else:
+        icon_jpg = os.path.join(profile_path, "icon.jpg")
+        icon_svg = os.path.join(profile_path, "icon.svg")
+        if any(os.path.isfile(p) for p in [icon_jpg, icon_svg]):
+            report.ok("Icon present (non-PNG format)")
+        else:
+            report.warn("No icon found — marketplace gods should have a 1024x1024 PNG icon")
+
+    return name, pkg_version, pkg_path, profile_path
+
+
+def list_codex_folders(codex_path):
+    """Return list of subfolders in the codex, excluding auto-excluded ones."""
+    if not os.path.isdir(codex_path):
+        return []
+    folders = []
+    for item in sorted(os.listdir(codex_path)):
+        item_path = os.path.join(codex_path, item)
+        if os.path.isdir(item_path) and item not in EXCLUDED_CODEX_DIRS:
+            file_count = sum(1 for f in Path(item_path).rglob("*") if f.is_file())
+            folders.append((item, file_count))
+    return folders
+
+
+# ── Bundle builder ───────────────────────────────────────────────────
+
+def build_bundle(god_id, pkg_path, profile_path, registry_entry, version,
+                 include_skills=True, codex_folders=None, output_dir=None):
+    """Build the marketplace bundle and return the tarball path."""
+    god_id_clean = god_id.replace("god-", "")
+    name = registry_entry.get("name", god_id_clean)
+    export_name = f"god-{god_id_clean}-v{version}"
+    timestamp = datetime.now(timezone.utc)
+
+    if not output_dir:
+        output_dir = os.path.join(PANTHEON_DIR, "god-exports")
+    os.makedirs(output_dir, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(prefix=f"pantheon-bundle-{export_name}-") as tmpdir:
+        export_root = os.path.join(tmpdir, f"god-{god_id_clean}")
+        os.makedirs(export_root)
+
+        # ── Step 1: god.yaml ──────────────────────────────────────────────
+        god_yaml_src = os.path.join(pkg_path, "god.yaml")
+        if os.path.isfile(god_yaml_src):
+            shutil.copy2(god_yaml_src, os.path.join(export_root, "god.yaml"))
+            print("  📄 god.yaml copied")
+
+        # ── Step 2: harness.yaml ─────────────────────────────────────────
+        harness_candidates = [
+            os.path.join(pkg_path, "harness.yaml"),
+            os.path.join(HARNESSES_DIR, f"{god_id}-base.yaml"),
+        ]
+        harness_src = next((p for p in harness_candidates if os.path.isfile(p)), None)
+        if harness_src:
+            shutil.copy2(harness_src, os.path.join(export_root, "harness.yaml"))
+            print("  📄 harness.yaml copied")
+
+        # ── Step 3: SOUL.md ──────────────────────────────────────────────
+        soul_src = os.path.join(profile_path, "SOUL.md")
+        if os.path.isfile(soul_src):
+            shutil.copy2(soul_src, os.path.join(export_root, "soul.md"))
+            print("  📄 soul.md copied")
+
+        # ── Step 4: god.json (display config) ────────────────────────────
+        god_json_src = os.path.join(profile_path, "god.json")
+        if os.path.isfile(god_json_src):
+            shutil.copy2(god_json_src, os.path.join(export_root, "god.json"))
+            print("  📄 god.json copied (display config)")
+
+        # ── Step 5: Icon ─────────────────────────────────────────────────
+        for ext in ["png", "jpg", "jpeg", "svg"]:
+            icon_src = os.path.join(profile_path, f"icon.{ext}")
+            if os.path.isfile(icon_src):
+                icon_dst = os.path.join(export_root, f"icon.{ext}")
+                shutil.copy2(icon_src, icon_dst)
+                print(f"  🖼️  icon.{ext} copied")
+                break
+
+        # ── Step 6: Skills ───────────────────────────────────────────────
+        skills_src = os.path.join(pkg_path, "skills")
+        if include_skills and os.path.isdir(skills_src):
+            skills_dst = os.path.join(export_root, "skills")
+            shutil.copytree(skills_src, skills_dst, ignore=shutil.ignore_patterns("__pycache__"))
+            skill_count = len([f for f in Path(skills_dst).rglob("*") if f.is_file()])
+            print(f"  🔧 Skills included ({skill_count} files)")
+
+        # ── Step 7: Plugins ──────────────────────────────────────────────
+        plugins_src = os.path.join(pkg_path, "plugins")
+        if os.path.isdir(plugins_src):
+            plugins_dst = os.path.join(export_root, "plugins")
+            shutil.copytree(plugins_src, plugins_dst, ignore=shutil.ignore_patterns("__pycache__"))
+            plugin_count = len([f for f in Path(plugins_dst).rglob("*") if f.is_file()])
+            if plugin_count:
+                print(f"  🔌 Plugins included ({plugin_count} files)")
+
+        # ── Step 8: Prompts ──────────────────────────────────────────────
+        prompts_src = os.path.join(pkg_path, "prompts")
+        if os.path.isdir(prompts_src):
+            prompts_dst = os.path.join(export_root, "prompts")
+            shutil.copytree(prompts_src, prompts_dst, ignore=shutil.ignore_patterns("__pycache__"))
+            print("  💬 Prompts included")
+
+        # ── Step 9: Assets ───────────────────────────────────────────────
+        assets_src = os.path.join(pkg_path, "assets")
+        if os.path.isdir(assets_src):
+            assets_dst = os.path.join(export_root, "assets")
+            shutil.copytree(assets_src, assets_dst, ignore=shutil.ignore_patterns("__pycache__"))
+            print("  📦 Assets included")
+
+        # ── Step 10: Codex ──────────────────────────────────────────────
+        codex_included = False
+        if codex_folders is not None and len(codex_folders) > 0:
+            codex_name = f"Codex-{name}"
+            codex_src = os.path.join(ATHENAEUM_DIR, codex_name)
+            codex_dst = os.path.join(export_root, "codex")
+
+            if not os.path.isdir(codex_src):
+                print(f"  ⚠️  Codex directory not found: {codex_src}")
+            else:
+                os.makedirs(codex_dst, exist_ok=True)
+
+                # Always copy INDEX.md
+                index_src = os.path.join(codex_src, "INDEX.md")
+                if os.path.isfile(index_src):
+                    shutil.copy2(index_src, os.path.join(codex_dst, "INDEX.md"))
+
+                # Copy selected folders
+                file_count = 0
+                for folder in codex_folders:
+                    folder_src = os.path.join(codex_src, folder)
+                    if os.path.isdir(folder_src):
+                        folder_dst = os.path.join(codex_dst, folder)
+                        shutil.copytree(folder_src, folder_dst,
+                                        ignore=shutil.ignore_patterns("__pycache__"))
+                        cnt = sum(1 for f in Path(folder_dst).rglob("*") if f.is_file())
+                        file_count += cnt
+                        print(f"  📚 {folder}/ included ({cnt} files)")
+
+                total_codex = sum(
+                    len(list(Path(codex_dst).rglob("*")))
+                    for _ in [1]
+                    if os.path.isdir(codex_dst)
+                )
+                file_count = sum(1 for f in Path(codex_dst).rglob("*") if f.is_file())
+                if file_count > (0 if codex_folders else 0):
+                    codex_included = True
+                    print(f"  📚 Codex included — {file_count} files total")
+
+        # ── Step 11: marketplace.yaml ────────────────────────────────────
+        marketplace = {
+            "id": god_id,
+            "name": name,
+            "version": version,
+            "author": "Duskript",
+            "created": timestamp.strftime("%Y-%m-%d"),
+            "pantheon_version": ">=1.0.0",
+        }
+
+        # Add display info from god.json if available
+        god_json_dst = os.path.join(export_root, "god.json")
+        if os.path.isfile(god_json_dst):
+            try:
+                with open(god_json_dst) as f:
+                    gd = json.load(f)
+                marketplace["display_name"] = gd.get("display_name", name)
+                if gd.get("color"):
+                    marketplace["color"] = gd.get("color")
+                if gd.get("domain"):
+                    marketplace["domain"] = gd.get("domain")
+                # Tags from god.yaml if present
+                god_yaml_dst = os.path.join(export_root, "god.yaml")
+                if os.path.isfile(god_yaml_dst):
+                    with open(god_yaml_dst) as f:
+                        gy = yaml.safe_load(f)
+                    if gy and gy.get("tags"):
+                        marketplace["tags"] = gy.get("tags")
+            except (json.JSONDecodeError, yaml.YAMLError, OSError):
+                pass
+
+        marketplace["has_skills"] = include_skills and os.path.isdir(os.path.join(export_root, "skills"))
+        marketplace["has_codex"] = codex_included
+        marketplace["files"] = []
+
+        # Walk and list all files
+        for root, dirs, files in os.walk(export_root):
+            for fn in files:
+                fp = os.path.join(root, fn)
+                rel = os.path.relpath(fp, export_root)
+                marketplace["files"].append(rel)
+
+        mkt_path = os.path.join(export_root, "marketplace.yaml")
+        with open(mkt_path, "w") as f:
+            yaml.dump(marketplace, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        print("  📋 marketplace.yaml generated")
+
+        # ── Step 12: README.md ───────────────────────────────────────────
+        readme_lines = [
+            f"# {name}",
+            "",
+            f"A Pantheon god — exported {timestamp.strftime('%Y-%m-%d')}.",
+            "",
+            f"**Version:** {version}",
+            f"**Author:** {marketplace.get('author', 'Duskript')}",
+        ]
+        if marketplace.get("domain"):
+            readme_lines.append(f"**Domain:** {marketplace.get('domain')}")
+        if marketplace.get("display_name"):
+            readme_lines.append(f"**Display Name:** {marketplace.get('display_name')}")
+        if marketplace.get("tags"):
+            readme_lines.append(f"**Tags:** {', '.join(marketplace.get('tags'))}")
+        if marketplace.get("color"):
+            readme_lines.append(f"**Color:** {marketplace.get('color')}")
+
+        readme_lines += [
+            "",
+            "## Included in this package",
+            "",
+        ]
+        if marketplace.get("has_skills"):
+            readme_lines.append("- Custom skills")
+        if marketplace.get("has_codex"):
+            readme_lines.append("- Knowledge base (codex/)")
+        if os.path.isdir(os.path.join(export_root, "plugins")):
+            readme_lines.append("- Plugins")
+        if os.path.isdir(os.path.join(export_root, "prompts")):
+            readme_lines.append("- Additional prompts")
+
+        readme_lines += [
+            "",
+            "## Install",
+            "",
+            "```bash",
+            "tar xzf god-{}-v{}.tar.gz".format(god_id_clean, version),
+            "pantheon-install god-{}/".format(god_id_clean),
+            "```",
+            "",
+            "## About",
+            "",
+            f"{registry_entry.get('description', 'A Pantheon god.')}",
+            "",
+        ]
+
+        with open(os.path.join(export_root, "README.md"), "w") as f:
+            f.write("\n".join(readme_lines) + "\n")
+        print("  📖 README.md generated")
+
+        # ── Step 13: Create tarball ─────────────────────────────────────
+        tarball_name = f"{export_name}.tar.gz"
+        tarball_path = os.path.join(output_dir, tarball_name)
+
+        with tarfile.open(tarball_path, "w:gz") as tar:
+            tar.add(export_root, arcname=f"god-{god_id_clean}")
+
+        tarball_size = os.path.getsize(tarball_path)
+        size_str = f"{tarball_size / 1024:.1f} KB" if tarball_size < 1024 * 1024 else f"{tarball_size / (1024 * 1024):.1f} MB"
+
+        print(f"\n  📦 Bundle created: {tarball_path}")
+        print(f"     Size: {size_str}")
+
+        return tarball_path
+
+
+# ── Main ─────────────────────────────────────────────────────────────
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Export a Pantheon god as a marketplace-ready bundle.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument("god_id", help="God identifier (e.g. 'apollo', 'god-apollo')")
+    parser.add_argument("--with-codex", nargs="*", default=None,
+                        help="Include codex. Optionally specify which folders (e.g. reference/ styles/)")
+    parser.add_argument("--no-skills", action="store_true",
+                        help="Exclude custom skills from the bundle")
+    parser.add_argument("--output", "-o", default=None,
+                        help="Output directory (default: ~/pantheon/god-exports/)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Validate only, don't create bundle")
+
+    args = parser.parse_args()
+    god_id = args.god_id.lower()
+    if not god_id.startswith("god-"):
+        god_id = f"god-{god_id}"
+
+    report = ValidationReport()
+
+    # ── Resolve from registry ────────────────────────────────────────────
+    registry = get_registry()
+    idx, entry = registry_find(registry, god_id)
+    name = entry.get("name", god_id.replace("god-", "")) if entry else god_id.replace("god-", "")
+
+    print_header(f"Exporting {name}")
+
+    # ── Validate ────────────────────────────────────────────────────────
+    result = validate_god(god_id, report, entry)
+    if not report.is_valid():
+        print(f"\n  ❌ Validation failed — {len(report.errors)} error(s) found.")
+        if report.warnings:
+            print(f"     {len(report.warnings)} warning(s) — review above.")
+        sys.exit(1)
+
+    name, pkg_version, pkg_path, profile_path = result
+
+    # Use version from god.yaml if available
+    version = pkg_version
+
+    # ── Codex folder selection ──────────────────────────────────────────
+    codex_folders = None
+    codex_name = f"Codex-{name}"
+    codex_path = os.path.join(ATHENAEUM_DIR, codex_name)
+    codex_available = os.path.isdir(codex_path)
+
+    if args.with_codex is not None and codex_available:
+        if len(args.with_codex) > 0:
+            # User specified folders — validate they exist
+            codex_folders = []
+            for folder in args.with_codex:
+                folder = folder.rstrip("/")
+                folder_path = os.path.join(codex_path, folder)
+                if not os.path.isdir(folder_path):
+                    print(f"  ❌ Codex folder '{folder}' not found at {folder_path}")
+                    sys.exit(1)
+                codex_folders.append(folder)
+        else:
+            # No folders specified — include all non-excluded
+            codex_folders = [f[0] for f in list_codex_folders(codex_path)]
+
+        print(f"  📚 Codex folders to include: {', '.join(codex_folders)}")
+
+    elif args.with_codex is not None and not codex_available:
+        print(f"  ⚠️  Codex '{codex_name}' not found — skipping codex export")
+
+    # ── Build ───────────────────────────────────────────────────────────
+    if args.dry_run:
+        print(f"\n  ✅ Dry-run passed — {name} is exportable.")
+        if report.warnings:
+            print(f"     {len(report.warnings)} warning(s) to address:")
+            for w in report.warnings:
+                print(f"     • {w}")
+        print()
+        return
+
+    tarball = build_bundle(
+        god_id, pkg_path, profile_path, entry, version,
+        include_skills=not args.no_skills,
+        codex_folders=codex_folders,
+        output_dir=args.output,
+    )
+
+    tarball_size = os.path.getsize(tarball)
+    size_str = f"{tarball_size / 1024:.1f} KB" if tarball_size < 1024 * 1024 else f"{tarball_size / (1024 * 1024):.1f} MB"
+
+    print(f"\n{'─' * 50}")
+    print(f"  ✅ {name} v{version} bundled successfully")
+    print(f"     File: {tarball}")
+    print(f"     Size: {size_str}")
+    print(f"\n  To distribute:")
+    print(f"     1. Share god-{name.lower()}-v{version}.tar.gz")
+    print(f"     2. Recipient runs: pantheon-install god-{name.lower()}/")
+    print()
+
+
+if __name__ == "__main__":
+    main()

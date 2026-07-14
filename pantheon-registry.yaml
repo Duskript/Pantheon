@@ -1,0 +1,74 @@
+gods:
+- harness: apollo-base.yaml
+  name: Apollo
+  studios:
+  - lyric-writing
+  - poetry
+  type: conversational
+- harness: hephaestus-base.yaml
+  name: Hephaestus
+  studios:
+  - project-scoping
+  - program-design
+  - infrastructure-planning
+  type: conversational
+- harness: hermes-base.yaml
+  name: Hermes
+  studios: none
+  type: conversational
+- author: Konan
+  description: "Lyric-writing, poetry, and song creation god \u2014 creative work\
+    \ in your established voice"
+  harness: god-apollo-base.yaml
+  id: god-apollo
+  name: Apollo
+  private: true
+  sanctuary: The Muses' Summit
+  studios:
+  - lyric-writing
+  - poetry
+  type: conversational
+  version: 1.0.0
+- author: Konan
+  description: "Knowledge synthesis, research, and idea capture \u2014 the ever-curious\
+    \ second brain that weaves scattered explorations into coherent insight"
+  harness: thoth-base.yaml
+  id: thoth
+  name: Thoth
+  private: true
+  sanctuary: The Bibliotheca
+  studios: none
+  type: conversational
+  version: 1.0.0
+- author: Konan
+  description: "Medicine, medication management, health research, and healing rhythms\
+    \ \u2014 a calm, collaborative guide through health complexity"
+  harness: caduceus-base.yaml
+  id: caduceus
+  name: Caduceus
+  private: true
+  sanctuary: The Asclepion
+  studios: none
+  type: conversational
+  version: 1.0.0
+- name: Marvin
+  id: marvin
+  harness: marvin-base.yaml
+  type: conversational
+  version: 1.0.0
+  description: A conversational god of Master Coder
+  author: Hephaestus (Pantheon-Core)
+- name: Rheta
+  id: rheta
+  harness: rheta-base.yaml
+  type: conversational
+  version: 1.0.0
+  description: A conversational god of Copywriting rhetoric And persuasion
+  author: Hephaestus (Pantheon-Core)
+- name: Iris
+  id: iris
+  harness: iris-base.yaml
+  type: conversational
+  version: 1.0.0
+  description: A conversational god of God of UI/UX Design
+  author: Hephaestus (Pantheon-Core)

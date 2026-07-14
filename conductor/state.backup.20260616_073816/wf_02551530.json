@@ -1,0 +1,35 @@
+{
+  "abort_on_fail": true,
+  "completion_target": null,
+  "context_bag": {
+    "operator_approval_token": {
+      "approved_at": "2026-06-15T16:50:00Z",
+      "approved_by": "konan",
+      "issued_at": "2026-06-15T16:55:00Z",
+      "issued_by": "hermes-pm-loop",
+      "operator_message_reference": "Telegram DM, konan \u2192 hermes, 2026-06-15T16:50Z: 'Yeah let's do that'",
+      "purpose": "Counter-message to retract 2 fabricated sovereign-NATS breach messages",
+      "references": [
+        "wf_8a0b5f28 (breach, 2026-06-15T02:16:56.473655Z)",
+        "wf_f26885f8 (breach, 2026-06-15T02:23:25.734427Z)",
+        "nats-publish-sovereign-breach.md (canonical record)",
+        "shared/decisions/2026-06-15.md (audit trail, 258 lines)"
+      ],
+      "reversibility": "Counter-message is fire-and-forget on NATS; this token is single-use, will be marked consumed by the engine after the publish",
+      "scope": "subspace.konan.outgoing.tallon",
+      "workflow_id": "wf_tallon_retraction_20260615_1655"
+    },
+    "references": "wf_8a0b5f28 + wf_f26885f8 (sovereign-NATS breach 2026-06-15)",
+    "retraction_body_path": "/home/konan/pantheon/shared/active/tallon-correction-message.md"
+  },
+  "created": "2026-06-15T17:06:33.926518Z",
+  "current_step": "notify-tallon",
+  "definition_id": "sovereign-publish-tallon-correction",
+  "definition_version": "1.0.0",
+  "dispatched_to": null,
+  "initiator": "hermes-pm-loop",
+  "original_request": "operator-approved retraction of 2 fabricated 'ready for Enterprise deploy' sovereign-NATS messages (wf_8a0b5f28 @ 02:16:56Z, wf_f26885f8 @ 02:23:25Z). Operator approval: 'Yeah let's do that' at 2026-06-15T16:50Z in Telegram DM with konan.",
+  "status": "in_progress",
+  "step_history": [],
+  "workflow_id": "wf_02551530"
+}

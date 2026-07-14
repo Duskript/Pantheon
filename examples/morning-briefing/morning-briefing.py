@@ -1,0 +1,1 @@
+../../scripts/morning-briefing.py

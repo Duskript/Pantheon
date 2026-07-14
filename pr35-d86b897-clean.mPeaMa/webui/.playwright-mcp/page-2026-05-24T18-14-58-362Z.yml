@@ -1,0 +1,560 @@
+- main [ref=e2]:
+  - generic [ref=e5]:
+    - generic [ref=e8]:
+      - link "Google Antigravity" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e11]
+      - generic [ref=e54]:
+        - navigation [ref=e55] [cursor=pointer]:
+          - button "Product" [ref=e58]:
+            - text: Product
+            - generic [ref=e59]: keyboard_arrow_down
+          - button "Use Cases" [ref=e62]:
+            - text: Use Cases
+            - generic [ref=e63]: keyboard_arrow_down
+          - button "Pricing" [expanded] [ref=e66]
+          - button "Blog" [expanded] [ref=e69]
+          - button "Resources" [ref=e72]:
+            - text: Resources
+            - generic [ref=e73]: keyboard_arrow_down
+        - button "Download download" [ref=e75] [cursor=pointer]:
+          - text: Download
+          - generic [ref=e76]: download
+    - generic [ref=e78]:
+      - navigation "Documentation navigation" [ref=e81]:
+        - link "Home" [ref=e83] [cursor=pointer]:
+          - /url: /docs/home
+          - generic [ref=e84]: Home
+        - generic [ref=e86]:
+          - generic [ref=e87] [cursor=pointer]: Antigravity 2.0
+          - generic [ref=e88] [cursor=pointer]: expand_more
+        - link "Overview" [ref=e90] [cursor=pointer]:
+          - /url: /docs/overview
+          - generic [ref=e91]: Overview
+        - link "Getting Started" [ref=e93] [cursor=pointer]:
+          - /url: /docs/getting-started
+          - generic [ref=e94]: Getting Started
+        - link "Build with Google" [ref=e96] [cursor=pointer]:
+          - /url: /docs/build-with-google
+          - generic [ref=e97]: Build with Google
+        - link "Features" [ref=e99] [cursor=pointer]:
+          - /url: /docs/features
+          - generic [ref=e100]: Features
+        - generic [ref=e102]:
+          - generic [ref=e103] [cursor=pointer]: Antigravity CLI
+          - generic [ref=e104] [cursor=pointer]: expand_more
+        - link "Overview" [ref=e106] [cursor=pointer]:
+          - /url: /docs/cli-overview
+          - generic [ref=e107]: Overview
+        - link "Getting Started" [ref=e109] [cursor=pointer]:
+          - /url: /docs/cli-getting-started
+          - generic [ref=e110]: Getting Started
+        - link "Using AGY CLI" [ref=e112] [cursor=pointer]:
+          - /url: /docs/cli-using
+          - generic [ref=e113]: Using AGY CLI
+        - link "Features" [ref=e115] [cursor=pointer]:
+          - /url: /docs/cli-features
+          - generic [ref=e116]: Features
+        - link "Migration" [ref=e118] [cursor=pointer]:
+          - /url: /docs/gcli-migration
+          - generic [ref=e119]: Migration
+        - generic [ref=e121]:
+          - generic [ref=e122] [cursor=pointer]: Antigravity SDK
+          - generic [ref=e123] [cursor=pointer]: expand_more
+        - link "Overview + Quick Start" [ref=e125] [cursor=pointer]:
+          - /url: /docs/sdk-overview
+          - generic [ref=e126]: Overview + Quick Start
+        - generic [ref=e128]:
+          - generic [ref=e129] [cursor=pointer]: Antigravity IDE
+          - generic [ref=e130] [cursor=pointer]: expand_more
+        - link "Overview" [ref=e132] [cursor=pointer]:
+          - /url: /docs/ide-overview
+          - generic [ref=e133]: Overview
+        - link "Getting Started" [ref=e135] [cursor=pointer]:
+          - /url: /docs/ide-getting-started
+          - generic [ref=e136]: Getting Started
+        - link "Firebase Studio Migration" [ref=e138] [cursor=pointer]:
+          - /url: /docs/firebase-studio-migration
+          - generic [ref=e139]: Firebase Studio Migration
+        - link "Editor expand_more" [ref=e141] [cursor=pointer]:
+          - /url: /docs/editor
+          - generic [ref=e142]: Editor
+          - generic [ref=e143]: expand_more
+        - link "Tab" [ref=e145] [cursor=pointer]:
+          - /url: /docs/tab
+          - generic [ref=e146]: Tab
+        - link "Command" [ref=e148] [cursor=pointer]:
+          - /url: /docs/command
+          - generic [ref=e149]: Command
+        - link "Side Panel" [ref=e151] [cursor=pointer]:
+          - /url: /docs/agent-side-panel
+          - generic [ref=e152]: Side Panel
+        - link "Review Changes" [ref=e154] [cursor=pointer]:
+          - /url: /docs/review-changes-editor
+          - generic [ref=e155]: Review Changes
+        - generic [ref=e157]:
+          - generic [ref=e158] [cursor=pointer]: Core Concepts & Features
+          - generic [ref=e159] [cursor=pointer]: expand_more
+        - link "Projects" [ref=e161] [cursor=pointer]:
+          - /url: /docs/projects
+          - generic [ref=e162]: Projects
+        - generic [ref=e164]:
+          - generic [ref=e165] [cursor=pointer]: Agent Capabilities
+          - generic [ref=e166] [cursor=pointer]: expand_more
+        - link "Models" [ref=e168] [cursor=pointer]:
+          - /url: /docs/models
+          - generic [ref=e169]: Models
+        - link "Agent Settings" [ref=e171] [cursor=pointer]:
+          - /url: /docs/agent-settings
+          - generic [ref=e172]: Agent Settings
+        - link "Artifact Review" [ref=e174] [cursor=pointer]:
+          - /url: /docs/artifact-review
+          - generic [ref=e175]: Artifact Review
+        - link "Permissions" [ref=e177] [cursor=pointer]:
+          - /url: /docs/permissions
+          - generic [ref=e178]: Permissions
+        - link "Subagents" [ref=e180] [cursor=pointer]:
+          - /url: /docs/subagents
+          - generic [ref=e181]: Subagents
+        - link "Strict Mode" [ref=e183] [cursor=pointer]:
+          - /url: /docs/strict-mode
+          - generic [ref=e184]: Strict Mode
+        - generic [ref=e186]:
+          - generic [ref=e187] [cursor=pointer]: Tools & Extensions
+          - generic [ref=e188] [cursor=pointer]: expand_more
+        - link "Plugins" [ref=e190] [cursor=pointer]:
+          - /url: /docs/plugins
+          - generic [ref=e191]: Plugins
+        - link "MCP" [ref=e193] [cursor=pointer]:
+          - /url: /docs/mcp
+          - generic [ref=e194]: MCP
+        - link "Skills" [ref=e196] [cursor=pointer]:
+          - /url: /docs/skills
+          - generic [ref=e197]: Skills
+        - link "Rules" [ref=e199] [cursor=pointer]:
+          - /url: /docs/rules-workflows
+          - generic [ref=e200]: Rules
+        - link "Hooks" [ref=e202] [cursor=pointer]:
+          - /url: /docs/hooks
+          - generic [ref=e203]: Hooks
+        - link "Sidecars" [ref=e205] [cursor=pointer]:
+          - /url: /docs/sidecars
+          - generic [ref=e206]: Sidecars
+        - link "Artifacts expand_more" [ref=e208] [cursor=pointer]:
+          - /url: /docs/artifacts
+          - generic [ref=e209]: Artifacts
+          - generic [ref=e210]: expand_more
+        - link "Task List" [ref=e212] [cursor=pointer]:
+          - /url: /docs/task-list
+          - generic [ref=e213]: Task List
+        - link "Plan" [ref=e215] [cursor=pointer]:
+          - /url: /docs/implementation-plan
+          - generic [ref=e216]: Plan
+        - link "Walkthrough" [ref=e218] [cursor=pointer]:
+          - /url: /docs/walkthrough
+          - generic [ref=e219]: Walkthrough
+        - link "Screenshots" [ref=e221] [cursor=pointer]:
+          - /url: /docs/screenshots
+          - generic [ref=e222]: Screenshots
+        - link "Browser Recordings" [ref=e224] [cursor=pointer]:
+          - /url: /docs/browser-recordings
+          - generic [ref=e225]: Browser Recordings
+        - link "Knowledge Items" [ref=e227] [cursor=pointer]:
+          - /url: /docs/knowledge
+          - generic [ref=e228]: Knowledge Items
+        - link "Agent Manager expand_more" [ref=e230] [cursor=pointer]:
+          - /url: /docs/agent-manager
+          - generic [ref=e231]: Agent Manager
+          - generic [ref=e232]: expand_more
+        - link "Workspaces expand_more" [ref=e234] [cursor=pointer]:
+          - /url: /docs/workspaces
+          - generic [ref=e235]: Workspaces
+          - generic [ref=e236]: expand_more
+        - link "Playground" [ref=e238] [cursor=pointer]:
+          - /url: /docs/playground
+          - generic [ref=e239]: Playground
+        - link "Inbox" [ref=e241] [cursor=pointer]:
+          - /url: /docs/inbox
+          - generic [ref=e242]: Inbox
+        - link "Conversation View expand_more" [ref=e244] [cursor=pointer]:
+          - /url: /docs/conversation-view
+          - generic [ref=e245]: Conversation View
+          - generic [ref=e246]: expand_more
+        - link "Browser Subagent View" [ref=e248] [cursor=pointer]:
+          - /url: /docs/browser-subagent-view
+          - generic [ref=e249]: Browser Subagent View
+        - link "Panes" [ref=e251] [cursor=pointer]:
+          - /url: /docs/panes
+          - generic [ref=e252]: Panes
+        - link "Review Changes + Source Control" [ref=e254] [cursor=pointer]:
+          - /url: /docs/review-changes-manager
+          - generic [ref=e255]: Review Changes + Source Control
+        - link "Changes Sidebar" [ref=e257] [cursor=pointer]:
+          - /url: /docs/changes-sidebar
+          - generic [ref=e258]: Changes Sidebar
+        - link "Terminal" [ref=e260] [cursor=pointer]:
+          - /url: /docs/terminal
+          - generic [ref=e261]: Terminal
+        - link "Files" [ref=e263] [cursor=pointer]:
+          - /url: /docs/files
+          - generic [ref=e264]: Files
+        - link "Browser expand_more" [ref=e266] [cursor=pointer]:
+          - /url: /docs/browser
+          - generic [ref=e267]: Browser
+          - generic [ref=e268]: expand_more
+        - link "Allowlist / Denylist" [ref=e270] [cursor=pointer]:
+          - /url: /docs/allowlist-denylist
+          - generic [ref=e271]: Allowlist / Denylist
+        - link "Separate Chrome Profile" [ref=e273] [cursor=pointer]:
+          - /url: /docs/separate-chrome-profile
+          - generic [ref=e274]: Separate Chrome Profile
+        - link "Enterprise" [ref=e276] [cursor=pointer]:
+          - /url: /docs/enterprise
+          - generic [ref=e277]: Enterprise
+        - link "Plans" [ref=e279] [cursor=pointer]:
+          - /url: /docs/plans
+          - generic [ref=e280]: Plans
+        - link "Settings" [ref=e282] [cursor=pointer]:
+          - /url: /docs/settings
+          - generic [ref=e283]: Settings
+        - link "FAQ" [ref=e285] [cursor=pointer]:
+          - /url: /docs/faq
+          - generic [ref=e286]: FAQ
+      - generic [ref=e287]:
+        - list [ref=e288] [cursor=pointer]:
+          - listitem [ref=e289]: Antigravity CLI
+          - generic [ref=e290]: ">"
+          - listitem [ref=e291]: Using AGY CLI
+        - heading "Using AGY CLI" [level=1] [ref=e293]
+        - heading "Settings" [level=3] [ref=e295]
+        - paragraph [ref=e297]: Antigravity CLI provides a flexible configuration system to customize workspace behavior, safety restrictions, editor preferences, visual style, and performance.
+        - list [ref=e299]:
+          - listitem [ref=e300]:
+            - generic [ref=e301]:
+              - strong [ref=e302]: Configuration File
+              - text: ":"
+            - generic [ref=e303]:
+              - text: Stored in a plain JSON file
+              - code [ref=e304]: ~/.gemini/antigravity-cli/settings.json
+              - text: .
+          - listitem [ref=e305]:
+            - generic [ref=e306]:
+              - strong [ref=e307]: Settings Panel
+              - text: ":"
+            - generic [ref=e308]:
+              - text: Type
+              - code [ref=e309]: /config
+              - text: or
+              - code [ref=e310]: /settings
+              - text: to open a full-screen overlay menu listing all available options.
+          - listitem [ref=e311]: Select a setting to open its list of options or a text input field.
+          - listitem [ref=e312]: Immediately save your selection to the disk and return to the main list.
+          - listitem [ref=e313]:
+            - generic [ref=e314]:
+              - strong [ref=e315]: Overrides
+              - text: ":"
+            - generic [ref=e316]:
+              - text: Certain settings can be overridden at launch via CLI flags (e.g.,
+              - code [ref=e317]: "--sandbox"
+              - text: or
+              - code [ref=e318]: "--dangerously-skip-permissions"
+              - text: ).
+          - listitem [ref=e319]:
+            - generic [ref=e320]:
+              - text: The settings menu will display an indicator showing where the override came from (e.g.,
+              - emphasis [ref=e321]:
+                - text: Sandbox Mode on overridden by
+                - code [ref=e322]: "--sandbox"
+              - text: ).
+          - listitem [ref=e323]: You can still edit the persistent setting on disk, but the current session will enforce the command-line override until restarted.
+        - heading "Quick Tips" [level=3] [ref=e325]
+        - paragraph [ref=e327]:
+          - table [ref=e328]:
+            - rowgroup [ref=e329]:
+              - row "Action/Feature Tip/Command" [ref=e330]:
+                - columnheader "Action/Feature" [ref=e331]
+                - columnheader "Tip/Command" [ref=e332]
+            - rowgroup [ref=e333]:
+              - row "Auto-complete to file paths @ will trigger path suggestions" [ref=e334]:
+                - cell "Auto-complete to file paths" [ref=e335]:
+                  - strong [ref=e336]: Auto-complete to file paths
+                - cell "@ will trigger path suggestions" [ref=e337]:
+                  - code [ref=e338]: "@"
+                  - text: will trigger path suggestions
+              - row "Clear Prompt Type esc esc to clear your prompt box (when no streaming is active)" [ref=e339]:
+                - cell "Clear Prompt" [ref=e340]:
+                  - strong [ref=e341]: Clear Prompt
+                - cell "Type esc esc to clear your prompt box (when no streaming is active)" [ref=e342]:
+                  - text: Type
+                  - code [ref=e343]: esc esc
+                  - text: to clear your prompt box (when no streaming is active)
+              - row "Terminal Commands Use ! at the start of your prompt to run terminal commands directly" [ref=e344]:
+                - cell "Terminal Commands" [ref=e345]:
+                  - strong [ref=e346]: Terminal Commands
+                - cell "Use ! at the start of your prompt to run terminal commands directly" [ref=e347]:
+                  - text: Use
+                  - code [ref=e348]: "!"
+                  - text: at the start of your prompt to run terminal commands directly
+              - row "Help Type ? to get help and list all slash commands" [ref=e349]:
+                - cell "Help" [ref=e350]:
+                  - strong [ref=e351]: Help
+                - cell "Type ? to get help and list all slash commands" [ref=e352]:
+                  - text: Type
+                  - code [ref=e353]: "?"
+                  - text: to get help and list all slash commands
+              - row "Reduce Noise from Tool Calls Set verbosity to low in /config to minimize outputs from numerous tool calls" [ref=e354]:
+                - cell "Reduce Noise from Tool Calls" [ref=e355]:
+                  - strong [ref=e356]: Reduce Noise from Tool Calls
+                - cell "Set verbosity to low in /config to minimize outputs from numerous tool calls" [ref=e357]:
+                  - text: Set verbosity to
+                  - strong [ref=e358]: low
+                  - text: in
+                  - code [ref=e359]: /config
+                  - text: to minimize outputs from numerous tool calls
+              - row "Manage Permissions Control permissions via /config or /permissions" [ref=e360]:
+                - cell "Manage Permissions" [ref=e361]:
+                  - strong [ref=e362]: Manage Permissions
+                - cell "Control permissions via /config or /permissions" [ref=e363]:
+                  - text: Control permissions via
+                  - code [ref=e364]: /config
+                  - text: or
+                  - code [ref=e365]: /permissions
+              - row "Go Back in Conversation Use /rewind or /undo to rewind the conversation history" [ref=e366]:
+                - cell "Go Back in Conversation" [ref=e367]:
+                  - strong [ref=e368]: Go Back in Conversation
+                - cell "Use /rewind or /undo to rewind the conversation history" [ref=e369]:
+                  - text: Use
+                  - code [ref=e370]: /rewind
+                  - text: or
+                  - code [ref=e371]: /undo
+                  - text: to rewind the conversation history
+              - row "Fork Conversation Use /fork to spin up a separate workspace and branch the conversation from an earlier point" [ref=e372]:
+                - cell "Fork Conversation" [ref=e373]:
+                  - strong [ref=e374]: Fork Conversation
+                - cell "Use /fork to spin up a separate workspace and branch the conversation from an earlier point" [ref=e375]:
+                  - text: Use
+                  - code [ref=e376]: /fork
+                  - text: to spin up a separate workspace and branch the conversation from an earlier point
+              - row "Clear Conversation Use /clear to clear the prompt and start a new conversation session" [ref=e377]:
+                - cell "Clear Conversation" [ref=e378]:
+                  - strong [ref=e379]: Clear Conversation
+                - cell "Use /clear to clear the prompt and start a new conversation session" [ref=e380]:
+                  - text: Use
+                  - code [ref=e381]: /clear
+                  - text: to clear the prompt and start a new conversation session
+              - row "Resume Conversation Use /resume to list and resume previous conversation logs" [ref=e382]:
+                - cell "Resume Conversation" [ref=e383]:
+                  - strong [ref=e384]: Resume Conversation
+                - cell "Use /resume to list and resume previous conversation logs" [ref=e385]:
+                  - text: Use
+                  - code [ref=e386]: /resume
+                  - text: to list and resume previous conversation logs
+              - row "Auto-Save Resume When you close the CLI, it automatically prints the exact command needed to resume that specific session" [ref=e387]:
+                - cell "Auto-Save Resume" [ref=e388]:
+                  - strong [ref=e389]: Auto-Save Resume
+                - cell "When you close the CLI, it automatically prints the exact command needed to resume that specific session" [ref=e390]
+        - heading "Keybindings" [level=3] [ref=e392]
+        - paragraph [ref=e394]:
+          - text: AGY CLI allows for custom keybindings. You can edit them by typing
+          - code [ref=e395]: /keybindings
+          - text: or modifying the JSON file directly.
+        - list [ref=e397]:
+          - listitem [ref=e398]:
+            - generic [ref=e399]:
+              - strong [ref=e400]: File Location
+              - text: ":"
+            - generic [ref=e401]:
+              - code [ref=e402]: ~/.gemini/antigravity-cli/keybindings.json
+              - text: .
+          - listitem [ref=e403]:
+            - generic [ref=e404]:
+              - strong [ref=e405]: Reset
+              - text: ":"
+            - generic [ref=e406]:
+              - text: To reset to default, delete the
+              - code [ref=e407]: keybindings.json
+              - text: file.
+        - paragraph [ref=e409]:
+          - strong [ref=e410]: Default Keybindings
+        - paragraph [ref=e412]:
+          - table [ref=e413]:
+            - rowgroup [ref=e414]:
+              - row "Action/Command Keys Purpose" [ref=e415]:
+                - columnheader "Action/Command" [ref=e416]
+                - columnheader "Keys" [ref=e417]
+                - columnheader "Purpose" [ref=e418]
+            - rowgroup [ref=e419]:
+              - row "Clear TUI Screen ctrl+l Clear terminal output" [ref=e420]:
+                - cell "Clear TUI Screen" [ref=e421]:
+                  - strong [ref=e422]: Clear TUI Screen
+                - cell "ctrl+l" [ref=e423]:
+                  - code [ref=e424]: ctrl+l
+                - cell "Clear terminal output" [ref=e425]
+              - row "Enter / Submit enter Submit prompts or choices" [ref=e426]:
+                - cell "Enter / Submit" [ref=e427]:
+                  - strong [ref=e428]: Enter / Submit
+                - cell "enter" [ref=e429]:
+                  - code [ref=e430]: enter
+                - cell "Submit prompts or choices" [ref=e431]
+              - row "Escape / Cancel ctrl+c, esc Stop stream, close menus, or clear prompt" [ref=e432]:
+                - cell "Escape / Cancel" [ref=e433]:
+                  - strong [ref=e434]: Escape / Cancel
+                - cell "ctrl+c, esc" [ref=e435]:
+                  - code [ref=e436]: ctrl+c
+                  - text: ","
+                  - code [ref=e437]: esc
+                - cell "Stop stream, close menus, or clear prompt" [ref=e438]
+              - row "Exit CLI ctrl+d Terminate CLI TUI session" [ref=e439]:
+                - cell "Exit CLI" [ref=e440]:
+                  - strong [ref=e441]: Exit CLI
+                - cell "ctrl+d" [ref=e442]:
+                  - code [ref=e443]: ctrl+d
+                - cell "Terminate CLI TUI session" [ref=e444]
+              - row "Suspend CLI ctrl+z Push CLI session to terminal background" [ref=e445]:
+                - cell "Suspend CLI" [ref=e446]:
+                  - strong [ref=e447]: Suspend CLI
+                - cell "ctrl+z" [ref=e448]:
+                  - code [ref=e449]: ctrl+z
+                - cell "Push CLI session to terminal background" [ref=e450]
+              - row "Edit Command e Open editor to edit proposed terminal command" [ref=e451]:
+                - cell "Edit Command" [ref=e452]:
+                  - strong [ref=e453]: Edit Command
+                - cell "e" [ref=e454]:
+                  - code [ref=e455]: e
+                - cell "Open editor to edit proposed terminal command" [ref=e456]
+              - row "Confirm No n Decline terminal command execution" [ref=e457]:
+                - cell "Confirm No" [ref=e458]:
+                  - strong [ref=e459]: Confirm No
+                - cell "n" [ref=e460]:
+                  - code [ref=e461]: "n"
+                - cell "Decline terminal command execution" [ref=e462]
+              - row "Confirm Yes y Approve terminal command execution" [ref=e463]:
+                - cell "Confirm Yes" [ref=e464]:
+                  - strong [ref=e465]: Confirm Yes
+                - cell "y" [ref=e466]:
+                  - code [ref=e467]: "y"
+                - cell "Approve terminal command execution" [ref=e468]
+              - row "Open Editor ctrl+g Edit prompt inside your default shell editor" [ref=e469]:
+                - cell "Open Editor" [ref=e470]:
+                  - strong [ref=e471]: Open Editor
+                - cell "ctrl+g" [ref=e472]:
+                  - code [ref=e473]: ctrl+g
+                - cell "Edit prompt inside your default shell editor" [ref=e474]
+              - row "Paste Text ctrl+v Paste text from your clipboard" [ref=e475]:
+                - cell "Paste Text" [ref=e476]:
+                  - strong [ref=e477]: Paste Text
+                - cell "ctrl+v" [ref=e478]:
+                  - code [ref=e479]: ctrl+v
+                - cell "Paste text from your clipboard" [ref=e480]
+              - row "Redo Text Edit ctrl+shift+z Redo last undone text change" [ref=e481]:
+                - cell "Redo Text Edit" [ref=e482]:
+                  - strong [ref=e483]: Redo Text Edit
+                - cell "ctrl+shift+z" [ref=e484]:
+                  - code [ref=e485]: ctrl+shift+z
+                - cell "Redo last undone text change" [ref=e486]
+              - row "Undo Text Edit ctrl+_, ctrl+shift+- Undo last text change" [ref=e487]:
+                - cell "Undo Text Edit" [ref=e488]:
+                  - strong [ref=e489]: Undo Text Edit
+                - cell "ctrl+_, ctrl+shift+-" [ref=e490]:
+                  - code [ref=e491]: ctrl+_
+                  - text: ","
+                  - code [ref=e492]: ctrl+shift+-
+                - cell "Undo last text change" [ref=e493]
+              - row "Yank (Copy) ctrl+y Yank/copy selected text" [ref=e494]:
+                - cell "Yank (Copy)" [ref=e495]:
+                  - strong [ref=e496]: Yank (Copy)
+                - cell "ctrl+y" [ref=e497]:
+                  - code [ref=e498]: ctrl+y
+                - cell "Yank/copy selected text" [ref=e499]
+              - row "Navigate Down down Scroll down in menu lists" [ref=e500]:
+                - cell "Navigate Down" [ref=e501]:
+                  - strong [ref=e502]: Navigate Down
+                - cell "down" [ref=e503]:
+                  - code [ref=e504]: down
+                - cell "Scroll down in menu lists" [ref=e505]
+              - row "Go to Bottom ctrl+end Jump TUI view directly to the bottom" [ref=e506]:
+                - cell "Go to Bottom" [ref=e507]:
+                  - strong [ref=e508]: Go to Bottom
+                - cell "ctrl+end" [ref=e509]:
+                  - code [ref=e510]: ctrl+end
+                - cell "Jump TUI view directly to the bottom" [ref=e511]
+              - row "Go to Top ctrl+home Jump TUI view directly to the top" [ref=e512]:
+                - cell "Go to Top" [ref=e513]:
+                  - strong [ref=e514]: Go to Top
+                - cell "ctrl+home" [ref=e515]:
+                  - code [ref=e516]: ctrl+home
+                - cell "Jump TUI view directly to the top" [ref=e517]
+              - row "Navigate Left left Move prompt cursor left" [ref=e518]:
+                - cell "Navigate Left" [ref=e519]:
+                  - strong [ref=e520]: Navigate Left
+                - cell "left" [ref=e521]:
+                  - code [ref=e522]: left
+                - cell "Move prompt cursor left" [ref=e523]
+              - row "Page Down pgdown, shift+down Scroll TUI page down" [ref=e524]:
+                - cell "Page Down" [ref=e525]:
+                  - strong [ref=e526]: Page Down
+                - cell "pgdown, shift+down" [ref=e527]:
+                  - code [ref=e528]: pgdown
+                  - text: ","
+                  - code [ref=e529]: shift+down
+                - cell "Scroll TUI page down" [ref=e530]
+              - row "Page Up pgup, shift+up Scroll TUI page up" [ref=e531]:
+                - cell "Page Up" [ref=e532]:
+                  - strong [ref=e533]: Page Up
+                - cell "pgup, shift+up" [ref=e534]:
+                  - code [ref=e535]: pgup
+                  - text: ","
+                  - code [ref=e536]: shift+up
+                - cell "Scroll TUI page up" [ref=e537]
+              - row "Navigate Right right Move prompt cursor right" [ref=e538]:
+                - cell "Navigate Right" [ref=e539]:
+                  - strong [ref=e540]: Navigate Right
+                - cell "right" [ref=e541]:
+                  - code [ref=e542]: right
+                - cell "Move prompt cursor right" [ref=e543]
+              - row "Tab / Focus tab Auto-complete choices or switch component focus" [ref=e544]:
+                - cell "Tab / Focus" [ref=e545]:
+                  - strong [ref=e546]: Tab / Focus
+                - cell "tab" [ref=e547]:
+                  - code [ref=e548]: tab
+                - cell "Auto-complete choices or switch component focus" [ref=e549]
+              - row "Navigate Up up Scroll up in menu lists" [ref=e550]:
+                - cell "Navigate Up" [ref=e551]:
+                  - strong [ref=e552]: Navigate Up
+                - cell "up" [ref=e553]:
+                  - code [ref=e554]: up
+                - cell "Scroll up in menu lists" [ref=e555]
+              - row "Insert Newline alt+enter, ctrl+j, shift+enter Add newline to prompt without submitting" [ref=e556]:
+                - cell "Insert Newline" [ref=e557]:
+                  - strong [ref=e558]: Insert Newline
+                - cell "alt+enter, ctrl+j, shift+enter" [ref=e559]:
+                  - code [ref=e560]: alt+enter
+                  - text: ","
+                  - code [ref=e561]: ctrl+j
+                  - text: ","
+                  - code [ref=e562]: shift+enter
+                - cell "Add newline to prompt without submitting" [ref=e563]
+        - paragraph [ref=e565]:
+          - text: You can map a single action to many keybindings in the JSON file. To disable keybindings, set the list to empty (e.g.,
+          - code [ref=e566]: "[]"
+          - text: ). If the file is malformed, the CLI will use the valid parts and fall back to defaults for the broken actions.
+        - generic [ref=e568]:
+          - generic [ref=e569]: warning
+          - generic [ref=e570]:
+            - strong [ref=e571]: Important
+            - text: ": Keybindings"
+            - code [ref=e572]: cli.exit
+            - text: and
+            - code [ref=e573]: cli.enter
+            - text: cannot be disabled.
+        - navigation [ref=e574]:
+          - link "keyboard_arrow_left Getting Started" [ref=e576] [cursor=pointer]:
+            - /url: /docs/cli-getting-started
+          - link "Features keyboard_arrow_right" [ref=e578] [cursor=pointer]:
+            - /url: /docs/cli-features
+      - generic [ref=e580]:
+        - generic [ref=e581]: On this Page
+        - navigation [ref=e582]:
+          - list [ref=e584]:
+            - listitem [ref=e586] [cursor=pointer]:
+              - generic [ref=e587]: Using AGY CLI

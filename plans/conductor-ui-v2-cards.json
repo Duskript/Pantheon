@@ -1,0 +1,2138 @@
+[
+  {
+    "card_id": "hep-2026-06-23-001",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md",
+        "~/projects/conductor-ui/src/soulforge/InterviewEngine.tsx",
+        "~/projects/conductor-ui/src/soulforge/types.ts"
+      ],
+      "context_lines": [
+        "Plan \u00a75.1 \u2014 agent-driven forge, one question at a time",
+        "InterviewEngine.tsx \u2014 understand the artifact schema from current form engine"
+      ]
+    },
+    "output": {
+      "file": "src/soulforge/chat-forge-backend.ts",
+      "change": "Create chat-forge-backend.ts: orchestrates agent-driven conversation. Accepts user message, returns {next_question, accumulated_state}. Maps answers into NodeArtifact/WorkflowArtifact fields.",
+      "max_loc_delta": 90
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/soulforge/chat-forge-backend.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not build the chat UI rendering \u2014 that is card 004",
+      "Do not implement the LLM/god-profile proxy \u2014 just the TypeScript orchestrator logic",
+      "Do not modify InterviewEngine.tsx"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-002",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-001"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/soulforge/types.ts",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a75.1 \u2014 add QuestionMessage, AnswerMessage, StateUpdate types"
+      ]
+    },
+    "output": {
+      "file": "src/soulforge/types.ts",
+      "change": "Add chat message types: QuestionMessage {id, text, field, options?}, AnswerMessage {questionId, value}, StateUpdate {artifact, fieldsCompleted, nextQuestion?}. Additive only.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/soulforge/types.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not modify existing types \u2014 additive only",
+      "Do not implement runtime behavior \u2014 types only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-003",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-002"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/soulforge/InterviewEngine.tsx",
+        "~/projects/conductor-ui/src/soulforge/chat-forge-backend.ts",
+        "~/projects/conductor-ui/src/soulforge/types.ts"
+      ],
+      "context_lines": [
+        "Plan \u00a75.1 \u2014 engine drives chat UI, one question at a time, not form wizard"
+      ]
+    },
+    "output": {
+      "file": "src/soulforge/InterviewEngine.tsx",
+      "change": "Rewrite InterviewEngine for one-question-at-a-time chat. Replace form wizard with state machine: await answer \u2192 call chat-forge-backend \u2192 render next question. Preserve skip-to-form fallback.",
+      "max_loc_delta": 100
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/soulforge/InterviewEngine.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement the chat UI rendering \u2014 card 004 handles that",
+      "Do not modify types.ts or chat-forge-backend.ts",
+      "Preserve the skip-to-form codepath intact"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-004",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-003"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/routes/forge.tsx",
+        "~/projects/conductor-ui/src/soulforge/InterviewEngine.tsx"
+      ],
+      "context_lines": [
+        "Plan \u00a75.1 \u2014 replace form-based interview with chat-based interview UI"
+      ]
+    },
+    "output": {
+      "file": "src/routes/forge.tsx",
+      "change": "Replace form wizard UI with chat interface. Render message history as chat bubbles. Single input field for user responses. Skip interview button drops to form. Get help opens /chat route.",
+      "max_loc_delta": 100
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/routes/forge.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement the /chat proxy route \u2014 card 006 handles that",
+      "Do not modify InterviewEngine state machine logic",
+      "Do not change the forge route registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-005",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/soulforge/workflow-templates.ts",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a75.2 \u2014 5 Archon templates with role labels not god names"
+      ]
+    },
+    "output": {
+      "file": "src/soulforge/workflow-templates.ts",
+      "change": "Add 5 Archon coding templates: bug-fix, feature, code-review, refactor, docs. Each with starter nodes using role labels ('AI for code', 'AI for review', 'AI for design'). Never god names.",
+      "max_loc_delta": 80
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/soulforge/workflow-templates.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not modify existing non-Archon templates",
+      "Do not implement role-assignment backend \u2014 labels only",
+      "Do not use god names in template labels"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-006",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-004"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/serve.py"
+      ],
+      "context_lines": [
+        "Plan \u00a75.1 \u2014 /chat proxy route, ?subject= and ?specialist= query params"
+      ]
+    },
+    "output": {
+      "file": "serve.py",
+      "change": "Add GET /chat proxy route. Accepts ?subject= and ?specialist= params. Forwards to Pantheon MCP messaging endpoint. Returns 501 stub if backend unreachable. Additive, do not change existing routes.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import ast; ast.parse(open('serve.py').read()); print('AST OK')\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new requirements",
+      "Do not refactor unrelated code",
+      "Do not implement full chat backend \u2014 proxy only",
+      "Do not change existing routes in serve.py"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-007",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-001",
+      "hep-2026-06-23-002",
+      "hep-2026-06-23-003",
+      "hep-2026-06-23-004",
+      "hep-2026-06-23-005",
+      "hep-2026-06-23-006"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/soulforge/chat-forge-backend.ts",
+        "~/projects/conductor-ui/src/soulforge/types.ts",
+        "~/projects/conductor-ui/src/soulforge/InterviewEngine.tsx",
+        "~/projects/conductor-ui/src/routes/forge.tsx",
+        "~/projects/conductor-ui/src/soulforge/workflow-templates.ts",
+        "~/projects/conductor-ui/serve.py",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Tier-1: spec-conformance gate (grep for every stated function), acceptance gate (browser test forge route). Ponytail: gpt55-ponytail-qa adversarial pass."
+      ]
+    },
+    "output": {
+      "file": "/tmp/ponytail-qa-output-phase1.md",
+      "change": "Run Hephaestus Tier-1 review (spec-conformance + acceptance gates) then GPT-5.5 Ponytail QA. Return PASS/PASS_WITH_WARNINGS/FAIL/ESCALATE verdict on Phase 1 forge.",
+      "max_loc_delta": 1
+    },
+    "verify": {
+      "command": "echo 'QA gate \u2014 manual Hephaestus review + Ponytail invocation'; test -f /tmp/ponytail-qa-output-phase1.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not fix code \u2014 return to Marvin if FAIL",
+      "Do not skip Ponytail invocation",
+      "Do not mark phase complete without PASS verdict"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-008",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/theme/index.css",
+        "~/projects/conductor-ui/src/mobile/mobile-tokens.css"
+      ],
+      "context_lines": [
+        "Plan \u00a76.1 \u2014 import mobile-tokens.css inside @media (max-width: 639px)"
+      ]
+    },
+    "output": {
+      "file": "src/theme/index.css",
+      "change": "Add @import for mobile-tokens.css inside @media (max-width: 639px) block. Verify Lumen tokens compress and touch targets enlarge below 640px.",
+      "max_loc_delta": 10
+    },
+    "verify": {
+      "command": "grep -q mobile-tokens.css src/theme/index.css && echo import-found",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not modify mobile-tokens.css itself",
+      "Do not change desktop token values"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-009",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-008"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/shell/AppShell.tsx",
+        "~/projects/conductor-ui/src/mobile/useIsMobile.ts",
+        "~/projects/conductor-ui/src/mobile/MobileAppShell.tsx"
+      ],
+      "context_lines": [
+        "Plan \u00a76.2-6.3 \u2014 import useIsMobile, conditional MobileAppShell vs DesktopAppShell"
+      ]
+    },
+    "output": {
+      "file": "src/shell/AppShell.tsx",
+      "change": "Import useIsMobile hook. Add conditional: isMobile ? MobileAppShell : DesktopAppShell. Import MobileAppShell from src/mobile/. Hide side rail on mobile.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/shell/AppShell.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not modify MobileAppShell internals \u2014 card 010 handles that",
+      "Do not modify useIsMobile hook",
+      "Do not change desktop shell behavior"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-010",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-009"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/mobile/MobileAppShell.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a76.3 \u2014 collapsible left drawer (not bottom tabs), drawer toggle, nav items"
+      ]
+    },
+    "output": {
+      "file": "src/mobile/MobileAppShell.tsx",
+      "change": "Implement collapsible left drawer navigation. Hamburger toggle or swipe-open. Contains nav items: Dashboard, Editor, Board, More (Settings). Top bar collapses to 56px.",
+      "max_loc_delta": 80
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/mobile/MobileAppShell.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement bottom tabs",
+      "Do not modify desktop AppShell",
+      "Do not add new deps for drawer animation"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-011",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-009"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/mobile/MobileBoard.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a76.4 \u2014 dot indicators show active column, swipe left/right navigates"
+      ]
+    },
+    "output": {
+      "file": "src/mobile/MobileBoard.tsx",
+      "change": "Add dot indicators showing active column position. Implement swipe left/right navigation between columns. Dots update on swipe. Reuse desktop Board data hooks.",
+      "max_loc_delta": 60
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/mobile/MobileBoard.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not duplicate fetch logic \u2014 reuse desktop Board hooks",
+      "Do not implement drag-and-drop on mobile \u2014 Phase 6 handles that"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-012",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-008",
+      "hep-2026-06-23-009",
+      "hep-2026-06-23-010",
+      "hep-2026-06-23-011"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/theme/index.css",
+        "~/projects/conductor-ui/src/shell/AppShell.tsx",
+        "~/projects/conductor-ui/src/mobile/MobileAppShell.tsx",
+        "~/projects/conductor-ui/src/mobile/MobileBoard.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Tier-1: spec-conformance + acceptance gates. Browser: <640px shows collapsible drawer, swipe between columns. Ponytail QA."
+      ]
+    },
+    "output": {
+      "file": "/tmp/ponytail-qa-output-phase2.md",
+      "change": "Run Hephaestus Tier-1 (spec-conformance + acceptance) then Ponytail QA on Phase 2 mobile wiring. Verify collapsible drawer and swipe nav in real browser below 640px.",
+      "max_loc_delta": 1
+    },
+    "verify": {
+      "command": "echo QA-gate-manual; test -f /tmp/ponytail-qa-output-phase2.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not fix code \u2014 return to Marvin if FAIL",
+      "Do not skip browser verification below 640px",
+      "Do not mark phase complete without PASS verdict"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-013",
+    "type": "build",
+    "assignee": "hephaestus",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/conductor/v2/api_server.py",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a77 \u2014 investigate existing SSE/streaming endpoints. Check for live_stream.py."
+      ]
+    },
+    "output": {
+      "file": "/tmp/phase3-sse-research.md",
+      "change": "Research: audit api_server.py for existing SSE endpoints. Report: what exists, what is missing, recommended approach (reuse or build new /api/runs/stream). One-page findings.",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "test -f /tmp/phase3-sse-research.md && echo research-done",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement any SSE endpoint \u2014 research only",
+      "Do not build frontend components \u2014 cards 014-016 handle that"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-014",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-013"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/runs/dashboard.tsx",
+        "/tmp/phase3-sse-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a77 \u2014 run list view: workflow name, started-at, elapsed, current node, progress bar"
+      ]
+    },
+    "output": {
+      "file": "src/runs/dashboard.tsx",
+      "change": "Build run list view. Fetch from /api/runs. Display: workflow name, started-at, elapsed, current node, progress bar. Click navigates to run detail. Handle empty state.",
+      "max_loc_delta": 80
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/runs/dashboard.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not build SSE viewer \u2014 card 015 handles that",
+      "Do not add historical analytics or charts"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-015",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-014"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/runs/detail.tsx",
+        "/tmp/phase3-sse-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a77 \u2014 live SSE event stream for a single run"
+      ]
+    },
+    "output": {
+      "file": "src/runs/detail.tsx",
+      "change": "Build SSE event viewer for single run. Connect to /api/runs/{id}/stream or equivalent endpoint. Display live events as they arrive. Show run metadata header.",
+      "max_loc_delta": 70
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/runs/detail.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not build the backend SSE endpoint \u2014 handled separately if needed",
+      "Do not implement EventSource reconnect logic beyond basic"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-016",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-014"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/editor/dispatch.tsx"
+      ],
+      "context_lines": [
+        "Plan \u00a77 \u2014 add View Runs link in editor top bar"
+      ]
+    },
+    "output": {
+      "file": "src/editor/dispatch.tsx",
+      "change": "Add View Runs link/button to editor top bar. Navigates to /runs. Place alongside existing editor controls. Minimal visual disruption.",
+      "max_loc_delta": 15
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/dispatch.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not change existing editor controls",
+      "Do not build the /runs route \u2014 that already exists"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-017",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-013"
+    ],
+    "input": {
+      "files": [
+        "~/pantheon/conductor/v2/api_server.py",
+        "/tmp/phase3-sse-research.md"
+      ],
+      "context_lines": [
+        "Conditional card \u2014 only execute if research finds no existing SSE endpoint"
+      ]
+    },
+    "output": {
+      "file": "~/pantheon/conductor/v2/api_server.py",
+      "change": "Add SSE endpoint: GET /api/runs/stream or GET /api/runs/{id}/stream. Stream run events as Server-Sent Events. Implement only if research card 013 finds no existing endpoint.",
+      "max_loc_delta": 60
+    },
+    "verify": {
+      "command": "python3 -c \"import ast; ast.parse(open(\"api_server.py\").read()); print(\"AST OK\")\" 2>&1 || echo \"skip if not needed\"",
+      "must_pass": false,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not refactor unrelated code",
+      "Do not execute if research finds existing SSE endpoint",
+      "Do not change existing API routes",
+      "Do not add new Python dependencies"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-018",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-014",
+      "hep-2026-06-23-015",
+      "hep-2026-06-23-016",
+      "hep-2026-06-23-017"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/runs/dashboard.tsx",
+        "~/projects/conductor-ui/src/runs/detail.tsx",
+        "~/projects/conductor-ui/src/editor/dispatch.tsx",
+        "~/pantheon/conductor/v2/api_server.py",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Tier-1: spec-conformance + acceptance. Browser: /runs shows run list, click into run detail, SSE events stream live. Ponytail QA."
+      ]
+    },
+    "output": {
+      "file": "/tmp/ponytail-qa-output-phase3.md",
+      "change": "Run Hephaestus Tier-1 (spec-conformance + acceptance gates) then Ponytail QA on Phase 3 live dashboard. Verify run list and SSE streaming in real browser.",
+      "max_loc_delta": 1
+    },
+    "verify": {
+      "command": "echo QA-gate-manual; test -f /tmp/ponytail-qa-output-phase3.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not fix code \u2014 return to Marvin if FAIL",
+      "Do not skip browser verification of SSE stream",
+      "Do not mark phase complete without PASS verdict"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-019",
+    "type": "build",
+    "assignee": "hephaestus",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 research n8n trigger node types and Archon trigger execution patterns"
+      ]
+    },
+    "output": {
+      "file": "/tmp/phase4-n8n-research.md",
+      "change": "Research n8n trigger node type architecture and Archon trigger patterns. Report: how n8n models triggers as nodes, the node type contract, recommended TypeScript implementation approach.",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "test -f /tmp/phase4-n8n-research.md && echo research-done",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement any trigger code \u2014 research only",
+      "Return findings as markdown, do not write TypeScript"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-020",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 manual-trigger trigger node: node.ts, schema.ts, uischema.ts, icon.tsx"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/manual_trigger/",
+      "change": "Create manual-trigger trigger node: node.ts (execution logic), schema.ts (JSON Schema), uischema.ts (form layout), icon.tsx (palette icon). Manual trigger node. User clicks Run to start. No credent...",
+      "max_loc_delta": 40
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/manual_trigger/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement other trigger nodes \u2014 only manual-trigger",
+      "Do not modify the node palette registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-021",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 webhook-trigger trigger node: node.ts, schema.ts, uischema.ts, icon.tsx"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/webhook_trigger/",
+      "change": "Create webhook-trigger trigger node: node.ts (execution logic), schema.ts (JSON Schema), uischema.ts (form layout), icon.tsx (palette icon). Webhook trigger node. Listens on HTTP endpoint. Optional...",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/webhook_trigger/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement other trigger nodes \u2014 only webhook-trigger",
+      "Do not modify the node palette registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-022",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 cron-trigger trigger node: node.ts, schema.ts, uischema.ts, icon.tsx"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/cron_trigger/",
+      "change": "Create cron-trigger trigger node: node.ts (execution logic), schema.ts (JSON Schema), uischema.ts (form layout), icon.tsx (palette icon). Cron trigger node. Schedule-based execution with cron expre...",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/cron_trigger/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement other trigger nodes \u2014 only cron-trigger",
+      "Do not modify the node palette registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-023",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 nats-trigger trigger node: node.ts, schema.ts, uischema.ts, icon.tsx"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/nats_trigger/",
+      "change": "Create nats-trigger trigger node: node.ts (execution logic), schema.ts (JSON Schema), uischema.ts (form layout), icon.tsx (palette icon). NATS trigger node. Subscribes to NATS subject. No credentia...",
+      "max_loc_delta": 45
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/nats_trigger/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement other trigger nodes \u2014 only nats-trigger",
+      "Do not modify the node palette registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-024",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 email-trigger trigger node: node.ts, schema.ts, uischema.ts, icon.tsx"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/email_trigger/",
+      "change": "Create email-trigger trigger node: node.ts (execution logic), schema.ts (JSON Schema), uischema.ts (form layout), icon.tsx (palette icon). Email trigger node. Polls IMAP inbox. Requires IMAP creden...",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/email_trigger/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement other trigger nodes \u2014 only email-trigger",
+      "Do not modify the node palette registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-025",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 polling-trigger trigger node: node.ts, schema.ts, uischema.ts, icon.tsx"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/polling_trigger/",
+      "change": "Create polling-trigger trigger node: node.ts (execution logic), schema.ts (JSON Schema), uischema.ts (form layout), icon.tsx (palette icon). Polling trigger node. HTTP polling at interval. Requires...",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/polling_trigger/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement other trigger nodes \u2014 only polling-trigger",
+      "Do not modify the node palette registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-026",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.1 \u2014 custom-trigger trigger node: node.ts, schema.ts, uischema.ts, icon.tsx"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/custom_trigger/",
+      "change": "Create custom-trigger trigger node: node.ts (execution logic), schema.ts (JSON Schema), uischema.ts (form layout), icon.tsx (palette icon). Custom trigger node. TypeScript plugin extension point. O...",
+      "max_loc_delta": 40
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/custom_trigger/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement other trigger nodes \u2014 only custom-trigger",
+      "Do not modify the node palette registration"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-027",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "/tmp/phase4-n8n-research.md",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.2 \u2014 sub-workflow node: workflow_ref, payload_mapping, join_policy, cycle detection"
+      ]
+    },
+    "output": {
+      "file": "src/editor/nodes/sub-workflow/",
+      "change": "Create sub-workflow node (6 files). workflow_ref + payload_mapping + join_policy. Implement cycle detection at save time (BFS from this node through referenced workflow).",
+      "max_loc_delta": 90
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/nodes/sub-workflow/node.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement workflow execution \u2014 node definition only",
+      "Do not modify existing node types"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-028",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/editor/node-properties.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.3 \u2014 per-node error policy: fail-fast, retry-with-backoff, continue-and-log, branch-to-error-handler"
+      ]
+    },
+    "output": {
+      "file": "src/editor/node-properties.tsx",
+      "change": "Add error_policy property to every node. Dropdown: fail-fast (default), retry-with-backoff (1s-60s cap), continue-and-log, branch-to-error-handler. Add 10-min wall-clock retry budget per workflow.",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/node-properties.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement retry execution logic \u2014 property definition only",
+      "Do not modify existing node types schemas \u2014 property layer on top"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-029",
+    "type": "build",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-019"
+    ],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md",
+        "/tmp/phase4-n8n-research.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.4 \u2014 needs research: expression evaluator for when: conditional execution"
+      ]
+    },
+    "output": {
+      "file": "/tmp/phase4-when-research.md",
+      "change": "Research n8n and Archon when: conditional execution models. Evaluate: TypeScript expression library vs Python backend validator. Recommend approach with rationale. Include sandbox safety analysis.",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "test -f /tmp/phase4-when-research.md && echo research-done",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement the expression evaluator \u2014 research only",
+      "Do not commit to approach without operator sign-off"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-030",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-019",
+      "hep-2026-06-23-028"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/editor/node-properties.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.5 \u2014 trigger_rule on join nodes, context fresh/continue, when: conditional"
+      ]
+    },
+    "output": {
+      "file": "src/editor/node-properties.tsx",
+      "change": "Add trigger_rule property to join nodes: all_success, one_success, none_failed_min_one_success, all_done. Add context property to every node: fresh or continue. Add when: conditional field (UI only...",
+      "max_loc_delta": 60
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/node-properties.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement runtime execution \u2014 property definitions only",
+      "when: evaluator is separate research card 029"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-031",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-020",
+      "hep-2026-06-23-021",
+      "hep-2026-06-23-022",
+      "hep-2026-06-23-023",
+      "hep-2026-06-23-024",
+      "hep-2026-06-23-025",
+      "hep-2026-06-23-026",
+      "hep-2026-06-23-027"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/editor/test-run-panel.tsx",
+        "~/pantheon/conductor/v2/api_server.py",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a78.6 \u2014 test-workflow mode: dry-run, recorder I/O, Test Workflow button"
+      ]
+    },
+    "output": {
+      "file": "src/editor/test-run-panel.tsx",
+      "change": "Create test-run panel UI. Test Workflow button in editor top bar. Dry-run exercises full DAG, routes I/O through recorder. Display results: passed/failed/skipped nodes. Add POST /api/workflows/{id}...",
+      "max_loc_delta": 90
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/test-run-panel.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement production execution \u2014 test-run only",
+      "Do not make external service calls in test mode"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-032",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-020",
+      "hep-2026-06-23-021",
+      "hep-2026-06-23-022",
+      "hep-2026-06-23-023",
+      "hep-2026-06-23-024",
+      "hep-2026-06-23-025",
+      "hep-2026-06-23-026",
+      "hep-2026-06-23-027",
+      "hep-2026-06-23-028",
+      "hep-2026-06-23-029",
+      "hep-2026-06-23-030",
+      "hep-2026-06-23-031"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/editor/nodes/",
+        "~/projects/conductor-ui/src/editor/node-properties.tsx",
+        "~/projects/conductor-ui/src/editor/test-run-panel.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Tier-1: spec-conformance + acceptance. Browser: all 7 triggers in palette, sub-workflow node, error policy dropdown, Archon patterns, test-run panel. Ponytail QA."
+      ]
+    },
+    "output": {
+      "file": "/tmp/ponytail-qa-output-phase4.md",
+      "change": "Run Hephaestus Tier-1 (spec-conformance + acceptance gates) then Ponytail QA on Phase 4 n8n surface. Verify all triggers, sub-workflow, error policy, and test-run in real browser.",
+      "max_loc_delta": 1
+    },
+    "verify": {
+      "command": "echo QA-gate-manual; test -f /tmp/ponytail-qa-output-phase4.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not fix code \u2014 return to Marvin if FAIL",
+      "Do not skip browser verification of node palette",
+      "Do not mark phase complete without PASS verdict"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-033",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 nats connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/nats.yaml",
+      "change": "Create nats connector YAML. NATS connector YAML. Host, port, subject prefix. No auth. Status: Active. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/nats.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only nats",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-034",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 slack connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/slack.yaml",
+      "change": "Create slack connector YAML. Slack connector YAML. Bot token, signing secret. OAuth2. Status: Active. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/slack.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only slack",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-035",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 github connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/github.yaml",
+      "change": "Create github connector YAML. GitHub connector YAML. Personal access token, repo scope. Status: Active. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/github.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only github",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-036",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 discord connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/discord.yaml",
+      "change": "Create discord connector YAML. Discord connector YAML. Bot token, guild ID. Status: Not connected. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/discord.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only discord",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-037",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 telegram connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/telegram.yaml",
+      "change": "Create telegram connector YAML. Telegram connector YAML. Bot token. Status: Active. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/telegram.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only telegram",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-038",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 mercer-crm connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/mercer-crm.yaml",
+      "change": "Create mercer-crm connector YAML. Mercer CRM connector YAML. API key, base URL. Status: Active. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/mercer-crm.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only mercer-crm",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-039",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 email-smtp connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/email-smtp.yaml",
+      "change": "Create email-smtp connector YAML. Email (SMTP) connector YAML. SMTP host, port, username, password. Status: Active. Follow standard connector schema: name, slug, status, auth_type, config_keys, hel...",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/email-smtp.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only email-smtp",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-040",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 linear connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/linear.yaml",
+      "change": "Create linear connector YAML. Linear connector YAML. API key. Status: 401 \u2014 needs re-auth. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/linear.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only linear",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-041",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 ichor connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/ichor.yaml",
+      "change": "Create ichor connector YAML. Ichor memory connector YAML. MCP endpoint. Status: Active. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/ichor.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only ichor",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-042",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 postgresql connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/postgresql.yaml",
+      "change": "Create postgresql connector YAML. PostgreSQL connector YAML. Connection string, SSL mode. Status: Off. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/postgresql.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only postgresql",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-043",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 webhook-generic connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/webhook-generic.yaml",
+      "change": "Create webhook-generic connector YAML. Webhook (generic) connector YAML. URL, method, headers template. Status: Off. Follow standard connector schema: name, slug, status, auth_type, config_keys, he...",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/webhook-generic.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only webhook-generic",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-044",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 anthropic-api connector, path: ~/projects/conductor-ui/src/connectors/"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/anthropic-api.yaml",
+      "change": "Create anthropic-api connector YAML. Anthropic API connector YAML. API key, model, max tokens. Status: Off. Follow standard connector schema: name, slug, status, auth_type, config_keys, help_url.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open(\"src/connectors/anthropic-api.yaml\"))\" 2>&1 || echo \"yaml parse check\"",
+      "must_pass": true,
+      "timeout_seconds": 15
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not write other connector YAMLs \u2014 only anthropic-api",
+      "Do not implement connector runtime \u2014 YAML definition only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-045",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-033",
+      "hep-2026-06-23-034",
+      "hep-2026-06-23-035",
+      "hep-2026-06-23-036",
+      "hep-2026-06-23-037",
+      "hep-2026-06-23-038",
+      "hep-2026-06-23-039",
+      "hep-2026-06-23-040",
+      "hep-2026-06-23-041",
+      "hep-2026-06-23-042",
+      "hep-2026-06-23-043",
+      "hep-2026-06-23-044"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/connectors/*.yaml",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 connector engine: load YAMLs, validate schema, expose status"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/engine.ts",
+      "change": "Create connector engine. Load all YAMLs from src/connectors/, validate against schema, expose connector list with status. Operator drops new YAML \u2192 picked up on restart.",
+      "max_loc_delta": 70
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/connectors/engine.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement connector runtime execution \u2014 load + validate only",
+      "Do not build the picker UI \u2014 card 046 handles that"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-046",
+    "type": "build",
+    "assignee": "iris",
+    "depends_on": [
+      "hep-2026-06-23-045"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/connectors/engine.ts",
+        "~/projects/conductor-ui/src/routes/connectors.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a79 \u2014 connector picker UI, filter, catalog view"
+      ]
+    },
+    "output": {
+      "file": "src/connectors/picker.tsx",
+      "change": "Build connector picker UI. Grid/list of connectors with status badges (active/off/error). Filter by status. Click to view connector details. Uses engine.ts for data.",
+      "max_loc_delta": 60
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/connectors/picker.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not modify engine.ts",
+      "Do not implement connector edit/CRUD \u2014 view only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-047",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-033",
+      "hep-2026-06-23-034",
+      "hep-2026-06-23-035",
+      "hep-2026-06-23-036",
+      "hep-2026-06-23-037",
+      "hep-2026-06-23-038",
+      "hep-2026-06-23-039",
+      "hep-2026-06-23-040",
+      "hep-2026-06-23-041",
+      "hep-2026-06-23-042",
+      "hep-2026-06-23-043",
+      "hep-2026-06-23-044",
+      "hep-2026-06-23-045",
+      "hep-2026-06-23-046"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/connectors/",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Tier-1: spec-conformance + acceptance. Browser: /connectors shows catalog, 3+ connectors show Active, filter works. Ponytail QA."
+      ]
+    },
+    "output": {
+      "file": "/tmp/ponytail-qa-output-phase5.md",
+      "change": "Run Hephaestus Tier-1 (spec-conformance + acceptance) then Ponytail QA on Phase 5 connectors. Verify 3+ working connectors in real browser, operator-extensible via YAML drop.",
+      "max_loc_delta": 1
+    },
+    "verify": {
+      "command": "echo QA-gate-manual; test -f /tmp/ponytail-qa-output-phase5.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not fix code \u2014 return to Marvin if FAIL",
+      "Do not skip browser verification of connector catalog",
+      "Do not mark phase complete without PASS verdict"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-048",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-016"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/editor/dispatch.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a710.1 \u2014 Dispatch as kanban task button in editor, POSTs to kanban API"
+      ]
+    },
+    "output": {
+      "file": "src/editor/dispatch.tsx",
+      "change": "Add Dispatch as kanban task button to editor. POSTs current workflow to kanban API. Shows success toast with task link. Handles error state (API down, duplicate).",
+      "max_loc_delta": 50
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/editor/dispatch.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not implement the Open in editor link \u2014 card 049 handles that",
+      "Do not modify kanban API"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-049",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/kanban/detail.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a710.1 \u2014 Open in editor link on kanban card, navigates to /editor/"
+      ]
+    },
+    "output": {
+      "file": "src/kanban/detail.tsx",
+      "change": "Add Open in editor link to kanban task detail. If task has associated workflow, navigate to /editor/{workflow_id}. Link only visible when workflow exists.",
+      "max_loc_delta": 20
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/kanban/detail.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not modify drawer controls \u2014 additive link only",
+      "Do not implement workflow creation from task"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-050",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/kanban/board.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a710.2 \u2014 kanban-only DnD, long-press/mouse drag, ghost card, drop indicator"
+      ]
+    },
+    "output": {
+      "file": "src/kanban/board.tsx",
+      "change": "Implement kanban card drag-and-drop between columns. Long-press or mouse drag to initiate. Ghost card follows cursor. Drop indicator on target column. Drop triggers status transition.",
+      "max_loc_delta": 80
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/kanban/board.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies for DnD \u2014 use native HTML5 drag",
+      "Do not refactor unrelated code",
+      "Do not implement cross-route drag to editor \u2014 kanban only",
+      "Do not implement mobile drag \u2014 desktop first"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-051",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [
+      "hep-2026-06-23-050"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/kanban/board.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a710.2 \u2014 Blocked column asks for reason, reason not required"
+      ]
+    },
+    "output": {
+      "file": "src/kanban/board.tsx",
+      "change": "Add Blocked reason prompt on drop to Blocked column. Show optional text input. Reason is NOT required \u2014 can be left empty. Append reason to task block_reason field.",
+      "max_loc_delta": 30
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/kanban/board.tsx 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not block the drop if reason is empty",
+      "Do not modify the kanban API block endpoint"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ],
+    "conflicts_with": [
+      "hep-2026-06-23-050"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-052",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-048",
+      "hep-2026-06-23-049",
+      "hep-2026-06-23-050",
+      "hep-2026-06-23-051"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/editor/dispatch.tsx",
+        "~/projects/conductor-ui/src/kanban/detail.tsx",
+        "~/projects/conductor-ui/src/kanban/board.tsx",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Tier-1: spec-conformance + acceptance. Browser: drag card to new column, dispatch creates task, open in editor links work. Ponytail QA."
+      ]
+    },
+    "output": {
+      "file": "/tmp/ponytail-qa-output-phase6.md",
+      "change": "Run Hephaestus Tier-1 (spec-conformance + acceptance) then Ponytail QA on Phase 6 cross-route and DnD. Verify drag between columns, dispatch button, and editor link in real browser.",
+      "max_loc_delta": 1
+    },
+    "verify": {
+      "command": "echo QA-gate-manual; test -f /tmp/ponytail-qa-output-phase6.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not fix code \u2014 return to Marvin if FAIL",
+      "Do not skip browser verification of DnD",
+      "Do not mark phase complete without PASS verdict"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-053",
+    "type": "build",
+    "assignee": "marvin",
+    "depends_on": [],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/ledger_adapter.ts",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a711 \u2014 data seam: LedgerAdapter swap from LocalStub"
+      ]
+    },
+    "output": {
+      "file": "src/ledger_adapter.ts",
+      "change": "Create LedgerAdapter.ts implementing the data seam for Ledger storage. Swap from LocalStub to real adapter. Interface: create, read, update, delete, list, query. No UI mounting \u2014 post-v1.",
+      "max_loc_delta": 80
+    },
+    "verify": {
+      "command": "npx tsc --noEmit src/ledger_adapter.ts 2>&1",
+      "must_pass": true,
+      "timeout_seconds": 30
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not build Ledger UI \u2014 post-v1",
+      "Do not migrate existing data \u2014 adapter swap only"
+    ],
+    "evidence_required": [
+      "diff_of_changed_file",
+      "output_of_verify_command"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-054",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-053"
+    ],
+    "input": {
+      "files": [
+        "~/projects/conductor-ui/src/ledger_adapter.ts",
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "QA: verify adapter compiles, interface contract matches LocalStub"
+      ]
+    },
+    "output": {
+      "file": "/tmp/ponytail-qa-output-phase7.md",
+      "change": "QA check on Phase 7 Ledger adapter. Verify TypeScript compiles, interface matches LocalStub signature, adapter swap test passes. Ponytail review.",
+      "max_loc_delta": 1
+    },
+    "verify": {
+      "command": "echo QA-gate-manual; test -f /tmp/ponytail-qa-output-phase7.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not test Ledger backend integration \u2014 adapter seam only"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes"
+    ]
+  },
+  {
+    "card_id": "hep-2026-06-23-055",
+    "type": "qa",
+    "assignee": "hephaestus",
+    "depends_on": [
+      "hep-2026-06-23-007",
+      "hep-2026-06-23-012",
+      "hep-2026-06-23-018",
+      "hep-2026-06-23-032",
+      "hep-2026-06-23-047",
+      "hep-2026-06-23-052",
+      "hep-2026-06-23-054"
+    ],
+    "input": {
+      "files": [
+        "~/pantheon/plans/conductor-ui-build-plan-v2.0.md"
+      ],
+      "context_lines": [
+        "Plan \u00a712 \u2014 full acceptance sweep: every route, every feature, real browser. 9 verification items."
+      ]
+    },
+    "output": {
+      "file": "/tmp/conductor-ui-v2-acceptance-sweep.md",
+      "change": "Full browser acceptance sweep. Verify all 9 items: dashboard, editor (14 nodes + DnD), board (DnD + drawer + 6 controls), forge (chat + templates), runs (SSE), connectors (3+ active), settings, mob...",
+      "max_loc_delta": 100
+    },
+    "verify": {
+      "command": "echo Full-acceptance-sweep-manual; test -f /tmp/conductor-ui-v2-acceptance-sweep.md",
+      "must_pass": true,
+      "timeout_seconds": 300
+    },
+    "out_of_scope": [
+      "Do not modify any file outside output.file",
+      "Do not add new dependencies",
+      "Do not refactor unrelated code",
+      "Do not fix code during sweep \u2014 log issues for follow-up",
+      "Do not skip any route \u2014 all 9 must be verified",
+      "Report format: PASS/FAIL per item with screenshot evidence"
+    ],
+    "evidence_required": [
+      "output_of_verify_command",
+      "summary_of_changes",
+      "list_of_new_files"
+    ]
+  }
+]

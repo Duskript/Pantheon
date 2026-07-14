@@ -1,0 +1,17 @@
+{
+  "abort_on_fail": true,
+  "completion_target": null,
+  "context_bag": {
+    "pm_verify": "step_1_1_closeout_final"
+  },
+  "created": "2026-06-14T22:48:35.292587Z",
+  "current_step": "active-goals",
+  "definition_id": "morning-briefing",
+  "definition_version": "1.1.0",
+  "dispatched_to": null,
+  "initiator": "hermes",
+  "original_request": "PM final closeout verification after Marvin take-3",
+  "status": "in_progress",
+  "step_history": [],
+  "workflow_id": "wf_11f62bce"
+}

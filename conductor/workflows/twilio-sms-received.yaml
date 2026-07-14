@@ -1,0 +1,25 @@
+workflow:
+  id: twilio-sms-received
+  name: "Twilio SMS Received"
+  version: "1.0.0"
+  description: "Notify Hermes when an inbound Twilio SMS arrives."
+  context:
+    required: [from_number, body]
+    optional: [to_number, sms_sid, summary]
+  steps:
+    - id: notify-hermes
+      god: hermes
+      action: notify
+      input_from: _start
+      timeout: 2m
+      prompt: |
+        You received an incoming SMS via Twilio.
+
+        ## SMS Details
+        - **From:** {{ context.from_number }}
+        - **To:** {{ context.to_number }}
+        - **SMS SID:** {{ context.sms_sid }}
+        - **Message:** {{ context.body }}
+
+        Let Konan know about this message so he can respond if needed.
+      output: notification_result

@@ -1,0 +1,6 @@
+name = "pantheon-image-gen"
+main = "src/index.ts"
+compatibility_date = "2026-07-10"
+
+[ai]
+binding = "AI"

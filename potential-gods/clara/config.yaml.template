@@ -1,0 +1,93 @@
+# ── Clara Profile Config Template ──────────────────────────────────
+# Replace placeholders with client-specific values before deploying.
+#
+# Clara v1.1 — Added: drug interaction API, Ichor CRM schema,
+# CMS-0057-F FHIR config, saved template paths.
+
+model:
+  default: deepseek-v4-flash
+  provider: opencode-go
+  base_url: ''
+  api_mode: chat_completions
+
+providers:
+  opencode-go:
+    default_model: deepseek-v4-flash
+    models:
+      - deepseek-v4-flash
+      - deepseek-v4-pro
+      - kimi-k2.6
+    name: OpenCode Go
+
+fallback_providers: []
+credential_pool_strategies: {}
+
+toolsets:
+  - hermes-cli
+  - web
+
+agent:
+  max_turns: 120
+  gateway_timeout: 1800
+  restart_drain_timeout: 60
+  api_max_retries: 3
+  tool_use_enforcement: auto
+  image_input_mode: auto
+  disabled_toolsets: []
+  personalities: {}
+
+# ── Google Workspace MCP ───────────────────────────────────────────
+# Credentials set up during deployment.
+# Scopes needed:
+#   https://www.googleapis.com/auth/gmail.readonly  (triage)
+#   https://www.googleapis.com/auth/gmail.modify    (triage + archive/tag)
+#   https://www.googleapis.com/auth/calendar        (scheduling)
+#   https://www.googleapis.com/auth/tasks           (task tracking)
+
+# ── Drug Interaction API ───────────────────────────────────────────
+# Phase 1: OpenFDA (free, no BAA)
+# Phase 2: DrugsAPI (~$99/mo, BAA available) or DrugBank (enterprise)
+# Choose one and configure below.
+
+drug_interaction:
+  provider: openfda  # or "drugsapi" or "drugbank"
+  openfda:
+    base_url: "https://api.fda.gov/drug/label.json"
+    rate_limit: 1000
+  drugsapi:
+    base_url: "https://api.drugsapi.com/v1"
+    api_key: "${DRUGSAPI_API_KEY}"   # set in .env or env var
+  drugbank:
+    base_url: "https://api.drugbank.com/v1"
+    api_key: "${DRUGBANK_API_KEY}"
+  cache_location: "Codex-PriorAuth/interactions/known-pairs.md"
+  disclaimer: "This interaction check is informational only. Always verify with a licensed pharmacist or physician."
+
+# ── Clearinghouse (Phase 2) ────────────────────────────────────────
+# For claim submission when Clara handles billing.
+clearinghouse:
+  provider: stedi  # or "office-ally" or "optum"
+  stedi:
+    base_url: "https://api.stedi.com/v1"
+    api_key: "${STEDI_API_KEY}"
+  office_ally:
+    base_url: "https://api.officeally.com/v1"
+    api_key: "${OFFICE_ALLY_API_KEY}"
+
+# ── Ichor Storage ──────────────────────────────────────────────────
+# Patient CRM data lives in Ichor. No local SQLite for patient data.
+# Schema defined at potential-gods/clara/patient-crm-schema.md
+
+# ── Cron jobs (provisioned at setup) ───────────────────────────────
+# These get created during first-time setup, not baked into config.
+# crons:
+#   morning-inbox-scan: "0 8 * * 1-5"
+#   refill-check: "0 10 * * 1-5"
+#   weekly-briefing: "0 16 * * 5"
+
+# ── Prior Auth Tracking ───────────────────────────────────────────
+# Prior auth state is stored in Ichor (FTS5).
+# Each submission gets a FTS5 entry:
+#   key: prior-auth:{patient}:{med}:{date}
+#   value with: status, payer, submitted_date, response, denial_reason
+# Saved language templates live at Codex-PriorAuth/templates/saved-phrases/

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantheon Companion</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <!-- ==================== DASHBOARD VIEW (toolbar) ==================== -->
+  <div id="view-dashboard" class="view">
+    <!-- Header -->
+    <div class="header">
+      <span class="header-title">🏛️ Pantheon</span>
+      <div class="header-actions">
+        <button id="open-pantheon-dash" class="header-btn" title="Open Dashboard">↗</button>
+        <button id="open-chat" class="header-btn" title="Open Chat">💬</button>
+        <button id="dash-settings" class="header-btn" title="Settings">⚙</button>
+      </div>
+    </div>
+
+    <!-- God Roster -->
+    <div class="section">
+      <div class="section-header">
+        <span>Gods</span>
+        <span id="god-count" class="badge"></span>
+      </div>
+      <div id="god-list" class="god-list">
+        <div class="loading">Loading gods...</div>
+      </div>
+    </div>
+
+    <!-- Sessions -->
+    <div class="section" id="sessions-section">
+      <div class="section-header">
+        <span id="sessions-title">Recent Sessions</span>
+        <span id="sessions-count" class="badge"></span>
+      </div>
+      <div id="session-list" class="session-list">
+        <div class="loading">Loading sessions...</div>
+      </div>
+    </div>
+
+    <!-- System Health -->
+    <div class="section">
+      <div class="section-header">
+        <span>System Health</span>
+        <span id="health-dot" class="health-dot">●</span>
+      </div>
+      <div id="health-info" class="health-info">
+        <div class="health-row"><span>Gateway</span><span id="health-gateway">—</span></div>
+        <div class="health-row"><span>Gods Active</span><span id="health-gods">—</span></div>
+      </div>
+    </div>
+
+    <!-- Quick Capture -->
+    <div class="section">
+      <div class="section-header">
+        <span>Quick Capture</span>
+      </div>
+      <div class="quick-capture">
+        <input type="text" id="idea-input" placeholder="Capture an idea..." class="capture-input">
+        <button id="idea-send" class="capture-btn">+</button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <button id="btn-reconnect" class="footer-btn">🔄 Reconnect</button>
+      <button id="btn-forget" class="footer-btn danger">Disconnect</button>
+    </div>
+  </div>
+
+  <!-- ==================== CHAT VIEW ==================== -->
+  <div id="view-chat" class="view" hidden>
+    <div class="chat-container">
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <button id="chat-back" class="chat-header-btn" title="Back to Dashboard">←</button>
+        <span id="chat-god-name">💬 Chat</span>
+        <select id="chat-god-select" class="god-select"></select>
+        <button id="chat-clear" class="chat-header-btn" title="New conversation">+</button>
+      </div>
+
+      <!-- Messages -->
+      <div id="chat-messages" class="chat-messages">
+        <div class="chat-empty">
+          <p>Ask a god anything...</p>
+          <p class="chat-empty-hint">Select a god above and start chatting.</p>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="chat-input-area">
+        <textarea id="chat-input" class="chat-input" rows="1" placeholder="Type a message..." disabled></textarea>
+        <button id="chat-send" class="chat-send-btn" disabled>➤</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantheon Companion</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Setup View (first install) -->
+  <div id="view-setup" class="view" hidden>
+    <div class="setup-card">
+      <div class="setup-icon">🏛️</div>
+      <h1>Pantheon Companion</h1>
+      <p class="setup-desc">Enter your Pantheon instance URL to connect.</p>
+      <input type="url" id="setup-url" placeholder="https://pantheon.tail164759.ts.net" class="setup-input" autofocus>
+      <div class="setup-actions">
+        <button id="setup-connect" class="btn-primary">Connect</button>
+      </div>
+      <p id="setup-error" class="setup-error" hidden></p>
+      <p class="setup-hint">Need help? <a href="#" id="setup-help">Learn more about Pantheon</a></p>
+    </div>
+  </div>
+
+  <!-- Main View (configured) -->
+  <div id="view-main" class="view" hidden>
+    <!-- Header -->
+    <div class="header">
+      <span class="header-title">🏛️ Pantheon</span>
+      <div class="header-actions">
+        <button id="open-pantheon" class="header-btn" title="Open Pantheon">↗</button>
+        <button id="open-sidepanel" class="header-btn" title="Open Chat Side Panel">💬</button>
+        <button id="btn-settings" class="header-btn" title="Settings">⚙</button>
+      </div>
+    </div>
+
+    <!-- God Roster -->
+    <div class="section">
+      <div class="section-header">
+        <span>Gods</span>
+        <span id="god-count" class="badge"></span>
+      </div>
+      <div id="god-list" class="god-list">
+        <div class="loading">Loading gods...</div>
+      </div>
+    </div>
+
+    <!-- Sessions -->
+    <div class="section" id="sessions-section">
+      <div class="section-header">
+        <span id="sessions-title">Recent Sessions</span>
+        <span id="sessions-count" class="badge"></span>
+      </div>
+      <div id="session-list" class="session-list">
+        <div class="loading">Loading sessions...</div>
+      </div>
+    </div>
+
+    <!-- Health -->
+    <div class="section">
+      <div class="section-header">
+        <span>System Health</span>
+        <span id="health-dot" class="health-dot">●</span>
+      </div>
+      <div id="health-info" class="health-info">
+        <div class="health-row"><span>Gateway</span><span id="health-gateway">—</span></div>
+        <div class="health-row"><span>Gods Active</span><span id="health-gods">—</span></div>
+      </div>
+    </div>
+
+    <!-- Quick Capture -->
+    <div class="section">
+      <div class="section-header">
+        <span>Quick Capture</span>
+      </div>
+      <div class="quick-capture">
+        <input type="text" id="idea-input" placeholder="Capture an idea..." class="capture-input">
+        <button id="idea-send" class="capture-btn">+</button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <button id="btn-reconnect" class="footer-btn">🔄 Reconnect</button>
+      <button id="btn-forget" class="footer-btn danger">Disconnect</button>
+    </div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

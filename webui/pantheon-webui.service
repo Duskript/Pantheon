@@ -1,0 +1,25 @@
+[Unit]
+Description=Pantheon Web UI
+Documentation=https://github.com/Duskript/Pantheon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=konan
+ExecStart=/home/konan/.hermes/hermes-agent/venv/bin/python3 /home/konan/pantheon/webui/server.py
+WorkingDirectory=/home/konan/pantheon/webui
+Restart=always
+RestartSec=5
+
+# ── React UI ────────────────────────────────────────────────────
+# Serve the new React UI (hermes-ui.html) instead of the default index.
+Environment=HERMES_WEBUI_INDEX=hermes-ui.html
+
+# ── Network ─────────────────────────────────────────────────────
+# Bind to all interfaces so Tailscale can reach it.
+Environment=HERMES_WEBUI_HOST=0.0.0.0
+Environment=HERMES_WEBUI_PORT=8787
+
+[Install]
+WantedBy=default.target

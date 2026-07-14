@@ -1,0 +1,16 @@
+[Unit]
+Description=Demeter — Athenaeum file watcher and ingestion daemon
+Documentation=https://hermes-agent.nousresearch.com/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.hermes/hermes-agent/venv/bin/python3 %h/pantheon/scripts/athenaeum-ingest --watch
+WorkingDirectory=%h/pantheon
+Restart=on-failure
+RestartSec=10
+EnvironmentFile=%h/pantheon/.env
+
+[Install]
+WantedBy=default.target

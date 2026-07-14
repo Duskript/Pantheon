@@ -1,0 +1,4 @@
+name: ichor-gates
+description: "Ichor RALPH 5-Gate Harness — deterministic tool-call middleware for all gods. Enforces read-before-write (State Gate), post-write validation (Logic Gate), context pre-fetching (Intent Injection), RALPH phase tracking (Phase Detection), and handoff verification (Handoff Gate). Fires on every agent tool call via pre_tool_call/post_tool_call hooks."
+version: 1.0.0
+author: Hermes (Pantheon-Core)

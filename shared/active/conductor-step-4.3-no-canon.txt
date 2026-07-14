@@ -1,0 +1,105 @@
+# Conductor v2 Step 4.3 — NO-CANON report
+# Generated: 2026-06-15T16:30:25Z
+# Scope: ~/.hermes/profiles/<god>/skills/<cat>/<skill>/SKILL.md
+# Meaning: per-profile SKILL.md files that have no canonical twin at
+#   ~/.hermes/skills/<cat>/<skill>/SKILL.md
+# These are profile-only skills, OR canonical was moved/renamed/never existed.
+# Scope note (clarified 2026-06-15 16:50Z by operator ratification):
+#   This report contains 86 entries. Thoth QA independently re-derived the count
+#   to be 80 when applying the "discoverable skills" rule strictly (excluding
+#   .archive/ subdirs and third-party cache paths). The 6-entry gap is
+#   hephaestus .archive/ entries: capture-idea, js-regex-escaping,
+#   pantheon-god-bot-setup, pantheon-mcp-server, pantheon-system-migration,
+#   pantheon-wsl-networking. Operator ratified the 86-scope as-written; the 6
+#   .archive/ entries are flagged for a future hephaestus-only cleanup ticket
+#   (out of scope for Step 4.3).
+# Action: NONE in Step 4.3 (report-only). Operator review pending.
+# Format: profile|category|skill_name|per_profile_path|mtime|size_bytes
+apollo|creative|suno-songwriting-suite|/home/konan/.hermes/profiles/apollo/skills/creative/suno-songwriting-suite/SKILL.md|2026-06-13 12:19:18.372823291 -0600|20234
+apollo|research|arxiv|/home/konan/.hermes/profiles/apollo/skills/research/arxiv/SKILL.md|2026-04-29 11:09:40.000000000 -0600|10050
+apollo|research|blogwatcher|/home/konan/.hermes/profiles/apollo/skills/research/blogwatcher/SKILL.md|2026-04-29 11:09:40.000000000 -0600|5076
+apollo|research|llm-wiki|/home/konan/.hermes/profiles/apollo/skills/research/llm-wiki/SKILL.md|2026-04-29 11:09:40.000000000 -0600|20078
+apollo|software-development|plan|/home/konan/.hermes/profiles/apollo/skills/software-development/plan/SKILL.md|2026-04-29 11:09:40.000000000 -0600|1981
+cachyos|research|arxiv|/home/konan/.hermes/profiles/cachyos/skills/research/arxiv/SKILL.md|2026-04-29 11:09:40.000000000 -0600|10050
+cachyos|research|blogwatcher|/home/konan/.hermes/profiles/cachyos/skills/research/blogwatcher/SKILL.md|2026-04-29 11:09:40.000000000 -0600|5076
+cachyos|research|llm-wiki|/home/konan/.hermes/profiles/cachyos/skills/research/llm-wiki/SKILL.md|2026-04-29 11:09:40.000000000 -0600|20078
+cachyos|software-development|plan|/home/konan/.hermes/profiles/cachyos/skills/software-development/plan/SKILL.md|2026-04-29 11:09:40.000000000 -0600|1981
+hephaestus|.archive|capture-idea|/home/konan/.hermes/profiles/hephaestus/skills/.archive/capture-idea/SKILL.md|2026-05-01 12:38:54.000000000 -0600|3050
+hephaestus|.archive|js-regex-escaping|/home/konan/.hermes/profiles/hephaestus/skills/.archive/js-regex-escaping/SKILL.md|2026-05-02 11:51:49.000000000 -0600|1642
+hephaestus|.archive|pantheon-god-bot-setup|/home/konan/.hermes/profiles/hephaestus/skills/.archive/pantheon-god-bot-setup/SKILL.md|2026-05-01 21:05:04.000000000 -0600|13470
+hephaestus|.archive|pantheon-mcp-server|/home/konan/.hermes/profiles/hephaestus/skills/.archive/pantheon-mcp-server/SKILL.md|2026-05-02 00:44:46.000000000 -0600|13903
+hephaestus|.archive|pantheon-system-migration|/home/konan/.hermes/profiles/hephaestus/skills/.archive/pantheon-system-migration/SKILL.md|2026-05-02 14:12:46.000000000 -0600|6395
+hephaestus|.archive|pantheon-wsl-networking|/home/konan/.hermes/profiles/hephaestus/skills/.archive/pantheon-wsl-networking/SKILL.md|2026-05-01 23:51:55.000000000 -0600|7673
+hephaestus|autonomous-ai-agents|hermes-memory-provider|/home/konan/.hermes/profiles/hephaestus/skills/autonomous-ai-agents/hermes-memory-provider/SKILL.md|2026-05-26 00:19:26.576864106 -0600|31319
+hephaestus|devops|docker-container-debugging|/home/konan/.hermes/profiles/hephaestus/skills/devops/docker-container-debugging/SKILL.md|2026-06-08 11:16:37.882536655 -0600|6326
+hephaestus|documentation|api-configuration-reference|/home/konan/.hermes/profiles/hephaestus/skills/documentation/api-configuration-reference/SKILL.md|2026-04-29 15:39:43.000000000 -0600|8345
+hephaestus|pantheon|composio-cli|/home/konan/.hermes/profiles/hephaestus/skills/pantheon/composio-cli/SKILL.md|2026-05-31 23:23:46.048501889 -0600|21267
+hephaestus|pantheon|n8n-migration|/home/konan/.hermes/profiles/hephaestus/skills/pantheon/n8n-migration/SKILL.md|2026-06-08 18:59:51.743310722 -0600|60911
+hephaestus|pantheon|olympus-ui-development|/home/konan/.hermes/profiles/hephaestus/skills/pantheon/olympus-ui-development/SKILL.md|2026-06-01 15:40:09.922874228 -0600|42254
+hephaestus|pantheon|pantheon-cron-operations|/home/konan/.hermes/profiles/hephaestus/skills/pantheon/pantheon-cron-operations/SKILL.md|2026-06-04 07:30:21.431659187 -0600|9735
+hephaestus|pantheon|pantheon-god-packaging|/home/konan/.hermes/profiles/hephaestus/skills/pantheon/pantheon-god-packaging/SKILL.md|2026-06-01 09:48:31.389787312 -0600|9904
+hephaestus|pantheon|pantheon-project-ideas|/home/konan/.hermes/profiles/hephaestus/skills/pantheon/pantheon-project-ideas/SKILL.md|2026-05-26 09:02:24.473856888 -0600|4612
+hephaestus|pantheon|pantheon-sync-adapters|/home/konan/.hermes/profiles/hephaestus/skills/pantheon/pantheon-sync-adapters/SKILL.md|2026-05-31 22:17:20.410946079 -0600|13709
+hephaestus|research|arxiv|/home/konan/.hermes/profiles/hephaestus/skills/research/arxiv/SKILL.md|2026-04-29 11:09:40.000000000 -0600|10050
+hephaestus|research|blogwatcher|/home/konan/.hermes/profiles/hephaestus/skills/research/blogwatcher/SKILL.md|2026-04-29 11:09:40.000000000 -0600|5076
+hephaestus|research|llm-wiki|/home/konan/.hermes/profiles/hephaestus/skills/research/llm-wiki/SKILL.md|2026-04-29 11:09:40.000000000 -0600|20078
+hephaestus|software-development|content-ingestion-pipeline|/home/konan/.hermes/profiles/hephaestus/skills/software-development/content-ingestion-pipeline/SKILL.md|2026-05-29 00:12:57.932437826 -0600|36231
+hephaestus|software-development|memory-provider-plugin|/home/konan/.hermes/profiles/hephaestus/skills/software-development/memory-provider-plugin/SKILL.md|2026-05-26 00:14:03.719036219 -0600|17349
+hephaestus|software-development|pantheon-god-architecture|/home/konan/.hermes/profiles/hephaestus/skills/software-development/pantheon-god-architecture/SKILL.md|2026-06-05 20:20:08.381154104 -0600|84443
+hephaestus|software-development|plan|/home/konan/.hermes/profiles/hephaestus/skills/software-development/plan/SKILL.md|2026-04-29 11:09:40.000000000 -0600|1981
+hephaestus|software-development|project-archaeology|/home/konan/.hermes/profiles/hephaestus/skills/software-development/project-archaeology/SKILL.md|2026-05-30 12:15:39.712949717 -0600|25619
+hephaestus|software-development|react-drag-patterns|/home/konan/.hermes/profiles/hephaestus/skills/software-development/react-drag-patterns/SKILL.md|2026-05-26 22:27:30.975632305 -0600|10418
+hephaestus|software-development|stepwise-iteration|/home/konan/.hermes/profiles/hephaestus/skills/software-development/stepwise-iteration/SKILL.md|2026-06-09 01:41:47.494700769 -0600|16656
+hephaestus|software-development|sveltekit-static-deploy|/home/konan/.hermes/profiles/hephaestus/skills/software-development/sveltekit-static-deploy/SKILL.md|2026-05-02 08:35:30.000000000 -0600|9468
+hephaestus|software-development|webui-route-development|/home/konan/.hermes/profiles/hephaestus/skills/software-development/webui-route-development/SKILL.md|2026-06-01 13:20:17.388313674 -0600|17087
+iris|creative|branded-print-pdf|/home/konan/.hermes/profiles/iris/skills/creative/branded-print-pdf/SKILL.md|2026-06-14 21:51:11.476819105 -0600|16414
+iris|pantheon-design|brand-book|/home/konan/.hermes/profiles/iris/skills/pantheon-design/brand-book/SKILL.md|2026-06-14 15:14:08.682496850 -0600|11319
+iris|pantheon-design|branded-document-pdf|/home/konan/.hermes/profiles/iris/skills/pantheon-design/branded-document-pdf/SKILL.md|2026-06-14 23:51:12.511318626 -0600|13594
+iris|pantheon-design|branded-print-asset|/home/konan/.hermes/profiles/iris/skills/pantheon-design/branded-print-asset/SKILL.md|2026-06-12 16:06:13.972474421 -0600|10361
+iris|pantheon-design|brand-identity-intake|/home/konan/.hermes/profiles/iris/skills/pantheon-design/brand-identity-intake/SKILL.md|2026-06-12 15:59:00.719739163 -0600|25280
+iris|pantheon-design|presentation-deck-design|/home/konan/.hermes/profiles/iris/skills/pantheon-design/presentation-deck-design/SKILL.md|2026-06-12 14:26:16.530979133 -0600|19561
+iris|pantheon-design|prototype-from-copy|/home/konan/.hermes/profiles/iris/skills/pantheon-design/prototype-from-copy/SKILL.md|2026-06-15 10:27:01.158394086 -0600|37669
+iris|pantheon-design|site-element-spec|/home/konan/.hermes/profiles/iris/skills/pantheon-design/site-element-spec/SKILL.md|2026-06-14 16:07:48.669976252 -0600|19485
+iris|research|arxiv|/home/konan/.hermes/profiles/iris/skills/research/arxiv/SKILL.md|2026-04-29 11:09:40.000000000 -0600|10050
+iris|research|blogwatcher|/home/konan/.hermes/profiles/iris/skills/research/blogwatcher/SKILL.md|2026-04-29 11:09:40.000000000 -0600|5076
+iris|research|llm-wiki|/home/konan/.hermes/profiles/iris/skills/research/llm-wiki/SKILL.md|2026-04-29 11:09:40.000000000 -0600|20078
+iris|software-development|plan|/home/konan/.hermes/profiles/iris/skills/software-development/plan/SKILL.md|2026-04-29 11:09:40.000000000 -0600|1981
+marvin|build|conversational-agent-prompting|/home/konan/.hermes/profiles/marvin/skills/build/conversational-agent-prompting/SKILL.md|2026-06-08 19:21:23.289441091 -0600|26286
+marvin|devops|caddy-vhost-routing|/home/konan/.hermes/profiles/marvin/skills/devops/caddy-vhost-routing/SKILL.md|2026-06-13 18:28:44.571295868 -0600|33757
+marvin|devops|cli-subprocess-pool|/home/konan/.hermes/profiles/marvin/skills/devops/cli-subprocess-pool/SKILL.md|2026-06-11 00:25:40.938119529 -0600|44245
+marvin|devops|composio-auth-surfaces|/home/konan/.hermes/profiles/marvin/skills/devops/composio-auth-surfaces/SKILL.md|2026-06-10 19:08:01.508981523 -0600|30847
+marvin|devops|credential-pool-triage|/home/konan/.hermes/profiles/marvin/skills/devops/credential-pool-triage/SKILL.md|2026-06-15 01:13:48.772481664 -0600|7425
+marvin|devops|cross-instance-messaging-via-clawforge-messenger|/home/konan/.hermes/profiles/marvin/skills/devops/cross-instance-messaging-via-clawforge-messenger/SKILL.md|2026-06-12 15:14:17.636068816 -0600|36290
+marvin|devops|deploy-target-classification|/home/konan/.hermes/profiles/marvin/skills/devops/deploy-target-classification/SKILL.md|2026-06-09 16:22:27.637072551 -0600|22390
+marvin|devops|file-delivery-fallbacks|/home/konan/.hermes/profiles/marvin/skills/devops/file-delivery-fallbacks/SKILL.md|2026-06-12 13:42:33.381803134 -0600|17809
+marvin|devops|html-write-filter-workaround|/home/konan/.hermes/profiles/marvin/skills/devops/html-write-filter-workaround/SKILL.md|2026-06-15 01:14:52.897603773 -0600|48393
+marvin|devops|install-readiness-audit|/home/konan/.hermes/profiles/marvin/skills/devops/install-readiness-audit/SKILL.md|2026-06-12 13:51:22.001795499 -0600|3311
+marvin|devops|pantheon-frontend-architecture|/home/konan/.hermes/profiles/marvin/skills/devops/pantheon-frontend-architecture/SKILL.md|2026-06-11 10:00:41.318242035 -0600|21666
+marvin|devops|pantheon-god-configuration|/home/konan/.hermes/profiles/marvin/skills/devops/pantheon-god-configuration/SKILL.md|2026-06-15 00:29:43.397985321 -0600|97613
+marvin|devops|pantheon-memory-system|/home/konan/.hermes/profiles/marvin/skills/devops/pantheon-memory-system/SKILL.md|2026-06-15 00:30:14.876157207 -0600|31796
+marvin|devops|project-state-doc|/home/konan/.hermes/profiles/marvin/skills/devops/project-state-doc/SKILL.md|2026-06-03 13:03:43.454089896 -0600|38141
+marvin|devops|recurring-task-reliability|/home/konan/.hermes/profiles/marvin/skills/devops/recurring-task-reliability/SKILL.md|2026-06-15 00:37:20.248093135 -0600|97506
+marvin|devops|relay-7-transport|/home/konan/.hermes/profiles/marvin/skills/devops/relay-7-transport/SKILL.md|2026-06-12 14:49:31.111429886 -0600|34396
+marvin|devops|tracker-audit|/home/konan/.hermes/profiles/marvin/skills/devops/tracker-audit/SKILL.md|2026-06-13 15:24:07.207307646 -0600|2499
+marvin|devops|untracked-dirs-verify-before-delete|/home/konan/.hermes/profiles/marvin/skills/devops/untracked-dirs-verify-before-delete/SKILL.md|2026-06-11 21:42:45.147258681 -0600|29619
+marvin|workflow|early-exit-on-zero-yield|/home/konan/.hermes/profiles/marvin/skills/workflow/early-exit-on-zero-yield/SKILL.md|2026-06-15 01:27:14.183512552 -0600|29039
+marvin|workflow|fresh-problem-ask-then-chain|/home/konan/.hermes/profiles/marvin/skills/workflow/fresh-problem-ask-then-chain/SKILL.md|2026-06-15 00:38:06.030961670 -0600|33323
+marvin|workflow|multi-phase-build-plan|/home/konan/.hermes/profiles/marvin/skills/workflow/multi-phase-build-plan/SKILL.md|2026-06-11 18:42:25.597735770 -0600|69182
+rheta|pantheon|theoforge-landing-page|/home/konan/.hermes/profiles/rheta/skills/pantheon/theoforge-landing-page/SKILL.md|2026-06-14 19:58:13.138479432 -0600|19907
+thoth|devops|archon-workflow-engine|/home/konan/.hermes/profiles/thoth/skills/devops/archon-workflow-engine/SKILL.md|2026-06-11 17:56:17.448686508 -0600|15325
+thoth|pantheon-ops|composio-mcp-setup|/home/konan/.hermes/profiles/thoth/skills/pantheon-ops/composio-mcp-setup/SKILL.md|2026-06-14 20:05:51.726575748 -0600|8163
+thoth|pantheon-ops|god-runtime-operations|/home/konan/.hermes/profiles/thoth/skills/pantheon-ops/god-runtime-operations/SKILL.md|2026-06-14 23:40:00.053406417 -0600|12043
+thoth|pantheon-ops|n8n-workflow-building|/home/konan/.hermes/profiles/thoth/skills/pantheon-ops/n8n-workflow-building/SKILL.md|2026-06-08 09:48:07.393864176 -0600|7089
+thoth|research|arxiv|/home/konan/.hermes/profiles/thoth/skills/research/arxiv/SKILL.md|2026-04-29 11:09:40.000000000 -0600|10050
+thoth|research|blogwatcher|/home/konan/.hermes/profiles/thoth/skills/research/blogwatcher/SKILL.md|2026-04-29 11:09:40.000000000 -0600|5076
+thoth|research|llm-wiki|/home/konan/.hermes/profiles/thoth/skills/research/llm-wiki/SKILL.md|2026-04-29 11:09:40.000000000 -0600|20078
+thoth|software-development|plan|/home/konan/.hermes/profiles/thoth/skills/software-development/plan/SKILL.md|2026-04-29 11:09:40.000000000 -0600|1981
+thoth|thoth|audience-positioning|/home/konan/.hermes/profiles/thoth/skills/thoth/audience-positioning/SKILL.md|2026-06-14 20:06:29.893177321 -0600|49580
+thoth|thoth|build-spec-authoring|/home/konan/.hermes/profiles/thoth/skills/thoth/build-spec-authoring/SKILL.md|2026-06-15 00:20:07.344934722 -0600|87142
+thoth|thoth|thoth-codesign-brainstorm|/home/konan/.hermes/profiles/thoth/skills/thoth/thoth-codesign-brainstorm/SKILL.md|2026-06-14 20:56:12.804327161 -0600|12227
+thoth|thoth|thoth-deliverable-skill-packaging|/home/konan/.hermes/profiles/thoth/skills/thoth/thoth-deliverable-skill-packaging/SKILL.md|2026-06-15 10:17:40.225603267 -0600|33934
+thoth|thoth|thoth-entity-graph|/home/konan/.hermes/profiles/thoth/skills/thoth/thoth-entity-graph/SKILL.md|2026-06-14 23:52:53.099930975 -0600|29785
+thoth|thoth|thoth-god-prototyping|/home/konan/.hermes/profiles/thoth/skills/thoth/thoth-god-prototyping/SKILL.md|2026-06-14 14:10:22.261371776 -0600|35662
+thoth|thoth|thoth-shared-context-digest|/home/konan/.hermes/profiles/thoth/skills/thoth/thoth-shared-context-digest/SKILL.md|2026-06-15 09:42:10.006206184 -0600|49806
+# ---
+# total_no_canon: 86

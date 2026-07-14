@@ -1,0 +1,14 @@
+id: 5e30919b-63ed-4f86-a6bb-49cdb3d0e62a
+name: Untitled
+version: 0.1.0
+description: ''
+context:
+  required: []
+  optional: []
+steps:
+- id: start
+  type: trigger
+  trigger_kind: manual
+  config: {}
+  on_error:
+    on_final_failure: fail_workflow

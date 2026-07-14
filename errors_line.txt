@@ -1,0 +1,6 @@
+25:  ERROR: HTTP Error 429: Too Many Requests
+33:  ERROR: HTTP Error 429: Too Many Requests
+41:  ERROR: HTTP Error 429: Too Many Requests
+49:  ERROR: HTTP Error 429: Too Many Requests
+57:  ERROR: HTTP Error 429: Too Many Requests
+65:  ERROR: HTTP Error 429: Too Many Requests

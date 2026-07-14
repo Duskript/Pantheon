@@ -1,0 +1,30 @@
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8222:80"
+    volumes:
+      - ./data:/data
+    environment:
+      # Admin panel — set this, then use /admin to configure
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN:-changeme-pantheon-admin}
+      # Signups allowed (we'll disable after creating the admin)
+      - SIGNUPS_ALLOWED=true
+      # Org import/export
+      - ORG_IMPORT_ENABLED=true
+      # SMTP — uncomment and configure for email invites/password resets
+      # - SMTP_HOST=smtp.example.com
+      # - SMTP_FROM=vaultwarden@example.com
+      # - SMTP_PORT=587
+      # - SMTP_SECURITY=starttls
+      # - SMTP_USERNAME=youruser
+      # - SMTP_PASSWORD=yourpass
+      # WebSocket notifications for real-time sync
+      - WEBSOCKET_ENABLED=true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

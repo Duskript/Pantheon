@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""
+pantheon-uninstall — Remove a god from the Pantheon.
+
+Usage:
+    pantheon-uninstall <god-id> [--remove-codex]
+"""
+import os
+import sys
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(script_dir, "lib")
+sys.path.insert(0, lib_dir)
+
+from pantheon_sdk import (
+    get_registry,
+    registry_find,
+    is_installed,
+    remove_package,
+    remove_harness,
+    remove_inbox,
+    registry_remove,
+    remove_from_graph,
+    notify_hermes,
+    log_vault_entry,
+    print_header,
+    print_summary,
+)
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: pantheon-uninstall <god-id> [--remove-codex]")
+        sys.exit(1)
+
+    god_id = sys.argv[1].lower()
+    remove_codex_flag = "--remove-codex" in sys.argv
+
+    # ── Look up the god in the registry ───────────────────────────────
+    entries = get_registry()
+    idx, entry = registry_find(entries, god_id)
+    if idx is None:
+        print(f"Error: god '{god_id}' not found in registry.")
+        sys.exit(1)
+
+    name = entry.get("name", god_id)
+    version = entry.get("version", "unknown")
+
+    print_header(f"Uninstalling {name} v{version}")
+
+    # ── Remove from registry ──────────────────────────────────────────
+    registry_remove(god_id)
+
+    # ── Remove harness ────────────────────────────────────────────────
+    remove_harness(god_id)
+
+    # ── Remove inbox ──────────────────────────────────────────────────
+    remove_inbox(god_id)
+
+    # ── Remove package ────────────────────────────────────────────────
+    remove_package(god_id)
+
+    # ── Remove Codex (with flag) ──────────────────────────────────────
+    if remove_codex_flag:
+        from pantheon_sdk import remove_codex
+        remove_codex(god_id, name, force=True)
+
+    # ── Remove from graph ─────────────────────────────────────────────
+    remove_from_graph(god_id)
+
+    # ── Log to vault ──────────────────────────────────────────────────
+    log_vault_entry("uninstall", god_id, f"Uninstalled {name} v{version}", version=version)
+
+    # ── Notify Hermes ─────────────────────────────────────────────────
+    notify_hermes(
+        f"God removed: {name} v{version}",
+        f"A god has been removed from the Pantheon.\n\n"
+        f"**Name:** {name}\n"
+        f"**ID:** {god_id}\n"
+        f"**Version:** {version}\n",
+    )
+
+    print_summary(god_id, name, version, "uninstalled")
+    print()
+
+
+if __name__ == "__main__":
+    main()

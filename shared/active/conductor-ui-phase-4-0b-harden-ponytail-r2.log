@@ -1,0 +1,182 @@
+  ┊ review diff
+a/pantheon/pr35-d86b897-clean.mPeaMa/.qa_site/sitecustomize.py → b/pantheon/pr35-d86b897-clean.mPeaMa/.qa_site/sitecustomize.py
+@@ -0,0 +1,21 @@
++"""QA-only import shim for PR #35 isolated test run.
++
++The v2 tests' fixtures.py inserts /home/konan/pantheon/conductor at sys.path[0],
++which makes bare `from v2 ...` imports resolve to the live working tree instead
++of this exported PR head. Pre-importing v2 here pins the package __path__ to the
++clean archive before fixtures.py mutates sys.path.
++"""
++from __future__ import annotations
++
++import importlib
++import os
++import sys
++
++ARCHIVE_ROOT = os.environ.get("PR35_QA_ARCHIVE_ROOT")
++if ARCHIVE_ROOT:
++    conductor_root = f"{ARCHIVE_ROOT}/conductor"
++    if conductor_root not in sys.path:
++        sys.path.insert(0, conductor_root)
++    if ARCHIVE_ROOT not in sys.path:
++        sys.path.insert(0, ARCHIVE_ROOT)
++    importlib.import_module("v2")
+  ⟳ compacting context…
+  ⟳ compacting context…
+## GPT-5.5 Ponytail QA Verdict
+
+Verdict: FAIL
+Confidence: high
+
+### Must Fix
+
+- Missing committed regression tests for the PR #35 auth bypass.
+  - The source fix works in direct probes, but `d86b897` changed only:
+    - `conductor/v2/api_server.py`
+    - `conductor/v2/service.py`
+    - `conductor/v2/webhook.py`
+  - No test files changed since the prior failed Ponytail head `b020120`.
+  - `conductor/v2/tests/test_service.py` still has no `CONDUCTOR_API_KEY` / `.env` / service wiring auth coverage.
+  - `conductor/v2/tests/test_webhook.py` still does not cover auth-enabled `.env` fallback.
+  - This was explicitly part of the prior must-fix surface, so this cannot be accepted as a warning.
+
+- `git diff --check origin/main..HEAD` still fails.
+  - Exit code: 2.
+  - It reports trailing whitespace in:
+    - `shared/active/conductor-step-4.6-brief-2.md`
+    - `shared/active/conductor-step-4.8-brief-1.md`
+    - `shared/active/conductor-step-4.9-brief-1.md`
+    - `shared/active/conductor-step-4.9-brief-2.md`
+  - `git diff --check b020120..d86b897` is clean, so the current fix commit did not add new whitespace, but the PR as merged into `main` still carries the prior hygiene failure.
+
+- Update stale auth-contract comments/docstrings while adding the tests.
+  - `service.py` still says empty `api_key` disables auth, but the fixed behavior is now “empty/None falls through to the resolver; auth disables only when no effective key exists.”
+  - `webhook.py` has the same stale “Passing '' disables auth” wording.
+  - `api_server.py` has a stale FastAPI description saying endpoints require auth “unless started with an empty api_key.”
+  - This is small, but it sits directly beside the sentinel contract that caused the bypass, so it should be corrected with the regression tests.
+
+### Ponytail Cuts
+
+- The source fix itself is minimal and directionally right.
+  - `service.py`: `resolve_api_key(api_key if api_key else None)` closes the production service wiring path.
+  - `api_server.py`: normalizes the empty argument before binding auth state.
+  - `webhook.py`: mirrors the API-server sentinel fix.
+
+- Minor cleanup available:
+  - `api_server.py` computes `effective_api_key` around line 290 and `_effective_key` around line 324. Only `_effective_key` is used. Remove the dead duplicate.
+
+### QA / UX Bugs
+
+- None found in the reviewed non-UI surface.
+- Browser QA not run; this PR review was API/auth/server-side only.
+- FastAPI TestClient probes were run instead.
+
+### Security / Accessibility / Data Safety
+
+- Fix 1 appears to close the production service bypass.
+  - Direct probe with process env unset and only a fake `.env` key:
+    - `ConductorService(..., api_key="").api_key` resolved to the fake file key.
+    - This means `service.py` no longer passes `""` through to `LiveStreamServer` in the normal daemon path.
+
+- Fix 2 appears correct.
+  - `/health` under `.env`-only auth returned:
+    - status `200`
+    - `auth: "required"`
+  - Protected API behavior under the same config:
+    - no token: `401`
+    - correct token: `200`
+    - wrong token: `403`
+
+- Fix 3 appears correct.
+  - `webhook.py:make_app` contains a single normalized binding:
+    - `set_expected_api_key(api_key if api_key else None)`
+  - Direct webhook probe under `.env`-only auth:
+    - no token: `401`
+    - correct token: `202`
+    - wrong token: `403`
+
+- Tier-1 script still flags `auth.py:370`:
+  - `expected_key = expected if expected is not None else resolve_api_key()`
+  - I do not treat that line itself as the blocker under the current documented contract: `None = fall through`, explicit empty string = disabled. The production service path now normalizes empty to `None` before live-stream wiring.
+  - Caveat: direct `LiveStreamServer(api_key="")` still disables auth even when `.env` has a key; `LiveStreamServer()` with default `None` resolves `.env` correctly. Current production caller is `service.py`, so this is not the same bypass anymore.
+
+- Broader 57-file substrate:
+  - No fresh security/data-loss blocker found in the static pass.
+  - But full `conductor/v2/tests` cannot collect from a clean git checkout because several pre-existing tests import `conductor.conductor_server`, which is not tracked in the clean PR checkout. That means any “full suite passed” claim must be scoped carefully; the clean evidence here is the targeted 58-test auth/API/webhook/live-stream suite plus direct probes.
+
+### Tests to Add
+
+- Add a committed service regression test:
+  - Patch `_HERMES_ENV_CANDIDATES` to a temp `.env`.
+  - Unset `CONDUCTOR_API_KEY` and `CONDUCTOR_WS_API_KEY`.
+  - Instantiate `ConductorService(enable_nats=False, enable_webhook=False, enable_api=False, api_key="")`.
+  - Assert `service.api_key` resolves to the file key, not `""`.
+
+- Add a service wiring regression test if feasible:
+  - Prove `ConductorService.start()` wires `LiveStreamServer(api_key=<resolved non-empty key>)`, not `api_key=""`.
+  - This can be done with monkeypatching/stubbing rather than starting real network services.
+
+- Add an API health regression test:
+  - `.env`-only key.
+  - `make_app(api_key="")`.
+  - Assert `/health` returns `auth: "required"`.
+
+- Add a webhook auth fallback regression test:
+  - `.env`-only key.
+  - `webhook.make_app(api_key="")`.
+  - Assert no token is rejected and correct token is accepted.
+
+- Clean the trailing whitespace reported by `git diff --check origin/main..HEAD`.
+
+### Evidence Reviewed
+
+- Spec / acceptance criteria:
+  - Prior Ponytail findings on head `b020120`.
+  - Claimed fixes in `d86b897`.
+  - Required verification checklist from the user prompt.
+
+- Marvin handoff:
+  - Claimed source fixes for `service.py`, `api_server.py`, and `webhook.py`.
+  - Claimed 58/58 passing targeted tests.
+  - Claimed PR title/body rewrite.
+  - Claimed trailing whitespace not yet cleaned.
+
+- Diff / files:
+  - Clean worktree: `/home/konan/pantheon/pr35-gitworktree-d86b897`
+  - HEAD: `d86b897ce37fe04dc744a9579bb0894a1f82eb29`
+  - Base: `origin/main` at `b03c06c65c90ca6195af72dd711b6bad2ca61a2b`
+  - PR metadata from GitHub:
+    - title: `Phase 4 (4.5 → 4.0b) + uce-v0.3 D1: merge to main`
+    - changed files: `57`
+    - additions: `15556`
+    - deletions: `66`
+    - head OID matches `d86b897ce37fe04dc744a9579bb0894a1f82eb29`
+  - `git diff --name-only b020120..d86b897` showed only 3 source files changed and no tests.
+
+- Verification output:
+  - Targeted suite:
+    - Command: `pytest test_api_server.py test_webhook.py test_live_stream.py -q`
+    - Result: `58 passed, 3 warnings in 4.72s`
+  - `git diff --check b020120..d86b897`:
+    - Result: clean.
+  - `git diff --check origin/main..HEAD`:
+    - Result: failed with trailing whitespace.
+  - Tier-1 script:
+    - Command: `bash .../pr-base-vs-working-tree.sh origin/main HEAD`
+    - Result: flagged auth sentinel candidate, module-load `app = make_app()` candidate, and scope drift; exit 1.
+  - Direct probes:
+    - Service `.env`-only auth resolution passed.
+    - API `/health` effective auth reporting passed.
+    - Default import `api_server.app` under `.env`-only auth enforced auth.
+    - Webhook `.env`-only auth enforcement passed.
+    - No-env `resolve_api_key(None)` returned `""`, preserving intentional dev/test disabled-auth mode.
+
+- Browser/app checks:
+  - Browser not run; no UI flow changed in the reviewed fix.
+  - FastAPI TestClient probes covered the auth behavior.
+
+### Decision for Hephaestus
+
+- Return to Marvin.
+- Reason: The code-level auth bypass is fixed by direct evidence, but the PR still fails the gate because the prior must-fix regression coverage was not committed, the PR still fails `git diff --check origin/main..HEAD`, and nearby auth-contract docs remain stale. Add the regression tests, clean whitespace, update the stale comments/docstrings, then rerun Tier-1 and Ponytail on the new head SHA.

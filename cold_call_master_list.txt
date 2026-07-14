@@ -1,0 +1,38 @@
+POCATELLO AREA COLD CALL MASTER LIST
+====================================
+Compiled: 2026-07-02 | Target: 100 calls
+
+CATEGORY                    PHONES  PRIORITY
+─────────────────────────────────────────────
+Medical Practices            48+    🔥 HIGHEST
+Insurance Agencies           28+    🔥 HIGH
+CPA/Accounting Firms         27+    ✅ HIGH
+Real Estate Agencies         15+    ✅ MEDIUM
+Auto Repair Shops            18+    ✅ MEDIUM
+Law Firms                    20+    ✅ MEDIUM
+─────────────────────────────────────────────
+TOTAL                       ~156+
+
+Files with full data (read before calling):
+  cat /home/konan/medical_practices_pocatello_region.md | less
+  cat /home/konan/insurance_agencies_pocatello_area.md | less
+  cat /home/konan/pocatello_area_cpa_firms.txt | less
+  cat /home/konan/real_estate_agencies_pocatello_area.md | less
+  cat /home/konan/business_leads_pocatello_area.md | less
+  cat /home/konan/dental_offices_research.csv (if exists)
+
+QUICK SCRIPT:
+"Hi [name], this is [your name]. I'm a local tech consultant in Pocatello.
+I help small businesses cut down paperwork and manual data entry using AI
+automation. I'm offering a free 15-min consultation. Do you have time this week?"
+
+PRIORITY ORDER:
+1. Medical (highest pain point — ask about prior auth / renewals)
+2. Insurance (client follow-up / policy tracking)
+3. CPA (document collection)
+4. Everything else
+
+PACE YOURSELF:
+- 100 calls = ~5 hours (3 min per call including dial + notes)
+- Best time: 9-11am and 2-4pm
+- Leave voicemail if no answer. Call back next day.

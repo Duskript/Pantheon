@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""
+pantheon-import-claude — Import Claude.ai export into the Athenaeum.
+
+Usage:
+    pantheon-import-claude <export.zip> [--dry-run] [--skip-existing]
+
+Routes conversations to the appropriate Codex:
+  - Lyric Smith / style / song craft    → Codex-Apollo/methodology/
+  - Lyrics, songs, Suno, SKC           → Codex-SKC/claude/
+  - Work (Jira, IT, helpdesk)          → Codex-Work/claude/
+  - Tech / homelab / networking         → Codex-Infrastructure/claude/
+  - Everything else                     → Codex-Claude/conversations/YYYY-MM/
+
+Projects (system prompts) are filed as reference docs in their relevant Codex.
+"""
+import json
+import os
+import sys
+import zipfile
+from datetime import datetime
+from collections import Counter
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(script_dir, "lib")
+if lib_dir not in sys.path:
+    sys.path.insert(0, lib_dir)
+
+from claude_import import (
+    ATHENAEUM_DIR,
+    classify_conversation,
+    classify_project,
+    sanitize_filename,
+    conversation_to_markdown,
+    safe_write,
+    get_existing_uuids,
+)
+
+
+# ── Codex name normalization ─────────────────────────────────────────
+
+CODEX_NAMES = {
+    "apollo": "Apollo",
+    "skc": "SKC",
+    "work": "Work",
+    "infrastructure": "Infrastructure",
+    "claude": "Claude",
+}
+
+
+def normalize_codex(raw: str) -> str:
+    """Map classifier output to proper Codex directory name."""
+    return CODEX_NAMES.get(raw.lower(), raw.capitalize())
+
+
+def get_subfolder(base_codex: str, conv: dict) -> str:
+    """Determine the subfolder within a Codex for a conversation."""
+    subfolder_map = {
+        "apollo": "methodology",
+        "skc": "claude",
+        "work": "claude",
+        "infrastructure": "claude",
+    }
+    if base_codex.lower() in subfolder_map:
+        return subfolder_map[base_codex.lower()]
+    # Claude default — organize by month
+    try:
+        created = conv.get("created_at", "")
+        dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+        return f"conversations/{dt.strftime('%Y-%m')}"
+    except Exception:
+        return "conversations/unknown"
+
+
+def get_project_subfolder(codex: str) -> str:
+    """Projects go in reference/ for all Codices."""
+    return "reference"
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: pantheon-import-claude <export.zip> [--dry-run] [--skip-existing]")
+        print("\nOptions:")
+        print("  --dry-run        Preview what would be imported without writing anything")
+        print("  --skip-existing  Skip conversations already imported (matched by UUID)")
+        sys.exit(1)
+
+    zip_path = os.path.abspath(sys.argv[1])
+    dry_run = "--dry-run" in sys.argv
+    skip_existing = "--skip-existing" in sys.argv
+
+    if not os.path.isfile(zip_path):
+        print(f"Error: file not found: {zip_path}")
+        sys.exit(1)
+
+    if dry_run:
+        print("\n  DRY RUN — no files will be written\n")
+
+    try:
+        zf = zipfile.ZipFile(zip_path)
+    except zipfile.BadZipFile:
+        print(f"Error: not a valid zip file: {zip_path}")
+        sys.exit(1)
+
+    print(f"\n{'─' * 50}")
+    print(f"  Claude Import Tool")
+    print(f"{'─' * 50}")
+    print(f"  Source: {zip_path}")
+    print(f"  Dry run: {'yes' if dry_run else 'no'}")
+    print(f"  Skip existing: {'yes' if skip_existing else 'no'}")
+    print()
+
+    # ── Check existing UUIDs if skipping ─────────────────────────────
+    existing_uuids = set()
+    if skip_existing:
+        for codex_name in ["Codex-Apollo", "Codex-SKC", "Codex-Work",
+                           "Codex-Infrastructure", "Codex-Claude"]:
+            codex_dir = os.path.join(ATHENAEUM_DIR, codex_name)
+            existing_uuids |= get_existing_uuids(codex_dir)
+        if existing_uuids:
+            print(f"  Found {len(existing_uuids)} previously imported UUIDS, will skip")
+
+    # ── Parse users.json ──────────────────────────────────────────────
+    try:
+        with zf.open("users.json") as f:
+            users = json.load(f)
+        if not dry_run:
+            user_file = os.path.join(
+                ATHENAEUM_DIR, "Codex-User", "profile", "claude-user.json"
+            )
+            safe_write(user_file, json.dumps(users, indent=2))
+        print(f"  ✅ Users: {len(users)} user(s)")
+    except KeyError:
+        print("  ⚠️  No users.json found")
+
+    # ── Parse memories.json ──────────────────────────────────────────
+    try:
+        with zf.open("memories.json") as f:
+            memories = json.load(f)
+        if memories:
+            mem = memories[0]
+            mem_text = mem.get("conversations_memory", "")
+            if mem_text:
+                mem_path = os.path.join(
+                    ATHENAEUM_DIR, "Codex-User", "profile", "claude-profile.md"
+                )
+                if not dry_run:
+                    safe_write(mem_path, f"# Claude Memory Profile\n\n"
+                                f"**Source:** claude.ai export\n"
+                                f"**Exported:** {datetime.now().strftime('%Y-%m-%d')}\n\n"
+                                f"---\n\n{mem_text}")
+                print(f"  ✅ Memories: profile saved to Codex-User/profile/")
+    except KeyError:
+        print("  ⚠️  No memories.json found")
+
+    # ── Parse projects.json ──────────────────────────────────────────
+    projects_imported = Counter()
+    try:
+        with zf.open("projects.json") as f:
+            projects = json.load(f)
+
+        for proj in projects:
+            name = proj.get("name", "Unknown Project")
+            prompt = proj.get("prompt_template", "")
+            description = proj.get("description", "")
+            codex_name = normalize_codex(classify_project(name))
+
+            if not dry_run:
+                codex_dir = os.path.join(ATHENAEUM_DIR, f"Codex-{codex_name}")
+                slug = sanitize_filename(name)[:40]
+                proj_file = os.path.join(
+                    codex_dir, "reference", f"project--{slug}.md"
+                )
+                safe_write(proj_file,
+                    f"# {name}\n\n"
+                    f"**Source:** claude.ai export\n"
+                    f"**Type:** Project\n\n"
+                    f"---\n\n"
+                    + (f"{description}\n\n---\n\n" if description else "")
+                    + f"## System Prompt\n\n```\n{prompt}\n```\n"
+                )
+
+            projects_imported[codex_name] += 1
+
+        print(f"  ✅ Projects: {len(projects)} imported")
+        for codex, count in sorted(projects_imported.most_common()):
+            print(f"     {count:3d} → Codex-{codex}/reference/")
+    except KeyError:
+        print("  ⚠️  No projects.json found")
+
+    # ── Parse conversations.json ─────────────────────────────────────
+    conversations_imported = Counter()
+    skipped_count = 0
+
+    try:
+        with zf.open("conversations.json") as f:
+            raw_data = json.load(f)
+
+        conversations = raw_data if isinstance(raw_data, list) else raw_data.get("conversations", [])
+        print(f"  📝 Conversations: {len(conversations)} total")
+
+        for conv in conversations:
+            name = conv.get("name", "Untitled")
+            uuid = conv.get("uuid", "unknown")
+            summary = conv.get("summary", "")
+            messages = conv.get("chat_messages", [])
+
+            if not messages:
+                continue
+            if skip_existing and uuid in existing_uuids:
+                skipped_count += 1
+                continue
+
+            # Build text for classification
+            messages_text = " ".join(
+                m.get("text", "") for m in messages[:10] if m.get("text")
+            )
+
+            # Detect Lyric Smith conversations → Apollo methodology
+            text_lower = f"{name} {summary} {messages_text}".lower()
+            is_lyric_smith = any(
+                kw in text_lower
+                for kw in ["lyric smith", "lyricist v", "lyric craft"]
+            )
+
+            if is_lyric_smith:
+                base_codex = "apollo"
+            else:
+                base_codex = classify_conversation(name, summary, messages_text)
+
+            codex_name = normalize_codex(base_codex)
+            subfolder = get_subfolder(base_codex, conv)
+            markdown = conversation_to_markdown(conv)
+
+            slug = sanitize_filename(name)
+            short_uuid = uuid.split("-")[0] if uuid and uuid != "unknown" else uuid[:8]
+            filename = f"{slug}--{short_uuid}.md"
+
+            if not dry_run:
+                filepath = os.path.join(
+                    ATHENAEUM_DIR, f"Codex-{codex_name}", subfolder, filename
+                )
+                safe_write(filepath, markdown)
+
+            conversations_imported[codex_name] += 1
+
+    except KeyError:
+        print("  ⚠️  No conversations.json found")
+
+    zf.close()
+
+    # ── Summary ────────────────────────────────────────────────────────────
+    print(f"\n{'─' * 50}")
+    print(f"  Summary")
+    print(f"{'─' * 50}")
+
+    if skipped_count:
+        print(f"  Skipped (already imported): {skipped_count}")
+
+    if conversations_imported:
+        print(f"\n  Conversations:")
+        for codex, count in sorted(conversations_imported.most_common()):
+            print(f"     {count:3d} → Codex-{codex}/")
+
+    print(f"\n  Projects (as reference docs):")
+    for codex, count in sorted(projects_imported.most_common()):
+        print(f"     {count:3d} → Codex-{codex}/reference/")
+
+    print(f"\n  Memories: Codex-User/profile/claude-profile.md")
+
+    if dry_run:
+        print(f"\n  ✅ DRY RUN — no files written")
+    else:
+        print(f"\n  ✅ Import complete!")
+        print(f"  Run 'athenaeum-ingest --bulk ~/athenaeum/' to embed new content")
+
+
+if __name__ == "__main__":
+    main()

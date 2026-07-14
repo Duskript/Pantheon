@@ -1,0 +1,315 @@
+- main [ref=e2]:
+  - generic [ref=e5]:
+    - generic [ref=e8]:
+      - link "Google Antigravity" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e11]
+      - generic [ref=e54]:
+        - navigation [ref=e55] [cursor=pointer]:
+          - button "Product" [ref=e58]:
+            - text: Product
+            - generic [ref=e59]: keyboard_arrow_down
+          - button "Use Cases" [ref=e62]:
+            - text: Use Cases
+            - generic [ref=e63]: keyboard_arrow_down
+          - button "Pricing" [expanded] [ref=e66]
+          - button "Blog" [expanded] [ref=e69]
+          - button "Resources" [ref=e72]:
+            - text: Resources
+            - generic [ref=e73]: keyboard_arrow_down
+        - button "Download download" [ref=e75] [cursor=pointer]:
+          - text: Download
+          - generic [ref=e76]: download
+    - generic [ref=e78]:
+      - navigation "Documentation navigation" [ref=e81]:
+        - link "Home" [ref=e83] [cursor=pointer]:
+          - /url: /docs/home
+          - generic [ref=e84]: Home
+        - generic [ref=e86]:
+          - generic [ref=e87] [cursor=pointer]: Antigravity 2.0
+          - generic [ref=e88] [cursor=pointer]: expand_more
+        - link "Overview" [ref=e90] [cursor=pointer]:
+          - /url: /docs/overview
+          - generic [ref=e91]: Overview
+        - link "Getting Started" [ref=e93] [cursor=pointer]:
+          - /url: /docs/getting-started
+          - generic [ref=e94]: Getting Started
+        - link "Build with Google" [ref=e96] [cursor=pointer]:
+          - /url: /docs/build-with-google
+          - generic [ref=e97]: Build with Google
+        - link "Features" [ref=e99] [cursor=pointer]:
+          - /url: /docs/features
+          - generic [ref=e100]: Features
+        - generic [ref=e102]:
+          - generic [ref=e103] [cursor=pointer]: Antigravity CLI
+          - generic [ref=e104] [cursor=pointer]: expand_more
+        - link "Overview" [ref=e106] [cursor=pointer]:
+          - /url: /docs/cli-overview
+          - generic [ref=e107]: Overview
+        - link "Getting Started" [ref=e109] [cursor=pointer]:
+          - /url: /docs/cli-getting-started
+          - generic [ref=e110]: Getting Started
+        - link "Using AGY CLI" [ref=e112] [cursor=pointer]:
+          - /url: /docs/cli-using
+          - generic [ref=e113]: Using AGY CLI
+        - link "Features" [ref=e115] [cursor=pointer]:
+          - /url: /docs/cli-features
+          - generic [ref=e116]: Features
+        - link "Migration" [ref=e118] [cursor=pointer]:
+          - /url: /docs/gcli-migration
+          - generic [ref=e119]: Migration
+        - generic [ref=e121]:
+          - generic [ref=e122] [cursor=pointer]: Antigravity SDK
+          - generic [ref=e123] [cursor=pointer]: expand_more
+        - link "Overview + Quick Start" [ref=e125] [cursor=pointer]:
+          - /url: /docs/sdk-overview
+          - generic [ref=e126]: Overview + Quick Start
+        - generic [ref=e128]:
+          - generic [ref=e129] [cursor=pointer]: Antigravity IDE
+          - generic [ref=e130] [cursor=pointer]: expand_more
+        - link "Overview" [ref=e132] [cursor=pointer]:
+          - /url: /docs/ide-overview
+          - generic [ref=e133]: Overview
+        - link "Getting Started" [ref=e135] [cursor=pointer]:
+          - /url: /docs/ide-getting-started
+          - generic [ref=e136]: Getting Started
+        - link "Firebase Studio Migration" [ref=e138] [cursor=pointer]:
+          - /url: /docs/firebase-studio-migration
+          - generic [ref=e139]: Firebase Studio Migration
+        - link "Editor expand_more" [ref=e141] [cursor=pointer]:
+          - /url: /docs/editor
+          - generic [ref=e142]: Editor
+          - generic [ref=e143]: expand_more
+        - link "Tab" [ref=e145] [cursor=pointer]:
+          - /url: /docs/tab
+          - generic [ref=e146]: Tab
+        - link "Command" [ref=e148] [cursor=pointer]:
+          - /url: /docs/command
+          - generic [ref=e149]: Command
+        - link "Side Panel" [ref=e151] [cursor=pointer]:
+          - /url: /docs/agent-side-panel
+          - generic [ref=e152]: Side Panel
+        - link "Review Changes" [ref=e154] [cursor=pointer]:
+          - /url: /docs/review-changes-editor
+          - generic [ref=e155]: Review Changes
+        - generic [ref=e157]:
+          - generic [ref=e158] [cursor=pointer]: Core Concepts & Features
+          - generic [ref=e159] [cursor=pointer]: expand_more
+        - link "Projects" [ref=e161] [cursor=pointer]:
+          - /url: /docs/projects
+          - generic [ref=e162]: Projects
+        - generic [ref=e164]:
+          - generic [ref=e165] [cursor=pointer]: Agent Capabilities
+          - generic [ref=e166] [cursor=pointer]: expand_more
+        - link "Models" [ref=e168] [cursor=pointer]:
+          - /url: /docs/models
+          - generic [ref=e169]: Models
+        - link "Agent Settings" [ref=e171] [cursor=pointer]:
+          - /url: /docs/agent-settings
+          - generic [ref=e172]: Agent Settings
+        - link "Artifact Review" [ref=e174] [cursor=pointer]:
+          - /url: /docs/artifact-review
+          - generic [ref=e175]: Artifact Review
+        - link "Permissions" [ref=e177] [cursor=pointer]:
+          - /url: /docs/permissions
+          - generic [ref=e178]: Permissions
+        - link "Subagents" [ref=e180] [cursor=pointer]:
+          - /url: /docs/subagents
+          - generic [ref=e181]: Subagents
+        - link "Strict Mode" [ref=e183] [cursor=pointer]:
+          - /url: /docs/strict-mode
+          - generic [ref=e184]: Strict Mode
+        - generic [ref=e186]:
+          - generic [ref=e187] [cursor=pointer]: Tools & Extensions
+          - generic [ref=e188] [cursor=pointer]: expand_more
+        - link "Plugins" [ref=e190] [cursor=pointer]:
+          - /url: /docs/plugins
+          - generic [ref=e191]: Plugins
+        - link "MCP" [ref=e193] [cursor=pointer]:
+          - /url: /docs/mcp
+          - generic [ref=e194]: MCP
+        - link "Skills" [ref=e196] [cursor=pointer]:
+          - /url: /docs/skills
+          - generic [ref=e197]: Skills
+        - link "Rules" [ref=e199] [cursor=pointer]:
+          - /url: /docs/rules-workflows
+          - generic [ref=e200]: Rules
+        - link "Hooks" [ref=e202] [cursor=pointer]:
+          - /url: /docs/hooks
+          - generic [ref=e203]: Hooks
+        - link "Sidecars" [ref=e205] [cursor=pointer]:
+          - /url: /docs/sidecars
+          - generic [ref=e206]: Sidecars
+        - link "Artifacts expand_more" [ref=e208] [cursor=pointer]:
+          - /url: /docs/artifacts
+          - generic [ref=e209]: Artifacts
+          - generic [ref=e210]: expand_more
+        - link "Task List" [ref=e212] [cursor=pointer]:
+          - /url: /docs/task-list
+          - generic [ref=e213]: Task List
+        - link "Plan" [ref=e215] [cursor=pointer]:
+          - /url: /docs/implementation-plan
+          - generic [ref=e216]: Plan
+        - link "Walkthrough" [ref=e218] [cursor=pointer]:
+          - /url: /docs/walkthrough
+          - generic [ref=e219]: Walkthrough
+        - link "Screenshots" [ref=e221] [cursor=pointer]:
+          - /url: /docs/screenshots
+          - generic [ref=e222]: Screenshots
+        - link "Browser Recordings" [ref=e224] [cursor=pointer]:
+          - /url: /docs/browser-recordings
+          - generic [ref=e225]: Browser Recordings
+        - link "Knowledge Items" [ref=e227] [cursor=pointer]:
+          - /url: /docs/knowledge
+          - generic [ref=e228]: Knowledge Items
+        - link "Agent Manager expand_more" [ref=e230] [cursor=pointer]:
+          - /url: /docs/agent-manager
+          - generic [ref=e231]: Agent Manager
+          - generic [ref=e232]: expand_more
+        - link "Workspaces expand_more" [ref=e234] [cursor=pointer]:
+          - /url: /docs/workspaces
+          - generic [ref=e235]: Workspaces
+          - generic [ref=e236]: expand_more
+        - link "Playground" [ref=e238] [cursor=pointer]:
+          - /url: /docs/playground
+          - generic [ref=e239]: Playground
+        - link "Inbox" [ref=e241] [cursor=pointer]:
+          - /url: /docs/inbox
+          - generic [ref=e242]: Inbox
+        - link "Conversation View expand_more" [ref=e244] [cursor=pointer]:
+          - /url: /docs/conversation-view
+          - generic [ref=e245]: Conversation View
+          - generic [ref=e246]: expand_more
+        - link "Browser Subagent View" [ref=e248] [cursor=pointer]:
+          - /url: /docs/browser-subagent-view
+          - generic [ref=e249]: Browser Subagent View
+        - link "Panes" [ref=e251] [cursor=pointer]:
+          - /url: /docs/panes
+          - generic [ref=e252]: Panes
+        - link "Review Changes + Source Control" [ref=e254] [cursor=pointer]:
+          - /url: /docs/review-changes-manager
+          - generic [ref=e255]: Review Changes + Source Control
+        - link "Changes Sidebar" [ref=e257] [cursor=pointer]:
+          - /url: /docs/changes-sidebar
+          - generic [ref=e258]: Changes Sidebar
+        - link "Terminal" [ref=e260] [cursor=pointer]:
+          - /url: /docs/terminal
+          - generic [ref=e261]: Terminal
+        - link "Files" [ref=e263] [cursor=pointer]:
+          - /url: /docs/files
+          - generic [ref=e264]: Files
+        - link "Browser expand_more" [ref=e266] [cursor=pointer]:
+          - /url: /docs/browser
+          - generic [ref=e267]: Browser
+          - generic [ref=e268]: expand_more
+        - link "Allowlist / Denylist" [ref=e270] [cursor=pointer]:
+          - /url: /docs/allowlist-denylist
+          - generic [ref=e271]: Allowlist / Denylist
+        - link "Separate Chrome Profile" [ref=e273] [cursor=pointer]:
+          - /url: /docs/separate-chrome-profile
+          - generic [ref=e274]: Separate Chrome Profile
+        - link "Enterprise" [ref=e276] [cursor=pointer]:
+          - /url: /docs/enterprise
+          - generic [ref=e277]: Enterprise
+        - link "Plans" [ref=e279] [cursor=pointer]:
+          - /url: /docs/plans
+          - generic [ref=e280]: Plans
+        - link "Settings" [ref=e282] [cursor=pointer]:
+          - /url: /docs/settings
+          - generic [ref=e283]: Settings
+        - link "FAQ" [ref=e285] [cursor=pointer]:
+          - /url: /docs/faq
+          - generic [ref=e286]: FAQ
+      - generic [ref=e287]:
+        - list [ref=e288] [cursor=pointer]:
+          - listitem [ref=e289]: Antigravity CLI
+          - generic [ref=e290]: ">"
+          - listitem [ref=e291]: Overview
+        - heading "Antigravity CLI Overview" [level=1] [ref=e293]
+        - paragraph [ref=e295]: The Antigravity CLI is the lightweight Terminal User Interface (TUI) surface of Antigravity. It brings the same core agentic capabilities as Antigravity 2.0—including multi-step reasoning, multi-file editing, tool calling, and conversation history—directly to your terminal.
+        - paragraph [ref=e297]: The CLI is the ideal tool for keyboard-centric developers and remote SSH workflows, optimized for speed and low resource overhead.
+        - 'heading "Philosophical Split: CLI vs. Antigravity 2.0" [level=3] [ref=e299]'
+        - paragraph [ref=e301]: Antigravity CLI complements Antigravity 2.0 as a terminal-first alternative.
+        - list [ref=e303]:
+          - listitem [ref=e304]:
+            - generic [ref=e305]:
+              - strong [ref=e306]: CLI
+              - text: ":"
+            - text: Optimized for speed, keyboard efficiency, and low overhead.
+          - listitem [ref=e307]:
+            - generic [ref=e308]:
+              - strong [ref=e309]: Antigravity 2.0
+              - text: ":"
+            - text: Optimized for comprehensiveness, visual orchestration, and project management.
+        - paragraph [ref=e311]:
+          - strong [ref=e312]: Integration Features
+        - list [ref=e314]:
+          - listitem [ref=e315]:
+            - generic [ref=e316]:
+              - strong [ref=e317]: Shared Agent Harness
+              - text: ":"
+            - text: Both products run on the same core agent engine. Any improvements to reasoning or tool use automatically apply to both.
+          - listitem [ref=e318]:
+            - generic [ref=e319]:
+              - strong [ref=e320]: Shared Settings
+              - text: ":"
+            - text: Core preferences and permissions are shared. Changing a setting in the CLI updates it in the Antigravity, and vice versa.
+          - listitem [ref=e321]:
+            - generic [ref=e322]:
+              - strong [ref=e323]: Conversation Export
+              - text: ":"
+            - text: While conversations are separate by default, you can easily export a CLI conversation to Antigravity 2.0 to continue with the agent-first interface.
+        - heading "Getting Started & Migration" [level=3] [ref=e325]
+        - paragraph [ref=e327]:
+          - text: To install the CLI, follow the
+          - link "Installation Guide" [ref=e328] [cursor=pointer]:
+            - /url: /docs/cli-getting-started
+          - text: .
+        - heading "Migrating from Gemini CLI" [level=3] [ref=e330]
+        - paragraph [ref=e332]:
+          - text: If you are transitioning from Gemini CLI, the onboarding process supports a one-time import to automatically migrate your existing Gemini CLI extensions, skills, and settings. To learn more, read
+          - link "Migrating from Gemini CLI" [ref=e333] [cursor=pointer]:
+            - /url: /docs/gcli-migration
+          - text: .
+        - heading "Deep Dives & References" [level=3] [ref=e335]
+        - paragraph [ref=e337]: "For detailed instructions on specific features, refer to the following guides:"
+        - list [ref=e339]:
+          - listitem [ref=e340]:
+            - generic [ref=e341]:
+              - strong [ref=e342]:
+                - link "Getting Started" [ref=e343] [cursor=pointer]:
+                  - /url: /docs/cli-getting-started
+              - text: ":"
+            - text: Details on silent keyring sign-in and remote SSH session auth.
+          - listitem [ref=e344]:
+            - generic [ref=e345]:
+              - strong [ref=e346]:
+                - link "Using AGY CLI" [ref=e347] [cursor=pointer]:
+                  - /url: /docs/cli-using
+              - text: ":"
+            - text: Learn about slash commands, configuration settings, and default keybindings.
+          - listitem [ref=e348]:
+            - generic [ref=e349]:
+              - strong [ref=e350]:
+                - link "Features" [ref=e351] [cursor=pointer]:
+                  - /url: /docs/cli-features
+              - text: ":"
+            - text: Learn how the agent delegates parallel background tasks, how to use fast-path approvals, and other advanced capabilities.
+          - listitem [ref=e352]:
+            - generic [ref=e353]:
+              - strong [ref=e354]:
+                - link "Tools & Extensions" [ref=e355] [cursor=pointer]:
+                  - /url: /docs/plugins
+              - text: ":"
+            - text: Reference for installing, enabling, and managing third-party skills and MCP servers.
+        - navigation [ref=e356]:
+          - link "keyboard_arrow_left Features" [ref=e358] [cursor=pointer]:
+            - /url: /docs/features
+          - link "Getting Started keyboard_arrow_right" [ref=e360] [cursor=pointer]:
+            - /url: /docs/cli-getting-started
+      - generic [ref=e362]:
+        - generic [ref=e363]: On this Page
+        - navigation [ref=e364]:
+          - list [ref=e366]:
+            - listitem [ref=e368] [cursor=pointer]:
+              - generic [ref=e369]: Antigravity CLI Overview

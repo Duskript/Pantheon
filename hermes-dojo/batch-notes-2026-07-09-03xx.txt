@@ -1,0 +1,25 @@
+# Dojo Crystallization Batch — 2026-07-09 03:XX UTC
+
+**Scanner:** python3 /home/konan/pantheon/hermes-dojo/scripts/skill_crystallization.py
+**Count:** 20 candidates
+**Pre-flight:** consecutive_none=0 (below 50, proceeding)
+**Session type:** Cron (god=default)
+
+## Candidate Cluster Analysis
+
+| Cluster | # | Noise Pattern | Rationale |
+|---------|---|---------------|-----------|
+| Slack tool rediscovery | 4,5,6,9,12,15,19,20 (8) | #14 — Tool Rediscovery Confirmations | "Re-ran Slack tool discovery" — already covered by slack-auth-recovery |
+| Slack invalid_auth | 8,11,14,18 (4) | #1 — Bug-Fix Confirmations | Bot token stale/wrong — already covered by slack-auth-recovery |
+| Bot handoff channels | 7,10,13,17 (4) | #7 — Architecture Observations | "No separate handoff channels needed" — already covered by multi-agent-channel-routing |
+| Truncated fragments | 1,2,3 (3) | #10 — Truncated Conversation Fragments | Mid-sentence Hephaestus/Apollo config text |
+| Partial overlap | 16 (1) | #14 — Variant | Tool rediscovery with different wording |
+
+## Decision
+
+**Skills created: 0.** All 20 candidates are known noise patterns. This is the same batch documented at `references/batch-2026-07-09-0211-stuck-candidates.md` — recurrence of the same 20 candidates from the Slack debugging sessions.
+
+**[SILENT] conditions met:**
+1. ✅ All candidates cluster into existing noise patterns
+2. ✅ All have trust=50.00, importance=80.00 (flat floor)
+3. ✅ All from god=default

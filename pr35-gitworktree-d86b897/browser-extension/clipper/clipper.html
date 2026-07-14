@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantheon Clipper</title>
+  <link rel="stylesheet" href="clipper.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🏛️ Save Web Clip</h1>
+      <p>Obsidian-style capture into Athenaeum inbox.</p>
+    </header>
+
+    <label>Template
+      <select id="template">
+        <option value="article">Article</option>
+        <option value="quote">Quote</option>
+        <option value="bookmark">Bookmark</option>
+        <option value="research">Research Note</option>
+      </select>
+    </label>
+
+    <label>Title
+      <input id="title" type="text" />
+    </label>
+
+    <label>URL
+      <input id="url" type="text" />
+    </label>
+
+    <label>Tags (comma-separated)
+      <input id="tags" type="text" placeholder="web, reading, ai" />
+    </label>
+
+    <label>Note
+      <textarea id="note" rows="4" placeholder="Why this matters..."></textarea>
+    </label>
+
+    <label>Clip Text
+      <textarea id="clipText" rows="8" placeholder="Selected text or page excerpt"></textarea>
+    </label>
+
+    <label>Preview
+      <textarea id="preview" rows="10" readonly></textarea>
+    </label>
+
+    <div class="actions">
+      <button id="cancel" class="ghost">Cancel</button>
+      <button id="save">Save to Athenaeum</button>
+    </div>
+    <p id="status"></p>
+  </div>
+
+  <script type="module" src="clipper.js"></script>
+</body>
+</html>

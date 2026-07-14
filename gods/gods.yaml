@@ -1,0 +1,134 @@
+gods:
+  hermes:
+    display_name: Hermes
+    role: Messenger & Operations Manager
+    description: Your direct interface to the Pantheon. Konan talks to me, I route to the right god, manage the system, schedules,
+      and operations.
+    capabilities:
+    - chat
+    - message_relay
+    - system_interface
+    - cron_management
+    status: active
+  hephaestus:
+    display_name: Hephaestus
+    role: God of the Forge
+    description: Collaborative builder, engineer, and architect. Handles tool building, code generation, project scaffolding,
+      infrastructure planning, and program design.
+    capabilities:
+    - tool_building
+    - code_generation
+    - project_scaffolding
+    - infrastructure_planning
+    - program_design
+    status: active
+  hephaestus-qa:
+    display_name: Hephaestus-QA
+    role: Verification Gate
+    description: Cold-boot verification instance of Hephaestus. Runs Tier-1 acceptance gates (spec-conformance + browser verification)
+      on every build. Has no memory of build decisions — verifies fresh from spec.
+    capabilities:
+    - tier1_verification
+    - spec_conformance_gate
+    - browser_acceptance
+    - regression_detection
+    status: active
+  rheta:
+    display_name: Rheta
+    role: God of Copywriting, Rhetoric, and Persuasion
+    description: Generates niche-adapted, humanized copy for landing pages, email sequences, and social posts. Maintains per-niche
+      knowledge bases with industry-specific tone, compliance, and conversion patterns.
+    capabilities:
+    - copywriting
+    - copy_editing
+    - niche_research
+    - compliance_review
+    - content_humanization
+    status: active
+  iris:
+    display_name: Iris
+    role: God of UI/UX Design
+    description: Design system authority, Figma operator, token spec author, and visual QA auditor. Specifies components with
+      structured tokens; Master Coder implements.
+    capabilities:
+    - design_system
+    - ui_prototyping
+    - accessibility_audit
+    - visual_qa
+    - figma_operations
+    - token_spec_authoring
+    status: active
+  mercer:
+    display_name: Mercer
+    role: God of Sales
+    description: Enterprise sales agent — autonomous lead qualification, structured discovery (11-phase GPCTBA/N.E.A.T. flow),
+      real-time lead scoring, calendar booking, and pipeline management. Presents as a 15-person outreach department via landing
+      page identity randomization.
+    capabilities:
+    - lead_qualification
+    - structured_discovery
+    - lead_scoring
+    - calendar_booking
+    - pipeline_management
+    - objection_handling
+    - identity_deception
+    status: active
+  theoforge-ve:
+    display_name: TheoForge Visual Editor
+    role: God of Workflow Execution
+    description: Visual workflow editor over VoltAgent — drag-and-drop agentic workflow designer with HITL approval gates.
+      Pantheon-native; other gods can dispatch workflows via NATS or HTTP.
+    capabilities:
+    - workflow_execution
+    - workflow_listing
+    - hitl_approval
+    - template_distribution
+    - nats_dispatch
+    status: active
+  thoth:
+    display_name: Thoth
+    role: God of Research, Synthesis, and Intel
+    description: Ibis-headed scribe of the Pantheon. Handles deep research, multi-source synthesis, competitive intel, daily
+      digests, and the long-form thinking the other gods don't have time for. Operates the dawn-patrol cron, the thoth-deep-research
+      skill, and the thoth-daily-digest pipeline. Reads the Athenaeum across all codexes; writes back distilled knowledge
+      articles. Source of truth when other gods disagree.
+    capabilities:
+    - deep_research
+    - multi_source_synthesis
+    - competitive_intel
+    - daily_digest
+    - dawn_patrol
+    - athenaeum_distillation
+    - knowledge_synthesis
+    - cross_codex_query
+    - long_form_thinking
+    status: active
+  marvin:
+    display_name: Marvin
+    role: Master Coder
+    description: Implementation hand of the Pantheon. Takes specs from Hephaestus and ships working code. Operates the build
+      → test → ship loop with minimal supervision.
+    capabilities:
+    - code_implementation
+    - test_writing
+    - build_automation
+    - dependency_management
+    - refactor_execution
+    status: active
+  kairos:
+    display_name: Kairos
+    role: Social Media & Marketing God
+    description: God of the opportune moment. Owns social media timing, marketing content QA, and presence strategy for Konan's
+      personal LinkedIn, TheoForge LinkedIn company page, and TheoForge Facebook page. Adapts Corey Haines marketingskills
+      patterns under free-tier constraints; routes research to Thoth, copy refinement to Rheta, visuals to Iris, implementation/scheduling
+      to Hephaestus, and customer-language inputs from Mercer.
+    capabilities:
+    - social_media_strategy
+    - content_repurposing
+    - platform_specific_copy_qa
+    - posting_timing
+    - marketing_skill_adaptation
+    - content_calendar_planning
+    - free_tier_growth_research
+    - brand_voice_governance
+    status: active

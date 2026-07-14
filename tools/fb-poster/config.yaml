@@ -1,0 +1,15 @@
+# fb-poster config
+# All defaults are tuned for: laptop -> CachyOS SSH tunnel -> Facebook
+
+proxy:
+  enabled: true
+  # SOCKS5 endpoint exposed by bin/tunnel.sh on the laptop
+  server: socks5://127.0.0.1:1080
+  username: ""
+  password: ""
+
+timezone: America/Boise
+
+# Fingerprint seed — same seed = same fingerprint every run.
+# Change this to rotate identity (you usually don't need to).
+fingerprint_seed: 42

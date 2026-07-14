@@ -1,0 +1,19 @@
+# theoforge-touch.timer — fires theoforge-touch.service hourly.
+# OnCalendar=hourly fires at minute 50 (a 10-min offset from the
+# previous n8n schedule, so logs are easy to find). Adjust as needed.
+# If you need a different cadence, set OnCalendar=*:0/30 for every 30 min,
+# or *:0/15 for every 15 min.
+
+[Unit]
+Description=TheoForge Touch Sequence timer (hourly)
+Documentation=file:///home/konan/pantheon/services/theoforge-bridge/theoforge-touch.service
+After=network-online.target
+Requires=theoforge-bridge.service
+
+[Timer]
+OnCalendar=*:50
+Persistent=true
+Unit=theoforge-touch.service
+
+[Install]
+WantedBy=timers.target

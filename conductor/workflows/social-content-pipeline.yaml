@@ -1,0 +1,141 @@
+workflow:
+  id: social-content-pipeline
+  name: "Social Media Content Pipeline"
+  version: "1.0.0"
+  description: >
+    Multi-phase content factory. Kairos generates 4 topic options,
+    waits for human pick, produces 2 drafts with product links, waits
+    for review/edits, then finalizes with graphic. Phases are linked
+    via dispatch files — Konan's reply triggers the next phase.
+
+  context:
+    required: [phase]
+    optional: [topic, surface, draft_choice, edits, giveaway_mode]
+
+  steps:
+    # ── Phase 1: Generate 4 topic options ──────────────────────
+    - id: generate-topics
+      god: kairos
+      skill: social-content-pipeline
+      action: generate_topics
+      output: topic_options
+      prompt: >
+        Generate exactly 4 social media topic options for Konan.
+        Each topic must be a helpful hint or tip about business
+        operations, workflow automation, or scaling small
+        businesses — NOT a step-by-step how-to guide.
+
+        For each topic include:
+        - Hook/headline
+        - Problem it addresses
+        - Why now (timing rationale)
+        - Best surface (LinkedIn personal, LinkedIn company, Facebook)
+        - Which TheoForge product link fits naturally
+
+        Available link targets:
+        - theoforgesolutions.com
+        - theoforgesolutions.com/pantheon
+        - theoforgesolutions.com/tally
+        - Gumroad ebook (link TBD)
+        - Future products as announced
+
+        Format as numbered options. Mark the best choice for right now.
+      timeout: 120s
+
+    - id: deliver-topics
+      type: nats_publish
+      subject: "subspace.konan.inbox"
+      input_from: generate-topics
+      message: >
+        📋 New content topics ready for review:
+
+        ${topic_options}
+
+        Reply with your pick (1-4) or request adjustments.
+
+    # ── Phase 2: Generate 2 draft variants ─────────────────────
+    - id: generate-drafts
+      god: kairos
+      skill: social-content-pipeline
+      action: generate_drafts
+      input: ${context.topic}
+      output: draft_variants
+      prompt: >
+        Given the chosen topic: "${context.topic}"
+
+        Generate 2 distinct draft variants. Each draft must be:
+        - 150-250 words
+        - Helpful hint/tip format (NOT step-by-step how-to)
+        - Platform-native voice per suggested surface
+        - Embed one natural link to a theoforgesolutions.com product
+        - End with a curiosity hook or question, not a hard sell
+
+        Variant A: Founder voice for Konan's personal LinkedIn
+        Variant B: Authority voice for TheoForge LinkedIn company page
+        (If giveaway_mode is set, include a free workflow offer instead)
+      timeout: 180s
+
+    - id: deliver-drafts
+      type: nats_publish
+      subject: "subspace.konan.inbox"
+      input_from: generate-drafts
+      message: >
+        ✍️ Two drafts ready for review:
+
+        ${draft_variants}
+
+        Reply with your pick (A/B), edits, or approval to proceed to graphic.
+
+    # ── Phase 3: Finalize with graphic ─────────────────────────
+    - id: generate-graphic
+      god: kairos
+      skill: social-content-pipeline
+      action: generate_graphic
+      input: ${context.draft_choice}
+      output: final_asset
+      prompt: >
+        Given the approved draft:
+
+        ${context.draft_choice}
+
+        Produce the final deliverable:
+        1. Polished post copy (incorporate any edits: ${context.edits})
+        2. Image generation prompt for an eye-catching social graphic
+           that matches the post tone and TheoForge brand
+        3. Scheduling recommendation (best time and day)
+        4. Final status: Ready to publish
+
+        The graphic should be a bold, clean social media image —
+        text-overlay style with the hook as the headline, TheoForge
+        logo or color palette, and a subtle CTA at the bottom.
+      timeout: 180s
+
+    - id: deliver-final
+      type: nats_publish
+      subject: "subspace.konan.inbox"
+      input_from: generate-graphic
+      message: >
+        ✅ Final content asset ready:
+
+        ${final_asset}
+
+        Post is ready to publish. Awaiting your go-ahead.
+
+    # ── Phase 4: Giveaway workflow (optional) ──────────────────
+    - id: generate-giveaway
+      god: kairos
+      skill: social-content-pipeline
+      action: generate_giveaway
+      input: ${context.giveaway_mode}
+      output: giveaway_asset
+      prompt: >
+        Design a free workflow giveaway. The workflow must:
+        - Solve a real small-business problem on its own
+        - Be genuinely useful without Pantheon
+        - Demonstrate clear turbocharged value WITH Pantheon
+        - Include a link to theoforgesolutions.com/pantheon
+          as the upgrade path
+
+        Format: workflow name, what it solves, free download link,
+        Pantheon upgrade story.
+      timeout: 180s

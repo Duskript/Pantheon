@@ -1,0 +1,30 @@
+{
+  "wiki-dedup": {
+    "last_sync": "2026-05-28T00:06:02.482283",
+    "cursor": null,
+    "records_today": 0,
+    "daily_budget": 1000,
+    "last_reset_date": "2026-05-28"
+  },
+  "wiki-provenance": {
+    "last_sync": "2026-05-28T00:06:02.483320",
+    "cursor": null,
+    "records_today": 0,
+    "daily_budget": 1000,
+    "last_reset_date": "2026-05-28"
+  },
+  "wikiguard": {
+    "last_sync": "2026-05-28T00:06:02.484352",
+    "cursor": null,
+    "records_today": 0,
+    "daily_budget": 500,
+    "last_reset_date": "2026-05-28"
+  },
+  "gmail-primary": {
+    "last_sync": "2026-05-28T07:51:12.359593",
+    "cursor": "msg_002",
+    "records_today": 4,
+    "daily_budget": 500,
+    "last_reset_date": "2026-05-28"
+  }
+}

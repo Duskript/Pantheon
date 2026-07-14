@@ -1,0 +1,130 @@
+# Dynamic TLS configuration — reloaded by Traefik without restart.
+#
+# This file declares:
+#   1. TLS options (modern / intermediate profiles)
+#   2. A default certificate store for fallback
+#   3. Shared middlewares (security headers, basic auth, rate limits)
+#   4. Standalone routers that don't have a clean Docker target
+#
+# Hot reload happens whenever this file changes — Traefik watches
+# the directory configured in traefik.yml's providers.file.directory.
+
+# ─── TLS options ────────────────────────────────────────────────────
+# `modern`    — TLS 1.3 only, X25519 + P-256/384. Use for new clients.
+# `intermediate` — TLS 1.2 + 1.3, broader cipher set. Default for public.
+#
+# Reference: https://ssl-config.mozilla.org/
+
+tls:
+  options:
+    modern:
+      minVersion: VersionTLS13
+      sniStrict: true
+      alpnProtocols:
+        - h2
+        - http/1.1
+    intermediate:
+      minVersion: VersionTLS12
+      sniStrict: true
+      alpnProtocols:
+        - h2
+        - http/1.1
+      cipherSuites:
+        - TLS_AES_128_GCM_SHA256
+        - TLS_AES_256_GCM_SHA384
+        - TLS_CHACHA20_POLY1305_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+
+  stores:
+    # The default certificate store. If the ACME challenge hasn't
+    # completed yet for a host, Traefik serves this cert (and the
+    # user sees a warning). Leave the file path empty in production —
+    # Traefik will fall back to a self-signed cert automatically.
+    #
+    # In Traefik v3 the empty `defaultCertificate: {}` placeholder is
+    # no longer a valid schema; the store block has to either declare
+    # an explicit certFile/keyFile or be empty. We declare no cert
+    # here so Traefik auto-generates a self-signed fallback.
+    default: {}
+
+# ─── Shared middlewares ─────────────────────────────────────────────
+# These middlewares are referenced by both Docker labels
+# (e.g. `traefik.http.routers.ledger.middlewares=secure-headers@file`)
+# and the standalone routers defined further down.
+
+http:
+  middlewares:
+    # Standard security headers — applied to every public route.
+    secure-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+
+    # Per-route basic auth (used by the Traefik dashboard route
+    # declared in traefik/docker-compose.yml).
+    traefik-auth:
+      basicAuth:
+        # The htpasswd string is interpolated by docker-compose from
+        # the .env file as admin:$6$XmweZ20da3xeKx3N$wgEDBh5Q.lDfaco7KC6ejX2w0lg0oAAgxhdun5yiuGPH2oxxO1U7NVnG/Vbv8E1onalHp0maaovnpCF7AEqNx..
+        users:
+          - "admin:$6$XmweZ20da3xeKx3N$wgEDBh5Q.lDfaco7KC6ejX2w0lg0oAAgxhdun5yiuGPH2oxxO1U7NVnG/Vbv8E1onalHp0maaovnpCF7AEqNx."
+
+    # Optional: rate limit for the public DocuSeal signing endpoint.
+    signing-rate-limit:
+      rateLimit:
+        average: 20
+        burst: 40
+        period: 1s
+
+    # Compress responses over 1 KB for the static asset hosts.
+    compress:
+      compress: {}
+
+    # Redirect the apex to www for hosts that don't run a website.
+    root-redirect:
+      redirectRegex:
+        regex: "^https?://(www\\.)?([^/]+)/?$"
+        replacement: "https://www.theoforge.app"
+        permanent: true
+
+  # ─── Standalone routers (not driven by Docker labels) ─────────────
+  # Most routes come from per-service container labels. The routers
+  # below handle cases where there's no clean Docker target — e.g.
+  # a redirect from the apex domain or an external SaaS bridge.
+  routers:
+    root-redirect:
+      rule: "Host(`theoforge.app`) || Host(`theoforge.app`)"
+      service: noop
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - root-redirect
+      priority: 1
+
+  services:
+    # `noop` is an unreachable back-end used as a target for redirect-
+    # only routers. Traefik never actually proxies to it — the
+    # middleware short-circuits with a 301 before the request reaches
+    # the load balancer.
+    noop:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:65535"

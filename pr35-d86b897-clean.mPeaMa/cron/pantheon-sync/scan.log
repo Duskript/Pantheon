@@ -1,0 +1,36 @@
+2026-05-28 06:16:39 [INFO   ] Pantheon Sync Scheduler starting  (loop=False)
+2026-05-28 06:16:39 [INFO   ] === Sync tick started  2026-05-28T06:16:39.258486 ===
+2026-05-28 06:16:39 [INFO   ] No active connections — nothing to sync.
+2026-05-28 06:16:45 [INFO   ] Pantheon Sync Scheduler starting  (loop=False)
+2026-05-28 06:16:45 [INFO   ] === Sync tick started  2026-05-28T06:16:45.815759 ===
+2026-05-28 06:16:45 [ERROR  ] ERROR syncing gmail-primary
+Traceback (most recent call last):
+  File "/home/konan/pantheon/cron/pantheon-sync/sync_scheduler.py", line 231, in run_sync_tick
+    result = adapter(conn, state)
+TypeError: GmailAdapter.sync() takes from 1 to 2 positional arguments but 3 were given
+2026-05-28 06:16:45 [INFO   ] === Sync tick complete  synced=0  skipped=0  errors=1  elapsed=0.0s ===
+2026-05-28 06:17:35 [INFO   ] Pantheon Sync Scheduler starting  (loop=False)
+2026-05-28 06:17:35 [INFO   ] === Sync tick started  2026-05-28T06:17:35.444190 ===
+2026-05-28 06:17:35 [ERROR  ] ERROR syncing gmail-primary
+Traceback (most recent call last):
+  File "/home/konan/pantheon/cron/pantheon-sync/sync_scheduler.py", line 245, in run_sync_tick
+    state.set_cursor(conn_id, result["cursor"])
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'SyncState' object has no attribute 'set_cursor'
+2026-05-28 06:17:35 [INFO   ] === Sync tick complete  synced=2  skipped=0  errors=1  elapsed=0.0s ===
+2026-05-28 06:18:14 [INFO   ] Pantheon Sync Scheduler starting  (loop=False)
+2026-05-28 06:18:14 [INFO   ] === Sync tick started  2026-05-28T06:18:14.389809 ===
+2026-05-28 06:18:14 [INFO   ] SYNC  gmail-primary             synced=2     status=ok
+2026-05-28 06:18:14 [INFO   ] === Sync tick complete  synced=1  skipped=0  errors=0  elapsed=0.0s ===
+2026-05-28 07:50:59 [INFO   ] Pantheon Sync Scheduler starting  (loop=False)
+2026-05-28 07:50:59 [INFO   ] === Sync tick started  2026-05-28T07:50:59.233600 ===
+2026-05-28 07:50:59 [INFO   ] No active connections — nothing to sync.
+2026-05-28 07:51:12 [INFO   ] Pantheon Sync Scheduler starting  (loop=False)
+2026-05-28 07:51:12 [INFO   ] === Sync tick started  2026-05-28T07:51:12.358531 ===
+2026-05-28 07:51:12 [INFO   ] SYNC  gmail-primary             synced=2     status=ok
+2026-05-28 07:51:12 [DEBUG  ] INGEST gmail-primary: written=1 dropped=0 skipped=0 entities=0
+2026-05-28 07:51:12 [DEBUG  ] INGEST gmail-primary: written=1 dropped=0 skipped=0 entities=0
+2026-05-28 07:51:12 [INFO   ] === Sync tick complete  synced=1  skipped=0  errors=0  elapsed=0.0s ===
+2026-05-28 08:00:51 [INFO   ] Pantheon Sync Scheduler starting  (loop=False)
+2026-05-28 08:00:51 [INFO   ] === Sync tick started  2026-05-28T08:00:51.998253 ===
+2026-05-28 08:00:51 [INFO   ] No active connections — nothing to sync.

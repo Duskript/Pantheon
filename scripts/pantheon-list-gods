@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""
+pantheon-list-gods — List all registered gods in the Pantheon.
+
+Usage:
+    pantheon-list-gods
+"""
+import os
+import sys
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(script_dir, "lib")
+sys.path.insert(0, lib_dir)
+
+from pantheon_sdk import get_registry, INSTALLED_DIR, is_installed
+
+# ── Also check gods.yaml for planned/active status ───────────────────
+
+PANTHEON_DIR = os.path.join(os.path.expanduser("~"), "pantheon")
+GODS_YAML_PATH = os.path.join(PANTHEON_DIR, "gods", "gods.yaml")
+
+
+def get_gods_yaml_statuses() -> dict:
+    """Read gods.yaml and return {name: status} mapping."""
+    import yaml
+    if not os.path.isfile(GODS_YAML_PATH):
+        return {}
+    try:
+        with open(GODS_YAML_PATH, "r") as f:
+            data = yaml.safe_load(f) or {}
+        gods = data.get("gods", {})
+        return {name: info.get("status", "unknown") for name, info in gods.items()}
+    except Exception:
+        return {}
+
+
+def main():
+    entries = get_registry()
+    yaml_statuses = get_gods_yaml_statuses()
+
+    if not entries:
+        print("No gods registered.")
+        print("Use 'pantheon-install <package-path>' to install one.")
+        return
+
+    # Column widths
+    name_w = max(len(e.get("name", "")) for e in entries) + 2
+    name_w = max(name_w, 10)
+    type_w = 18
+    ver_w = 10
+    status_w = 10
+
+    header = (
+        f"{'Name':<{name_w}} {'Type':<{type_w}} {'Version':<{ver_w}} {'Status':<{status_w}} Description"
+    )
+    sep = "─" * len(header)
+
+    print(f"\n  Registered Gods ({len(entries)})\n")
+    print(f"  {header}")
+    print(f"  {sep}")
+
+    for entry in sorted(entries, key=lambda e: e.get("name", "").lower()):
+        name = entry.get("name", "?")
+        gtype = entry.get("type", "?")
+        version = entry.get("version", "?")
+        description = entry.get("description", "")
+
+        # Determine install status
+        god_id = entry.get("id", name.lower())
+        pkg_installed = is_installed(god_id)
+        yaml_status = yaml_statuses.get(name.lower(), "")
+        status = "unknown"
+        if yaml_status == "active":
+            status = "active"
+        elif pkg_installed:
+            status = "installed"
+        elif yaml_status:
+            status = yaml_status
+        else:
+            status = "registered"
+
+        # Truncate description
+        desc = description[:60] + "..." if len(description) > 63 else description
+
+        print(f"  {name:<{name_w}} {gtype:<{type_w}} {version:<{ver_w}} {status:<{status_w}} {desc}")
+
+    print(f"  {sep}")
+    print(f"\n  {len(entries)} gods total")
+    print(f"  For details: cat ~/pantheon/pantheon-registry.yaml")
+    print()
+
+
+if __name__ == "__main__":
+    main()

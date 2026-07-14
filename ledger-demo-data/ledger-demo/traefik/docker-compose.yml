@@ -1,0 +1,144 @@
+# Traefik v3 reverse proxy stack for a single-firm Ledger deployment.
+#
+# Phase L2 (2026-06-21): aligned to the optimized single-network
+# topology from ~/pantheon/plans/ledger-drift-remediation-plan.md §2.
+# Traefik attaches to the same external `ledger-net` bridge that the
+# main docker-compose.yml uses, instead of the previous per-firm
+# `${FIRM_SLUG}-internal` + `${FIRM_SLUG}-web` split. One network,
+# one DNS suffix, one routing table.
+#
+# The Docker provider's `network=` flag tells Traefik which network's
+# IP to use when generating Service URL's from container labels —
+# services on `ledger-net` are now reachable from Traefik on that
+# same network.
+#
+# This compose file is run by provision-firm.sh alongside the main
+# docker-compose.yml. Traefik fronts every public subdomain for the firm:
+#   - ledger.{DOMAIN}    (ERPNext / Frappe)
+#   - sign.{DOMAIN}      (DocuSeal)
+#   - vault.{DOMAIN}     (Vaultwarden)
+#
+# Admin access (SSH) is Tailscale-only — Traefik's dashboard is gated
+# by basic auth on entrypoint :8080 (bound to ledger-net only, not
+# published to the host).
+#
+# Required env vars (see ../../.env.example):
+#   DOMAIN       e.g. theoforge.app
+#   FIRM_SLUG    e.g. jones-cpa
+#   ACME_EMAIL   Let's Encrypt registration contact
+#   TRAEFIK_BASIC_AUTH_USERS  htpasswd string for the dashboard
+#
+# Quick start:
+#   cp .env.example .env && edit it
+#   docker compose up -d
+#   docker compose logs -f traefik
+#
+# Note: this file is intended to be RUN from infra/_templates/ as
+# `docker compose -f traefik/docker-compose.yml up -d` OR symlinked
+# into the per-firm directory by provision-firm.sh.
+---
+services:
+  traefik:
+    # v3.6.1+ has automatic Docker API version negotiation.
+    # Docker v29 (current host daemon, May 2026) raised the
+    # minimum supported Docker API version to 1.44. Earlier
+    # Traefik releases (v3.4 / v3.5) bundle a docker SDK that
+    # hardcodes the default API version to 1.24, which dockerd
+    # rejects with "client version 1.24 is too old. Minimum
+    # supported API version is 1.40". The v3.6.1 release adds
+    # automatic API version negotiation so Traefik adapts to the
+    # daemon's supported API version at runtime.
+    #
+    # Discovered 2026-06-21 during the Ledger L2 provision of
+    # `ledger-demo` — the traefik:v3.4 container crash-looped
+    # on this exact error after the v3.4.5 image was pinned.
+    #
+    # Do NOT downgrade to v3.4 / v3.5 without also downgrading
+    # dockerd to <= v28.5.2 (see the web search result from
+    # 2026-06-21 — Traefik 3.6.1 is the only Traefik release
+    # that works on Docker 29+).
+    image: traefik:v3.6.1
+    container_name: ${FIRM_SLUG}-traefik
+    restart: unless-stopped
+    # Dashboard + API bind to entrypoint :8080 on the host's
+    # :8080 (not published to the host — Tailscale or operator-only).
+    # Public traffic only hits entrypoints :80/:443 on the host.
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=ledger-net"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.tls=true"
+      - "--entrypoints.traefik.address=:8080"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      # Enable the /ping endpoint so the built-in `traefik healthcheck`
+      # CLI command works (it calls /ping internally). Without this,
+      # the container's Docker healthcheck fails with
+      # "Error calling healthcheck: please enable `ping` to use health check".
+      - "--ping=true"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--accesslog.fields.headers.names.X-Forwarded-For=keep"
+    networks:
+      - ledger-net
+    ports:
+      # Public HTTP/HTTPS only. Dashboard port :8080 is NOT published —
+      # reach it via Tailscale on the host's :8080 inside the docker network.
+      #
+      # TRAEFIK_BIND_INTERFACE lets operators override the host bind
+      # address. Defaults to 0.0.0.0 (public). Set to 127.0.0.1 in
+      # test environments where Tailscale or another daemon already
+      # claims 0.0.0.0:443 (e.g. tailscaled on the Beelink host).
+      - "${TRAEFIK_BIND_INTERFACE:-0.0.0.0}:80:80"
+      - "${TRAEFIK_BIND_INTERFACE:-0.0.0.0}:443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
+      - traefik_letsencrypt:/letsencrypt
+    healthcheck:
+      # Hit the auto-routed /ping endpoint on the internal traefik
+      # entrypoint (:8080). With --api.insecure=true, the /ping endpoint
+      # is directly exposed on the traefik entrypoint. The `traefik
+      # healthcheck` subcommand cannot be used because it spawns a
+      # SECOND traefik process that fails to bind ports already held
+      # by the running instance ("address already in use" on :80/:443/:8080).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ping | grep -q OK || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    labels:
+      # The Traefik dashboard itself is exposed ONLY on ledger-net,
+      # not published to the host port. Basic auth guards :8080.
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledger-net"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=traefik"
+      - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_BASIC_AUTH_USERS}"
+      # Ping endpoint for the verification gate.
+      - "traefik.http.routers.traefik-ping.rule=Path(`/api/ping`)"
+      - "traefik.http.routers.traefik-ping.service=ping@internal"
+      - "traefik.http.routers.traefik-ping.entrypoints=traefik"
+      - "traefik.http.routers.traefik-ping.priority=100"
+
+volumes:
+  traefik_letsencrypt:
+    name: ${FIRM_SLUG}-traefik-letsencrypt
+
+# Single external bridge — created once per host by provision-firm.sh
+# (Phase L2 fix). All services from this stack and from the main
+# docker-compose.yml attach to this same network, so Traefik's
+# `providers.docker.network=ledger-net` flag resolves all of them.
+networks:
+  ledger-net:
+    name: ledger-net
+    external: true

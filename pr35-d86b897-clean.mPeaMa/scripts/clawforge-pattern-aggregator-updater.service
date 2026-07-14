@@ -1,0 +1,17 @@
+[Unit]
+Description=Clawforge Pattern Aggregator Updater
+After=network-online.target clawforge-registry.service nats.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/clawforge-pattern-aggregator-updater.py
+Restart=on-failure
+RestartSec=5
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

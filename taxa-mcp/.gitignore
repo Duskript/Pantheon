@@ -1,0 +1,20 @@
+# Build artifacts (downloaded US Code + CFR XML)
+data/*.xml
+data/*.zip
+data/*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,54 @@
+topic: "Getting TheoForge accepted by affiliate marketing aggregators"
+slug: "affiliate-aggregator-acceptance"
+product: "TheoForge — B2B SaaS business process automation platform"
+goal: "Comprehensive guide to getting TheoForge listed on every type of aggregator platform that drives affiliate revenue"
+
+research_items:
+  - id: "affiliate-networks"
+    title: "Major Affiliate Networks — Merchant Approval Criteria"
+    description: >
+      Research the top affiliate networks (ShareASale, CJ/Affiliate, Impact, Rakuten, Awin, PartnerStack)
+      and document their merchant/merchant application process, approval criteria, fees, commission expectations,
+      and B2B SaaS acceptance rates. Include application links, typical review timelines, and rejection risk factors.
+    priority: 1
+
+  - id: "deal-aggregators"
+    title: "Deal/Product Aggregators — Listing Requirements"
+    description: >
+      Research product listing and deal sites (AppSumo, StackSocial, SaaSWorthy, Product Hunt, G2, Capterra,
+      GetApp, SaaStr, BetaList) — how to submit, what they look for, revenue split models, traffic levels,
+      and whether they have affiliate components or purely listing. Focus on B2B SaaS acceptance.
+    priority: 1
+
+  - id: "saas-affiliate-programs"
+    title: "B2B SaaS Affiliate Program Best Practices"
+    description: >
+      What makes a B2B SaaS affiliate program attractive to networks and affiliates. Commission structures
+      (recurring vs one-time), cookie durations, payout thresholds, affiliate tiers, tracking setup needs
+      (PostAffiliatePro, FirstPromoter, Rewardful, etc.), creative assets required, and program terms.
+      Benchmark against similar B2B SaaS tools.
+    priority: 2
+
+  - id: "preparation-checklist"
+    title: "Preparation Checklist — Before You Apply"
+    description: >
+      Concrete checklist of everything a B2B SaaS needs before submitting to affiliate networks and aggregators.
+      Includes: affiliate program terms and conditions, commission structure, tracking setup, creative assets
+      (banners, email templates, landing pages), cookie policy, legal compliance (FTC disclosures), support
+      infrastructure for affiliates, and payout infrastructure.
+    priority: 2
+
+  - id: "theoforge-assessment"
+    title: "TheoForge-Specific Assessment"
+    description: >
+      Map TheoForge (B2B business process automation, visual workflow editor replacing n8n) against each
+      platform's requirements. Identify strengths (no-code automation appeal, business audience, clear value prop)
+      and potential friction points (pricing model, maturity, competitive landscape). Recommend priority order
+      for which platforms to target first and what to prepare.
+    priority: 3
+
+dimensions:
+  - methodology_fit: "How well each platform fits a B2B SaaS product"
+  - actionability: "How concrete and immediate the steps are"
+  - evidence_quality: "Quality of sources and data backing each finding"
+  - cost_implication: "Entry costs, commission splits, and ongoing fees"

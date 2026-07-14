@@ -1,0 +1,5 @@
+name: accordion
+version: "1.0.0"
+description: "Accordion context engine — keeps the last 7 turns in full and folds older turns into Ichor episodic storage with reversible expansion."
+author: Hermes (Pantheon)
+kind: context_engine

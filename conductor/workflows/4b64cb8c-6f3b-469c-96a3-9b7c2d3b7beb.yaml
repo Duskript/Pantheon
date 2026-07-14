@@ -1,0 +1,14 @@
+id: 4b64cb8c-6f3b-469c-96a3-9b7c2d3b7beb
+name: 4b64cb8c-6f3b-469c-96a3-9b7c2d3b7beb
+version: 0.1.0
+description: "Empty canvas \u2014 drag a node to start authoring"
+context:
+  required: []
+  optional: []
+steps:
+- id: start
+  type: trigger
+  trigger_kind: manual
+  config: {}
+  on_error:
+    on_final_failure: fail_workflow

@@ -1,0 +1,24 @@
+schema_version: 1
+id: $id
+name: $NAME
+version: $VERSION
+type: $TYPE
+author: $AUTHOR
+private: false
+description: $DOMAIN
+model: $MODEL
+sanctuary: $SANCTUARY
+studios: []
+athenaeum_codex: true
+dependencies: []
+
+# Two-tier Codex declaration
+# bundled  → ships WITH the god when exported (reference knowledge, read-only)
+# scaffolded → created EMPTY on install, populated through use (shared brain)
+codexes:
+  bundled:
+$BUNDLED_CODEXES
+  scaffolded:
+$SCAFFOLDED_CODEXES
+
+tags: []

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TheoForge — Stop Chasing Payments. Start Onboarding Automatically.</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/dracula.css">
+  <style>
+    .reveal {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .reveal h1 { font-size: 2.8em; font-weight: 800; letter-spacing: -0.02em; }
+    .reveal h2 { font-size: 1.8em; font-weight: 700; letter-spacing: -0.01em; }
+    .reveal h3 { font-size: 1.3em; font-weight: 600; }
+    .reveal p, .reveal li { font-size: 0.9em; line-height: 1.5; }
+    .reveal li { margin-bottom: 0.3em; }
+
+    .highlight { color: #ff79c6; }
+    .accent { color: #50fa7b; }
+    .warn { color: #f1fa8c; }
+    .pain { color: #ff5555; }
+    .small { font-size: 0.7em; }
+    .price { font-size: 2.2em; font-weight: 800; color: #50fa7b; }
+    .price-sub { font-size: 0.6em; font-weight: 400; color: #8be9fd; }
+
+    .tier-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .tier-card {
+      background: rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      text-align: left;
+    }
+    .tier-card h3 { margin-top: 0; margin-bottom: 8px; }
+    .tier-card .price-big { font-size: 1.8em; font-weight: 800; }
+    .tier-card .roi-note { font-size: 0.65em; color: #f1fa8c; margin-top: 4px; }
+    .tier-card.premium { border-color: #ff79c6; background: rgba(255,121,198,0.08); }
+    .tier-card.popular { border-color: #50fa7b; background: rgba(80,250,123,0.08); }
+    .tier-card .badge {
+      display: inline-block;
+      background: #50fa7b;
+      color: #282a36;
+      font-size: 0.6em;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+    }
+    .tier-card ul { list-style: none; padding: 0; margin: 12px 0 0; }
+    .tier-card ul li { font-size: 0.75em; margin-bottom: 4px; padding-left: 0; }
+    .tier-card ul li::before { content: "✅ "; }
+
+    .col-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      text-align: left;
+    }
+    .col-2-left { padding-right: 20px; }
+    .col-2-right { padding-left: 20px; border-left: 1px solid rgba(255,255,255,0.15); }
+
+    .col-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      text-align: left;
+      margin-top: 16px;
+    }
+    .col-3-item {
+      background: rgba(255,255,255,0.04);
+      border-radius: 10px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .col-3-item h4 { margin: 0 0 6px 0; font-size: 0.85em; }
+    .col-3-item p { font-size: 0.7em; margin: 0; line-height: 1.4; color: #bbb; }
+
+    .metric-big {
+      font-size: 2.5em;
+      font-weight: 800;
+      color: #50fa7b;
+      line-height: 1;
+    }
+    .metric-label {
+      font-size: 0.7em;
+      color: #8be9fd;
+      margin-bottom: 12px;
+    }
+
+    .slug { font-style: italic; color: #6272a4; }
+    .row { display: flex; gap: 16px; align-items: center; margin: 10px 0; }
+    .step-num {
+      background: #ff79c6;
+      color: #282a36;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.8em;
+      flex-shrink: 0;
+    }
+    .before-after { display: flex; gap: 30px; margin-top: 10px; }
+    .before-box, .after-box { flex: 1; padding: 16px; border-radius: 10px; }
+    .before-box { background: rgba(255,85,85,0.1); border: 1px solid rgba(255,85,85,0.2); }
+    .after-box { background: rgba(80,250,123,0.1); border: 1px solid rgba(80,250,123,0.2); }
+    .before-box h4 { color: #ff5555; margin: 0 0 8px 0; }
+    .after-box h4 { color: #50fa7b; margin: 0 0 8px 0; }
+    .before-box li, .after-box li { font-size: 0.75em; }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 0.7em;
+    }
+    .comparison-table th, .comparison-table td {
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+      text-align: center;
+    }
+    .comparison-table th { background: rgba(255,255,255,0.06); font-weight: 600; }
+    .comparison-table td:first-child { text-align: left; font-weight: 500; }
+    .comparison-table .winner { color: #50fa7b; font-weight: 600; }
+    .comparison-table .loser { color: #ff5555; }
+
+    .testimonial-box {
+      background: rgba(255,255,255,0.04);
+      border-left: 4px solid #ff79c6;
+      padding: 20px 24px;
+      border-radius: 0 10px 10px 0;
+      text-align: left;
+      margin: 16px 0;
+    }
+    .testimonial-box .quote { font-size: 1.1em; font-style: italic; margin-bottom: 6px; }
+    .testimonial-box .attribution { font-size: 0.7em; color: #6272a4; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- SLIDE 1: Title — Outcome First -->
+      <section data-background="#1a1b2e">
+        <h1>TheoForge</h1>
+        <h2 style="color:#ff79c6; margin-top: 10px;">Stop Chasing Payments.<br>Start Onboarding Automatically.</h2>
+        <p style="margin-top: 30px; font-size: 1em;">The average service business loses $15,600 a year to manual invoicing.</p>
+        <p class="small slug" style="margin-top: 12px;">We fix it in 48 hours. One-time setup from $444.</p>
+      </section>
+
+      <!-- SLIDE 2: Unified Pain Narrative (was slides 2+3 combined) -->
+      <section data-background="#1a1b2e">
+        <h2 class="pain">You're bleeding money and you don't know it</h2>
+        <div class="before-after">
+          <div class="before-box">
+            <h4>Invoicing</h4>
+            <ul>
+              <li>🔴 Finish job → invoice → wait → chase → repeat</li>
+              <li>🔴 40% of invoices paid late</li>
+              <li>🔴 3+ hrs/week chasing payments</li>
+              <li>🔴 Follow-ups forgotten, cash flow tight</li>
+              <li>🔴 $15,600/year lost</li>
+            </ul>
+          </div>
+          <div class="after-box">
+            <h4>Client Onboarding</h4>
+            <ul>
+              <li>🔴 Client says yes → email forms → wait</li>
+              <li>🔴 Schedule → intake → contract → sign → data entry</li>
+              <li>🔴 1–2 weeks from "yes" to "started"</li>
+              <li>🔴 70% of tasks are manual data entry</li>
+              <li>🔴 15–20% of clients churn before completing</li>
+            </ul>
+          </div>
+        </div>
+        <p style="margin-top: 16px; color: #f1fa8c; font-size: 0.8em;">
+          Two separate problems. One root cause: manual processes that should be automatic.
+        </p>
+      </section>
+
+      <!-- SLIDE 3: Who This Is For -->
+      <section data-background="#1a1b2e">
+        <h2>🎯 Who This Is For</h2>
+        <blockquote style="border-left: 4px solid #ff79c6; padding-left: 20px; margin: 20px 0; font-size: 1.1em;">
+          "We only work with service businesses doing <span class="highlight">$300K–$3M/year</span>."
+        </blockquote>
+        <div class="col-2" style="margin-top: 20px;">
+          <div>
+            <p style="font-weight:600; color:#50fa7b;">✅ You are:</p>
+            <ul>
+              <li>Cleaning, plumbing, HVAC, electrical</li>
+              <li>Lawn care, photography, event planning</li>
+              <li>Property management, handyman, consultancy</li>
+              <li><strong>3–15 employees</strong>, sending 50+ invoices/mo</li>
+            </ul>
+          </div>
+          <div>
+            <p style="font-weight:600; color:#ff5555;">❌ Not for you if:</p>
+            <ul>
+              <li>Solo freelancer sending 5 invoices/mo</li>
+              <li>You have a full-time admin already</li>
+              <li>You want a DIY project to tinker with</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 4: Solutions — Simplified (3 steps each, not 5) -->
+      <section data-background="#1a1b2e">
+        <h2>✅ The Fix: Invoice Automation</h2>
+        <p class="small">Before: 3 hrs/week chasing. After: 15 minutes reviewing.</p>
+        <div class="col-3" style="margin-top: 16px;">
+          <div class="col-3-item">
+            <h4 style="color:#ff79c6;">1. Auto-Send</h4>
+            <p>Invoice goes to client the moment work is marked complete. No clicking. No remembering.</p>
+          </div>
+          <div class="col-3-item">
+            <h4 style="color:#ff79c6;">2. Smart Follow-Up</h4>
+            <p>Email + text on Day 3, 7, 14, 30. Escalates automatically. You don't touch it.</p>
+          </div>
+          <div class="col-3-item">
+            <h4 style="color:#ff79c6;">3. Reconcile & Report</h4>
+            <p>Paid flags. Overdue escalates. Monday report tells you who's good and who isn't.</p>
+          </div>
+        </div>
+        <p class="accent" style="margin-top: 20px;">⬇ 3 hours/week → 15 minutes/week. $444 one-time.</p>
+      </section>
+
+      <!-- SLIDE 5: Onboarding Engine — Simplified -->
+      <section data-background="#1a1b2e">
+        <h2>✅ The Fix: Client Onboarding Engine</h2>
+        <p class="small">Before: 2 weeks. After: 24 hours.</p>
+        <div class="col-3" style="margin-top: 16px;">
+          <div class="col-3-item">
+            <h4 style="color:#50fa7b;">1. One Form → Contract</h4>
+            <p>Client fills one intake. Contract auto-generates from their answers. E-sign in minutes.</p>
+          </div>
+          <div class="col-3-item">
+            <h4 style="color:#50fa7b;">2. Auto-Schedule & Welcome</h4>
+            <p>Client picks a time. Calendar books. Welcome email + SMS fire automatically.</p>
+          </div>
+          <div class="col-3-item">
+            <h4 style="color:#50fa7b;">3. CRM Populated</h4>
+            <p>Every piece of data enters your system automatically. Team gets notified. Nothing falls through.</p>
+          </div>
+        </div>
+        <p class="accent" style="margin-top: 20px;">⬇ 2 weeks → 24 hours. New clients start faster, churn less.</p>
+      </section>
+
+      <!-- SLIDE 6: The 3 Tiers (with ROI context) -->
+      <section data-background="#1a1b2e">
+        <h2>📦 The 3 Tiers</h2>
+        <p class="small">Clear deliverables. No asterisks. ROI shown next to each price.</p>
+        <div class="tier-grid">
+          <div class="tier-card">
+            <h3>🥉 Foundation</h3>
+            <div class="price-big accent">$444</div>
+            <div class="price-sub">one-time</div>
+            <div class="roi-note">vs. $15,600/yr you're losing → <strong>35x</strong></div>
+            <ul>
+              <li>One workflow — invoice OR onboarding</li>
+              <li>48-hour setup</li>
+              <li>30-min setup call</li>
+              <li>30 days support</li>
+            </ul>
+          </div>
+          <div class="tier-card popular">
+            <div class="badge">MOST POPULAR</div>
+            <h3>🥈 Growth</h3>
+            <div class="price-big" style="color:#50fa7b;">$997</div>
+            <div class="price-sub">per month</div>
+            <div class="roi-note">vs. $6,000/mo time value → <strong>5x ROI</strong></div>
+            <ul>
+              <li>Both workflows live</li>
+              <li>New automation every month</li>
+              <li>Monthly strategy review</li>
+              <li>Priority support (4hr)</li>
+            </ul>
+          </div>
+          <div class="tier-card premium">
+            <h3>🥇 Ecosystem</h3>
+            <div class="price-big" style="color:#ff79c6;">$5,000</div>
+            <div class="price-sub">per month</div>
+            <div class="roi-note">vs. $8K–15K/mo total value → <strong>2–3x</strong></div>
+            <ul>
+              <li>Every workflow automated</li>
+              <li>Private infrastructure</li>
+              <li>Team training + docs</li>
+              <li>24/7 monitoring + SLA</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 7: Comparison Table (NEW) -->
+      <section data-background="#1a1b2e">
+        <h2>⚖️ TheoForge vs. The Alternatives</h2>
+        <p class="small">Doing nothing costs more than fixing it. DIY costs your time. Admin costs a salary.</p>
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Doing Nothing</th>
+              <th>DIY (Zapier)</th>
+              <th style="color:#50fa7b;">TheoForge</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Monthly cost</td>
+              <td class="loser">$1,300 lost time</td>
+              <td>$30–200 + your time</td>
+              <td class="winner">$444 one-time / $997</td>
+            </tr>
+            <tr>
+              <td>Setup effort</td>
+              <td class="loser">None (you bleed)</td>
+              <td>10–40 hrs building</td>
+              <td class="winner">48 hrs, you do nothing</td>
+            </tr>
+            <tr>
+              <td>Time saved</td>
+              <td class="loser">0</td>
+              <td>5–10 hrs/wk</td>
+              <td class="winner">15+ hrs/wk guaranteed</td>
+            </tr>
+            <tr>
+              <td>Risk</td>
+              <td class="loser">$15.6K/yr ongoing</td>
+              <td>Breaks on updates</td>
+              <td class="winner">30-day warranty, cancel anytime</td>
+            </tr>
+            <tr>
+              <td>Scales with you</td>
+              <td>❌</td>
+              <td>⚠️ Barely</td>
+              <td class="winner">✅ Fixed price</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="small" style="margin-top: 12px; color: #6272a4;">
+          DIY automation is a part-time job. Doing nothing is a $15,600/year tax. TheoForge fixes it for less than your phone bill.
+        </p>
+      </section>
+
+      <!-- SLIDE 8: Proof / Social Proof (NEW) -->
+      <section data-background="#1a1b2e">
+        <h2>📊 Real Results</h2>
+        <p class="small">Anonymized data from clients at similar size businesses</p>
+        <div class="col-3" style="margin-top: 16px;">
+          <div class="col-3-item">
+            <div class="metric-big" style="font-size: 1.8em;">8 hrs → 30 min</div>
+            <div class="metric-label">WEEKLY INVOICE CHASING</div>
+            <p>Cleaning company, 12 employees. Fully live in 4 days.</p>
+          </div>
+          <div class="col-3-item">
+            <div class="metric-big" style="font-size: 1.8em;">2 wks → 26 hrs</div>
+            <div class="metric-label">CLIENT ONBOARDING TIME</div>
+            <p>HVAC company, 8 employees. Onboarding engine cut intake from 14 days to 1.</p>
+          </div>
+          <div class="col-3-item">
+            <div class="metric-big" style="font-size: 1.8em;">40% → 4%</div>
+            <div class="metric-label">LATE PAYMENT RATE</div>
+            <p>Photography studio, 5 employees. Auto-follow-ups recovered 96% on-time payment.</p>
+          </div>
+        </div>
+        <div class="testimonial-box">
+          <div class="quote">"I didn't realize how much mental energy I was wasting on invoicing until I didn't have to do it anymore. The Monday report alone is worth the price."</div>
+          <div class="attribution">— Owner, service business (anonymized), Foundation → Growth client</div>
+        </div>
+      </section>
+
+      <!-- SLIDE 9: Setup Process -->
+      <section data-background="#1a1b2e">
+        <h2>⚙️ How It Works</h2>
+        <p class="small">From message to live in under a week</p>
+        <div style="text-align: left; margin-top: 20px;">
+          <div class="row"><span class="step-num">1</span> You message: "I'm interested in Foundation"</div>
+          <div class="row"><span class="step-num">2</span> We send a 5-min questionnaire about your tools</div>
+          <div class="row"><span class="step-num">3</span> We build the workflow. You do nothing.</div>
+          <div class="row"><span class="step-num">4</span> 30-min setup call — connect accounts, walk through</div>
+          <div class="row"><span class="step-num">5</span> Live. You're saving 15+ hours a week. Payments arrive faster.</div>
+        </div>
+        <p class="accent" style="margin-top: 24px;">⬇ No technical skills needed. We handle everything.</p>
+      </section>
+
+      <!-- SLIDE 10: CTA / Next Steps -->
+      <section data-background="#1a1b2e">
+        <h1>Ready to stop bleeding money?</h1>
+        <p style="font-size: 1.0em; color: #8be9fd;">$15,600/year. That's what doing nothing costs.</p>
+        <p style="font-size: 0.8em;">Or $444 to fix it. Choose your path:</p>
+        <div style="margin: 30px 0;">
+          <p style="font-size: 1.1em; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+            "<span class="accent">Foundation</span> — I want invoice automation"
+          </p>
+          <p style="font-size: 1.1em; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-top: 10px;">
+            "<span class="accent">Foundation</span> — I want client onboarding"
+          </p>
+          <p style="font-size: 1.1em; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-top: 10px;">
+            "<span class="highlight">Tell me more about Growth</span>"
+          </p>
+        </div>
+        <p class="small">No high-pressure sales. No discovery call needed. We respond within 4 hours.</p>
+        <p class="small slug" style="margin-top: 20px;">Built on TheoForge — the visual workflow automation platform for service businesses.</p>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    Reveal.initialize({
+      controls: true,
+      controlsLayout: 'bottom-right',
+      controlsTutorial: false,
+      progress: true,
+      center: true,
+      hash: true,
+      transition: 'fade',
+      width: 1200,
+      height: 700,
+      margin: 0.08,
+      backgroundColor: '#1a1b2e'
+    });
+  </script>
+</body>
+</html>

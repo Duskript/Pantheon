@@ -1,0 +1,6 @@
+name: stream-retrieval
+description: "Stream retrieval tools for the Codex-Stream integration pipeline. Provides 6 tools: stream_search, stream_filter, stream_entity, stream_trending, stream_connections, stream_fetch_chunks. Searches raw chunks via filesystem + FTS5, queries hotness tracker, and walks the Ichor knowledge graph."
+version: 1.0.0
+author: Hephaestus (Pantheon-Core)
+kind: standalone
+provides_hooks: []

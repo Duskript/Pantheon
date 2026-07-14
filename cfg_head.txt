@@ -1,0 +1,35 @@
+model:
+  default: glm-5.2
+  provider: opencode-go
+providers:
+  opencode-go:
+    api: http://127.0.0.1:8771/v1
+    api_key: sk-TaX5CXb5kUBpY7e6LETMHbWvII8CgGgUzg4HerJmjTfprHZBjjMLkT0PpyyplvJ3
+    default_model: deepseek-v4-flash
+    models:
+      - deepseek-v4-flash
+      - deepseek-v4-flash
+      - glm-5.2
+      - qwen3.6-plus
+      - kimi-k2.7-code
+    name: opencode
+  qwythos:
+    api: http://100.114.60.103:11434/v1
+    default_model: qwythos
+    models:
+      - qwythos
+    name: Qwythos (local Ollama)
+  omniroute:
+    api: http://127.0.0.1:20141/v1
+    api_key: sk-TaX5CXb5kUBpY7e6LETMHbWvII8CgGgUzg4HerJmjTfprHZBjjMLkT0PpyyplvJ3
+    default_model: mcode/mimo-auto
+    models:
+      - mcode/mimo-auto
+      - mimocode/mimo-auto
+      - auto/chat
+      - auto/coding
+    name: OmniRoute
+fallback_providers: []
+toolsets:
+  - hermes-cli
+  - web

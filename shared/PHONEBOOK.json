@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "description": "Pantheon messenger phonebook — directory of gods, their Discord home channels, roles, and the shared free-response channels. Any god may read this file to route a handoff reply back to the sender's channel. Kept in ~/pantheon/shared/ so it is readable by every god profile.",
+  "updated": "2026-07-11",
+  "gods": {
+    "hermes": {
+      "role": "Operations Manager / messenger of the gods (main agent, this session)",
+      "home_channel": null,
+      "discord_bot": true,
+      "note": "Main gateway; currently locked to allowed_channels:0 until re-invited. Free-response scope to be set on re-invite."
+    },
+    "thoth": {
+      "role": "Deep research / synthesis",
+      "home_channel": "1522263525605773332",
+      "discord_bot": true,
+      "provider": "opencode-go"
+    },
+    "hephaestus": {
+      "role": "Build / engineering / design systems",
+      "home_channel": "1499854046138204170",
+      "discord_bot": true,
+      "provider": "opencode-go"
+    },
+    "apollo": {
+      "role": "Planning / strategy (verify)",
+      "home_channel": "1522263529774649524",
+      "discord_bot": true,
+      "provider": "opencode-go"
+    },
+    "iris": {
+      "role": "Vision / knowledge (Obsidian, verify)",
+      "home_channel": "1522263514775814314",
+      "discord_bot": true,
+      "provider": "opencode-go"
+    },
+    "rheta": {
+      "role": "Copywriting / marketing copy",
+      "home_channel": "1522263522078363861",
+      "discord_bot": true,
+      "provider": "opencode-go"
+    },
+    "kairos": {
+      "role": "Marketing / social / growth (verify)",
+      "home_channel": "1522273941668761852",
+      "discord_bot": true,
+      "provider": "opencode-go"
+    },
+    "caduceus": {
+      "role": "Messaging relay / Composio (verify)",
+      "home_channel": "1522263533457244262",
+      "discord_bot": true,
+      "provider": "opencode-go"
+    },
+    "marvin": {
+      "role": "Senior engineering lead",
+      "home_channel": null,
+      "discord_bot": true,
+      "note": "Discord allowed_channels locked to 0 (deny-all) until scoped."
+    }
+  },
+  "shared_channels": {
+    "omicron": "1499851385704022088",
+    "pantheon_general": "1499868497180889158",
+    "notifications": "1522263537186246717"
+  },
+  "free_response_channels": [
+    "1499851385704022088",
+    "1499868497180889158",
+    "1522263537186246717"
+  ],
+  "reply_protocol": {
+    "summary": "When a god completes a task, it must return the result to the requester's channel, closing the loop.",
+    "discord_native": "If the task arrived via a Discord @mention in an allowed channel, the god replies in that same channel (native Discord behavior). No extra plumbing needed.",
+    "conductor_routed": "If the task arrived via a Conductor file handoff (no live Discord context), the receiving god reads routing.reply_to_channel + routing.reply_to_user from the handoff and posts the result there via its Discord adapter's send-to-channel capability.",
+    "handoff_return_fields": {
+      "routing.reply_to_channel": "Discord channel ID where the result should be posted back (usually the sender's home or the channel the request came from).",
+      "routing.reply_to_user": "Display name / handle of the requester, for addressing the reply.",
+      "routing.return_to_sender": "Boolean. When true, the god MUST post the final result to reply_to_channel rather than only its own home."
+    },
+    "result_message_format": "Summary line + list of artifact paths/URLs + 'where to find it' pointer. Keep it scannable."
+  },
+  "loop_example": {
+    "scenario": "Cyber asks Thoth for research from pantheon-general",
+    "steps": [
+      "1. Cyber posts '@Thoth research the X market' in pantheon-general (1499868497180889158).",
+      "2. Thoth (free-response there) picks it up, does the research, writes artifacts to ~/pantheon/shared/handoffs/<id>/.",
+      "3. Thoth replies IN pantheon-general with the summary + file paths (Discord-native reply). Loop closed.",
+      "Alt (Conductor): Cyber's request becomes a handoff file in pending/thoth/ with routing.reply_to_channel=1499868497180889158; Thoth posts result there on completion."
+    ]
+  },
+  "constraints": {
+    "guild_membership": "A god's Discord bot can only post to channels in the guild(s) its token was invited to. Cross-guild posting requires the bot to be invited to the target guild. VERIFY each god's bot is in the guild hosting the shared channels before relying on cross-channel replies. This could not be verified from filesystem alone — confirm live once bots restart + opencode-go recovers."
+  }
+}

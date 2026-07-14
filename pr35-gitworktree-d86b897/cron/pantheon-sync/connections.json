@@ -1,0 +1,61 @@
+{
+  "_note": "Active Pantheon sync connections. Each uses a 'provider' key that maps to a registered adapter. Connection status is checked via n8n credential API.",
+  "connections": [
+    {
+      "id": "gmail-primary",
+      "provider": "gmail",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 500
+    },
+    {
+      "id": "github-primary",
+      "provider": "github",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 500
+    },
+    {
+      "id": "slack-primary",
+      "provider": "slack",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 500
+    },
+    {
+      "id": "google-calendar-primary",
+      "provider": "google_calendar",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 200
+    },
+    {
+      "id": "outlook-primary",
+      "provider": "outlook",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 500
+    },
+    {
+      "id": "microsoft-teams-primary",
+      "provider": "microsoft_teams",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 500
+    },
+    {
+      "id": "notion-primary",
+      "provider": "notion",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 300
+    },
+    {
+      "id": "discord-primary",
+      "provider": "discord",
+      "enabled": false,
+      "sync_interval_minutes": 20,
+      "daily_budget": 300
+    }
+  ]
+}

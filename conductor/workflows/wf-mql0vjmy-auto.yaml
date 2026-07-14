@@ -1,0 +1,14 @@
+id: wf-mql0vjmy-auto
+name: wf-mql0vjmy-auto
+version: 0.1.0
+description: ''
+context:
+  required: []
+  optional: []
+steps:
+- id: start
+  type: trigger
+  trigger_kind: manual
+  config: {}
+  on_error:
+    on_final_failure: fail_workflow

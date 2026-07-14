@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""Hades CLI — nightly Athenaeum consolidation pipeline.
+
+Usage:
+  hades                    Run full consolidation pipeline
+  hades --health           Health checks only
+  hades --embed            Embed backfill only
+  hades --distill          Distillation only (LLM-enhanced + embed + graph)
+  hades --archive          Scan archive candidates only
+  hades --json             Output as JSON (pipe to file)
+  hades --save <path>      Save report to file
+  hades --help             Show this help
+"""
+
+import os
+import sys
+
+# Use REAL home path (Hermes overrides Path.home())
+_REAL_HOME = os.path.expanduser("~")
+sys.path.insert(0, _REAL_HOME + "/pantheon/pantheon-core/gods")
+
+# Load profile-level .env for API keys
+_ENV_FILE = _REAL_HOME + "/.hermes/.env"
+if os.path.isfile(_ENV_FILE):
+    with open(_ENV_FILE) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
+from hades import main
+
+if __name__ == "__main__":
+    main()

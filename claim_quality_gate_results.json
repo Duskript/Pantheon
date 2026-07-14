@@ -1,0 +1,58 @@
+{
+  "sessions_tested": 10,
+  "sessions_with_claims": 0,
+  "total_claims": 0,
+  "gate_passed": false,
+  "details": [
+    {
+      "session": "20260623_164347_3a059f",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260623_041701_470a251b",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260620_092513_5f4826da",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260707_040045_07d22ee9",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260626_071618_662085f8",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260702_071441_7f569cea",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260622_091347_aebbbffe",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260706_040246_64719de1",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260620_092936_ca21cf55",
+      "claims_created": 0,
+      "skipped": true
+    },
+    {
+      "session": "20260609_135252_980756a5",
+      "claims_created": 0,
+      "skipped": true
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+# TheoForge Bridge — Pantheon side of the relay7→Pantheon trust boundary.
+# Tailscale-only HTTP service that fronts lead ingest, Mercer LLM chat,
+# Resend email, and scout endpoints for the n8n workflows.
+#
+# Owner: konan
+# Started by: Marvin (2026-06-07) — see ~/athenaeum/Codex-God-marvin/journal/2026-06-07-theoforge-bridge.md
+#
+# Tailscale binding: BRIDGE_HOST defaults to the Tailscale IP (100.68.106.59).
+# This is the "auth layer" — only hosts on Konan's tailnet can reach it.
+# - 127.0.0.1: would block relay7 (loopback only)
+# - 0.0.0.0: would expose to LAN + Docker bridge (192.168.1.x, 172.17.x.x)
+# - 100.68.106.59: tailnet only. The right answer.
+# Override BRIDGE_HOST in /etc/systemd/system/theoforge-bridge.service.d/override.conf
+# if your Tailscale IP changes.
+
+[Unit]
+Description=TheoForge Bridge (lead ingest, Mercer proxy, Resend, scout)
+Documentation=file:///home/konan/pantheon/services/theoforge-bridge/server.mjs
+After=network-online.target tailscaled.service
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=konan
+Group=konan
+WorkingDirectory=/home/konan/pantheon/services/theoforge-bridge
+
+# Defaults are in server.mjs (PORT=4323, HOST=127.0.0.1). Override here
+# only if you have a reason.
+Environment=BRIDGE_HOST=100.68.106.59
+Environment=BRIDGE_PORT=4323
+Environment=HERMES_PROFILE=mercer
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=256
+
+# No secrets in the unit file — the bridge reads them from
+# ~/.hermes/profiles/theoforge/.env at runtime. Don't put RESEND_API_KEY
+# or any other key here.
+
+ExecStart=/usr/bin/node /home/konan/pantheon/services/theoforge-bridge/server.mjs
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/konan/athenaeum/Codex-God-Mercer/leads
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theoforge-bridge
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10s
+
+[Install]
+WantedBy=multi-user.target

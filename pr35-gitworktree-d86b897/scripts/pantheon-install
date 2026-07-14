@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""
+pantheon-install — Install a god package into the Pantheon.
+
+Usage:
+    pantheon-install <package-path>
+
+The package must contain a valid god.yaml manifest and a harness.yaml.
+"""
+import os
+import sys
+
+# Add the lib directory to path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(script_dir, "lib")
+sys.path.insert(0, lib_dir)
+
+from pantheon_sdk import (
+    INSTALLED_DIR,
+    get_installed_path,
+    is_installed,
+    validate_manifest,
+    copy_package,
+    remove_package,
+    install_harness,
+    create_inbox,
+    create_codex,
+    registry_add,
+    notify_hermes,
+    log_vault_entry,
+    register_in_graph,
+    print_header,
+    print_summary,
+)
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: pantheon-install <package-path>")
+        sys.exit(1)
+
+    package_path = os.path.abspath(sys.argv[1])
+
+    if not os.path.isdir(package_path):
+        print(f"Error: package directory not found: {package_path}")
+        sys.exit(1)
+
+    # ── Step 1: Validate ────────────────────────────────────────────────
+    try:
+        manifest = validate_manifest(package_path)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    god_id = manifest["id"]
+    name = manifest["name"]
+    version = manifest["version"]
+    god_type = manifest["type"]
+
+    print_header(f"Installing {name} v{version}")
+
+    # ── Step 2: Check for existing installation ────────────────────────
+    if is_installed(god_id):
+        print(f"  Warning: {god_id} is already installed at {get_installed_path(god_id)}")
+        print(f"  Use 'pantheon-upgrade {god_id} <package-path>' to upgrade.")
+        sys.exit(1)
+
+    # ── Step 3: Copy package ──────────────────────────────────────────
+    installed_path = get_installed_path(god_id)
+    os.makedirs(os.path.dirname(installed_path), exist_ok=True)
+    copy_package(package_path, installed_path)
+
+    # ── Step 4: Install harness ───────────────────────────────────────
+    try:
+        install_harness(god_id, package_path)
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        remove_package(god_id)
+        sys.exit(1)
+
+    # ── Step 5: Create inbox ──────────────────────────────────────────
+    create_inbox(god_id)
+
+    # ── Step 6: Create Codex (if flagged) ─────────────────────────────
+    if manifest.get("athenaeum_codex", False):
+        create_codex(god_id, name)
+
+    # ── Step 7: Register in registry ──────────────────────────────────
+    registry_add(manifest)
+
+    # ── Step 8: Register in graph ─────────────────────────────────────
+    register_in_graph(god_id, name, version, god_type)
+
+    # ── Step 9: Log to vault ──────────────────────────────────────────
+    log_vault_entry("install", god_id, f"Installed {name} v{version} ({god_type})", version=version)
+
+    # ── Step 10: Notify Hermes ────────────────────────────────────────
+    notify_hermes(
+        f"New god installed: {name} v{version}",
+        f"A new god has been installed in the Pantheon.\n\n"
+        f"**Name:** {name}\n"
+        f"**ID:** {god_id}\n"
+        f"**Version:** {version}\n"
+        f"**Type:** {god_type}\n"
+        f"**Sanctuary:** {manifest.get('sanctuary', 'None')}\n"
+        f"**Studios:** {', '.join(manifest.get('studios', [])) if manifest.get('studios') else 'None'}\n"
+        f"**Description:** {manifest['description']}\n",
+    )
+
+    # ── Summary ───────────────────────────────────────────────────────
+    print_summary(god_id, name, version, "installed")
+    print()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,58 @@
+# Olympus UI — Theme Configuration
+# Read by Olympus backend at GET /api/theme, written by PUT /api/theme.
+# CSS custom properties are applied to :root at runtime.
+
+colors:
+  lumen:
+    "0": "#0a0a0c"
+    "1": "#141416"
+    "2": "#1e1e22"
+    "3": "#2a2a30"
+    "4": "#3a3a42"
+    "5": "#6a6a74"
+    "6": "#b0b0bc"
+    "7": "#f0f0f8"
+
+  semantic:
+    bg: "var(--lumen-0)"
+    surface: "var(--lumen-1)"
+    surface_elevated: "var(--lumen-2)"
+    surface_hover: "var(--lumen-3)"
+    border: "var(--lumen-3)"
+    border_hover: "var(--lumen-4)"
+    text: "var(--lumen-7)"
+    text_muted: "var(--lumen-5)"
+    text_dim: "var(--lumen-4)"
+    danger: "#ef4444"
+    success: "#22c55e"
+    warning: "#f59e0b"
+
+typography:
+  font_sans: "'Inter', system-ui, -apple-system, sans-serif"
+  font_mono: "'JetBrains Mono', 'Fira Code', monospace"
+
+spacing:
+  radius_sm: 7
+  radius_md: 14
+  radius_lg: 21
+  radius_xl: 28
+
+animation:
+  duration_fast: 150
+  duration_normal: 300
+  duration_slow: 600
+  duration_signature: 1000
+
+branding:
+  logo_url: ""
+  favicon_url: ""
+
+terminology:
+  knowledge: "Athenaeum"
+  agent: "God"
+  agents: "Gods"
+  session: "Session"
+  boon: "Boon"
+  tools: "Tools"
+  admin: "Admin"
+  settings: "Settings"

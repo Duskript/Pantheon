@@ -1,0 +1,33 @@
+# theoforge-touch.service — runs the hourly touch sequence.
+# Triggered by theoforge-touch.timer. Don't run manually unless you're
+# testing — the touch logic is idempotent but a manual run while a
+# timer run is in flight will double-send.
+
+[Unit]
+Description=TheoForge Touch Sequence (hourly lead follow-ups via Resend)
+Documentation=file:///home/konan/pantheon/services/theoforge-bridge/theoforge-touch.mjs
+After=network-online.target theoforge-bridge.service
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=konan
+Group=konan
+WorkingDirectory=/home/konan/pantheon/services/theoforge-bridge
+Environment=BRIDGE_URL=http://100.68.106.59:4323
+ExecStart=/usr/bin/node /home/konan/pantheon/services/theoforge-bridge/theoforge-touch.mjs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theoforge-touch
+TimeoutStartSec=300
+
+# No secrets — Resend key is read by the bridge from the env at runtime.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

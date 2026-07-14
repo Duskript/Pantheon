@@ -1,0 +1,71 @@
+============================================================
+  Ichor Phase 0C — Claim Extraction Quality Gate
+============================================================
+
+Provider: opencode
+Model: deepseek-v4-flash
+API base: http://127.0.0.1:8771/v1
+
+Sampling 10 sessions:
+  20260623_164347_3a059f: 16122 events
+  20260623_041701_470a251b: 7026 events
+  20260620_092513_5f4826da: 6995 events
+  20260707_040045_07d22ee9: 6105 events
+  20260626_071618_662085f8: 5847 events
+  20260702_071441_7f569cea: 5105 events
+  20260622_091347_aebbbffe: 4841 events
+  20260706_040246_64719de1: 4786 events
+  20260620_092936_ca21cf55: 4584 events
+  20260609_135252_980756a5: 2699 events
+
+--- Session 1/10: 20260623_164347_3a059f (16122 events) ---
+  Sampled 25 events
+  429 rate-limited, waiting 30s before retry 2/3...
+  429 rate-limited, waiting 60s before retry 3/3...
+  ERROR: HTTP Error 429: Too Many Requests
+  Latency: 271.6s
+  Cooling down 30s...
+
+--- Session 2/10: 20260623_041701_470a251b (7026 events) ---
+  Sampled 25 events
+  429 rate-limited, waiting 30s before retry 2/3...
+  429 rate-limited, waiting 60s before retry 3/3...
+  ERROR: HTTP Error 429: Too Many Requests
+  Latency: 273.3s
+  Cooling down 30s...
+
+--- Session 3/10: 20260620_092513_5f4826da (6995 events) ---
+  Sampled 25 events
+  429 rate-limited, waiting 30s before retry 2/3...
+  429 rate-limited, waiting 60s before retry 3/3...
+  ERROR: HTTP Error 429: Too Many Requests
+  Latency: 272.3s
+  Cooling down 30s...
+
+--- Session 4/10: 20260707_040045_07d22ee9 (6105 events) ---
+  Sampled 25 events
+  429 rate-limited, waiting 30s before retry 2/3...
+  429 rate-limited, waiting 60s before retry 3/3...
+  ERROR: HTTP Error 429: Too Many Requests
+  Latency: 272.7s
+  Cooling down 30s...
+
+--- Session 5/10: 20260626_071618_662085f8 (5847 events) ---
+  Sampled 25 events
+  429 rate-limited, waiting 30s before retry 2/3...
+  429 rate-limited, waiting 60s before retry 3/3...
+  ERROR: HTTP Error 429: Too Many Requests
+  Latency: 271.7s
+  Cooling down 30s...
+
+--- Session 6/10: 20260702_071441_7f569cea (5105 events) ---
+  Sampled 25 events
+  429 rate-limited, waiting 30s before retry 2/3...
+  429 rate-limited, waiting 60s before retry 3/3...
+  ERROR: HTTP Error 429: Too Many Requests
+  Latency: 272.8s
+  Cooling down 30s...
+
+--- Session 7/10: 20260622_091347_aebbbffe (4841 events) ---
+  Sampled 25 events
+  429 rate-limited, waiting 30s before retry 2/3...

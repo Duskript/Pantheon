@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # chromadb removed 2026-06-20 (P5a, ichor-semantic-search-recovery).
+  # Semantic search is now provided by sqlite-vec + fastembed in-process
+  # via lib/ichor/embedder.py and lib/ichor/vector_backend.py — no
+  # separate service required. The embedded vectors live in the same
+  # ~/.hermes/ichor.db file as FTS5.
+
+  pantheon-core:
+    build:
+      context: ../pantheon-core
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    depends_on:
+      - ollama
+    environment:
+      - PANTHEON_HARNESS_DIR=/app/harnesses
+      - PANTHEON_SANCTUARIES_DIR=/app/sanctuaries
+      - ATHENAEUM_ROOT=/app/athenaeum
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
+    volumes:
+      - ../harnesses:/app/harnesses:ro
+      - athenaeum-data:/app/athenaeum
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
+  athenaeum-data:
