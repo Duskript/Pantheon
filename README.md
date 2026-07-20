@@ -2,313 +2,372 @@
 
 <img src="pantheon-logo.png" alt="Pantheon Logo" width="140" align="right" />
 
-Most AI assistants try to do everything. One bot for chat, one for research, one for writing. None of them remember what the others learned.
+Pantheon is a private, local-first AI operating system built around a simple idea: one assistant should not have to be everything.
 
-Pantheon does the opposite.
+Instead of one general-purpose bot, Pantheon gives you a family of specialized AI personalities, called **Gods**, that each know their role. They share context, hand work to each other, build durable knowledge, and keep working even when you walk away.
 
-Instead of one jack-of-all-trades, you get a team of specialized AI personalities (we call them **Gods**) that each excel in their own domain. They talk to each other. They share one evolving brain that gets smarter the more you use it. And they follow your mind wherever it goes. Rabbit holes, tangents, sudden project swaps. Without making you start over.
-
-Create new Gods whenever you need. No coding, no prompt engineering, no YAML. Just talk.
+It is not just chat. It is memory, tools, background work, routing, dashboards, workflows, plugins, skills, and a knowledge base that grows with you.
 
 ---
 
-## Why Pantheon?
+## What Makes Pantheon Different
 
-The idea is simple. A single AI assistant is acceptable at everything but masterful at nothing. A research assistant shouldn't sound like a code builder. A medical advisor shouldn't improvise. So why make them share one personality?
+### A family of specialists, not one generic assistant
 
-Pantheon gives you:
+Each God has a name, personality, domain, tools, boundaries, and memory. A builder should not sound like a medical companion. A researcher should not improvise infrastructure. A writer should not pretend to be a code reviewer.
 
-**A second brain that grows with you.** Your Gods remember what you've talked about and connect ideas across sessions. The more you use Pantheon, the smarter it gets. Not because the models improve, but because your knowledge grows inside it. It learns your voice, your projects, your patterns. Over time it stops feeling like a tool and starts feeling like an extension of your own thinking.
+Pantheon keeps those roles separate while giving them one shared foundation.
 
-**Specialists, not generalists.** Each God has a crafted personality, domain knowledge, and boundaries. They know what they're good at, and they know when to hand something off to another God.
+### A one-of-a-kind memory system
 
-**A shared brain.** Everything your Gods learn gets stored in one place (the Athenaeum). Talk to Thoth about a topic, then ask Hephaestus to build something related. He already has the context. Nothing gets siloed. Nothing gets lost.
+Pantheon combines several layers of memory instead of relying on a single chat transcript:
 
-**Designed for your actual brain.** Rabbit holes aren't a bug, they're how you work. Pantheon doesn't punish you for jumping between topics. Switch from research to building to health tracking in one click. Every God picks up exactly where you left off, with full context preserved. No context dumps, no "as we discussed earlier," no friction.
+- **Rolling working memory** through the `last30days` skill, giving Gods a durable view of recent work without stuffing every conversation into the prompt.
+- **Profile memory** for compact, stable preferences and environment facts.
+- **Session recall** for searching past conversations when a God needs history.
+- **Athenaeum knowledge storage** for durable notes, decisions, plans, references, and codices.
+- **Vector retrieval** for semantic search over knowledge.
+- **Knowledge graph extraction** for entities, relationships, and cross-topic connections.
+- **Skill memory** for reusable procedures that improve the system over time.
+- **Pluggable Hermes memory providers** including Byterover, Hindsight, Holographic, Honcho, Mem0, OpenViking, RetainDB, and Supermemory.
 
-**Your data, your rules.** Pantheon runs on your machine. Every conversation, every document, every insight stays where you control it. No SaaS subscription, no training on your data, no lock-in. You own every byte.
+The result is not “the model remembers.” The system remembers. Models can change, providers can change, contexts can compact, and the memory layer remains yours.
 
-### Who is this for?
+### Local-first and user-owned
 
-- **ADHD thinkers** whose brains jump between subjects. Pantheon's shared brain holds the thread while you follow the spark.
-- **Tinkerers and builders** who want an AI that adapts to them, not the other way around.
-- **Privacy-conscious users** who want frontier model power without handing their data to a cloud service.
-- **Anyone tired of repeating themselves.** Your Gods remember. No context dumps. No "as we discussed earlier."
+Pantheon is designed to run on your machine. Your prompts, files, notes, Codices, plugin state, cron outputs, and long-term knowledge remain under your control. Use cloud models if you want their power; keep the operating system and memory on hardware you own.
+
+### Built for nonlinear minds
+
+Pantheon assumes you will jump topics. Research in the morning, build in the afternoon, health question at night, random product idea three days later. The system is designed to hold the threads so you do not have to keep re-explaining yourself.
 
 ---
 
-## How It All Fits Together
+## High-Level Architecture
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
-│                            YOU                                      │
-│            (Web UI · Telegram · Discord · Mobile · Any Platform)    │
+│                                YOU                                 │
+│        Web UI · Discord · Telegram · Slack · Email · Mobile         │
 └──────────────────────────────┬─────────────────────────────────────┘
                                │
                                ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                    HERMES AGENT (The Runtime Engine)                  │
-│                                                                     │
-│ 15 Platform Gateways  │  Skills · Memory · Cron · Webhooks         │
-│ Email · Calendar ·    │  Web Search · Browser · Code Exec          │
-│ Reminders · Alerts    │  Sub-agents · MCP · Plugin System          │
-└────────────┬───────────────────────────────────────────────────────┘
-             │
-             ├─────────────────────────────────────────────┐
-             │                                             │
-             ▼                                             ▼
-┌────────────────────────┐              ┌──────────────────────────────┐
-│      THE GODS           │              │     THE ATHENAEUM            │
-│  (Specialized Agents)   │              │     (Shared Knowledge)       │
-│                         │              │                              │
-│  ┌─────┐ ┌─────┐       │              │  Knowledge Graph            │
-│  │Her- │ │Thoth│       │◄────►       │  (Entity extraction +        │
-│  │mes  │ │     │       │  All Gods    │   relationship mapping)      │
-│  └─────┘ └─────┘       │  Read/Write  │                              │
-│  ┌─────┐ ┌─────┐       │              │  Vector Search (Ichor vector backend) │
-│  │Heph-│ │Cad- │       │              │                              │
-│  │aest.│ │uceus│       │              │  Self-Learning Intake        │
-│  └─────┘ └─────┘       │              │                              │
-│  ┌─────┐ ┌─────┐       │              │  Lives on your machine      │
-│  │Mar- │ │+ You│       │              │  You own every byte         │
-│  │vin  │ │     │       │              └──────────────────────────────┘
-│  └─────┘ └─────┘       │
-└────────────────────────┘
-             │
-             ▼
+│                        HERMES AGENT RUNTIME                         │
+│                                                                    │
+│  Providers · Tools · Skills · Memory · Cron · Webhooks · MCP        │
+│  Sub-agents · Browser · Search · Files · Code Exec · TTS · Media    │
+└──────────────┬───────────────────────────────┬─────────────────────┘
+               │                               │
+               ▼                               ▼
+┌──────────────────────────────┐   ┌─────────────────────────────────┐
+│             GODS              │   │            ATHENAEUM             │
+│  Specialized AI personalities │   │       Shared knowledge layer     │
+│                              │   │                                 │
+│  Hermes      Operations       │   │  Codices                         │
+│  Hephaestus  Building/PM      │◄─►│  Session summaries               │
+│  Thoth       Research/review  │   │  Knowledge graph                 │
+│  Marvin      Engineering      │   │  Vector retrieval                │
+│  Iris        Design           │   │  Decisions and plans             │
+│  Caduceus    Health           │   │  Rolling memory                  │
+│  + custom Gods                │   │                                 │
+└──────────────┬───────────────┘   └─────────────────────────────────┘
+               │
+               ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                    Model Providers (Direct Routing)                   │
-│                                                                     │
-│  OpenAI · Anthropic · Ollama · OpenRouter · DeepSeek · +20 more    │
-│  Google Gemini · OpenCode Go - direct connections, no proxy        │
+│                         EXTENSION LAYER                             │
+│                                                                    │
+│  Hermes plugins · memory providers · MCP servers · shared skills    │
+│  phone gateway · n8n bridge · Olympus BTST MCP · Ichor gates        │
 └────────────────────────────────────────────────────────────────────┘
-             │
-             ▼
+               │
+               ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                  YOUR MACHINE (Any Hardware)                         │
-│                                                                     │
-│  Full stack: ~3.5GB RAM  │  6-year-old mini PC works fine          │
-│  Headless server · WSL · Linux · macOS                             │
+│                         MODEL PROVIDERS                             │
+│                                                                    │
+│  OpenAI · Anthropic · OpenRouter · Ollama · DeepSeek · Gemini       │
+│  OpenCode Go · Groq · local models · OpenAI-compatible endpoints    │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
 ![Pantheon Architecture Diagram](pantheon-architecture.png)
 
-> **[Open SVG version →](pantheon-architecture.svg)** *(vector, opens in any browser)* • **[Interactive HTML →](pantheon-architecture.html)** *(dark-themed, full-page)*
+> [Open SVG version →](pantheon-architecture.svg) · [Interactive HTML →](pantheon-architecture.html)
 
 ---
 
-## Everything Pantheon Can Do
+## Feature Catalog
 
-### A Self-Learning Knowledge Base
+### Gods and orchestration
 
-The **Athenaeum** is the shared brain. Every conversation, every link, every document you feed it becomes searchable, interconnected, and accessible to every God.
+- **God profiles** with SOUL/persona files, boundaries, tools, and domain ownership.
+- **Multi-god routing** so work goes to the right specialist instead of the loudest assistant.
+- **God-to-god handoffs** with structured contracts.
+- **Conductor workflow patterns** for larger chains of work.
+- **Sub-agent delegation** for parallel investigation and verification.
+- **God packaging** for exporting and sharing reusable God profiles.
+- **Soul Forge direction** for creating new Gods through conversation rather than hand-editing prompts.
 
-- **Vector search** finds anything by meaning, not just keywords.
-- **Knowledge graph** extracts entities automatically, maps relationships, surfaces connections you never explicitly made.
-- **Nightly consolidation** distills your conversations into summaries while you sleep, archives old content, keeps the knowledge base healthy.
-- **Health checks** let Hestia monitor all systems and report back so nothing breaks silently.
+### Memory and knowledge
 
-### A Team That Grows With You
+- **Athenaeum Codices**: durable, file-backed knowledge stores.
+- **`last30days` rolling memory skill**: a living context layer for recent work, decisions, corrections, and unresolved threads.
+- **Hermes profile memory**: compact durable facts about the user and environment.
+- **Session search**: full-text recall over past conversations.
+- **Vector search**: meaning-based retrieval over stored knowledge.
+- **Knowledge graph**: entity and relationship extraction for connected understanding.
+- **Nightly/daily consolidation patterns**: summaries, health checks, stale-context reduction, and digest generation.
+- **Decision logs**: append-only records for operator-locked decisions.
+- **Skill crystallization**: recurring procedures become reusable skills instead of being rediscovered.
 
-Ship with two core Gods. Forge as many more as you need.
+### Skills
 
-- **Hermes**. Messenger and interface. Your front door to the Pantheon. Routes you to the right God, delivers notifications, handles system tasks.
-- **Hephaestus**. The builder. Code, projects, tools, scaffolding. If something needs constructing, this is who you talk to.
+Pantheon ships and uses a large skill ecosystem:
 
-Beyond that, the Pantheon is yours to grow. Use the **Soul Forge** to create a new God through a simple conversation. Pick a name, a personality, a domain. Done. No YAML, no terminal, no prompt engineering.
+- **Shared Pantheon skills** for packaging, release prep, notifications, project ideas, migrations, UI work, n8n, Conductor, Olympus, Athenaeum maintenance, and more.
+- **PM skills** for product strategy, discovery, PRDs, roadmaps, market research, GTM, metrics, personas, pricing, Lean Canvas, SWOT, Porter, PESTLE, and product naming.
+- **Development skills** for debugging, TDD, React, code review, deployment, MCP, GitHub, databases, and release workflows.
+- **Creative skills** for diagrams, PDFs, infographics, comics, mockups, pixel art, music, and visual artifacts.
+- **Dojo / self-improvement skills** that mine failed trajectories and convert hard-won lessons into reusable procedures.
 
-Community-made Gods will be available through the **Gods Marketplace** (coming soon).
+Skills are procedural memory. When a God learns how to solve a class of problem, Pantheon can preserve that know-how.
 
-### Meet Your Gods Anywhere
+### Plugins and extension systems
 
-Pantheon works on every platform you do. Telegram, Discord, Slack, WhatsApp, Signal, SMS, Email, Matrix, and more. Same Gods, same personalities, same shared brain. Switch platforms mid-conversation. Talk to Hermes on Telegram, check a Hephaestus build report in your email, get a push notification from Caduceus on your phone.
+Pantheon includes the Hermes Agent plugin architecture and Pantheon-owned plugins:
 
-The **Web UI** adds Pantheon-specific superpowers:
-- **Glowing gods** each God has their own look, color, and icon. You always know who you're talking to.
-- **Boon Drawer** Gods hand you rich outputs: cards, graphics, structured data. Think artifacts on steroids.
-- **Notification Pane** health checks, cron reports, God-to-God messages in one place. No log hunting.
-- **PWA push notifications** get alerted on your phone when a God finishes a task or needs your input.
-- **Export Bundle** package any God for sharing or backup with one click.
-- **Athenaeum UI** browse, search, and write to your knowledge base directly from the browser.
+- **Model provider plugins** for direct provider routing.
+- **Web search and browser provider plugins**.
+- **Image, video, media, and TTS integrations**.
+- **Dashboard auth and platform adapters**.
+- **Cron, observability, and context-engine plugins**.
+- **Memory provider plugins**: Byterover, Hindsight, Holographic, Honcho, Mem0, OpenViking, RetainDB, Supermemory.
+- **Pantheon plugins** for Demeter intake, Athenaeum graph access, notifications, and profile-aware operations.
+- **Ichor gates** for guardrails, filters, quality checks, and workflow harnessing.
+- **Tokenjuice and stream-retrieval** for token/context management and retrieval support.
 
-### Autonomous Gods That Work While You Sleep
+Credentials, provider-local databases, runtime state, and user-specific plugin data are intentionally excluded from the public repository.
 
-Pantheon doesn't stop when you walk away. Background Gods run on schedules you set:
+### MCP servers
 
-- **Hades** runs nightly: distills conversations, summarizes codexes, archives old content, generates health reports.
-- **Hestia** checks system health every 2 hours: pings services, reports status, catches problems early.
-- **The Fates** evaluates data lifecycle every 5 minutes: applies archival rules, keeps the knowledge base lean.
-- **Your own cron jobs** schedule any task at any interval. Morning briefings, market reports, daily research digests. Delivered wherever you are.
+Pantheon can expose and consume tools through Model Context Protocol:
 
-### Business Tools Built In
+- **Pantheon MCP server** for Athenaeum, messaging, and God-system operations.
+- **Olympus BTST MCP** for browser/task-state tooling.
+- **Hermes n8n MCP integration** for workflow automation.
+- **External MCP compatibility** so new tool servers can be wired in without redesigning the agent runtime.
 
-- **Email** your Gods can send and receive email on your behalf.
-- **Reminders and alerts** scheduled check-ins at any interval, pushed wherever you are.
-- **Coordination** chain tasks, set up recurring reports, automate multi-step workflows.
-- **Web research** search the web, scrape pages, gather competitive intel.
-- **File and code execution** read, write, organize files, run Python and shell scripts.
-- **Credential management** rotate API keys automatically, never hit a rate limit.
-- **Browser automation** fill forms, navigate sites, capture screenshots.
+### Interfaces
 
-### Skills That Accumulate
+- **Pantheon Web UI** with god-themed identity, conversations, artifacts, and system views.
+- **PWA support** for installable mobile/desktop use.
+- **Discord and Telegram gateways** for chatting with Gods from normal messaging apps.
+- **Slack, email, SMS, Signal, Matrix, and other Hermes-supported platforms** depending on configured gateways.
+- **Phone gateway skill and daemon** for mobile/device integration experiments.
+- **Notifications** for task completion, errors, review requests, and chain stalls.
 
-Every time a God solves a complex problem or discovers a useful workflow, that knowledge can be saved as a **skill**. Skills accumulate over time, making your Gods better at your specific tasks and environment.
+### Automation and background work
 
-It's not a better model. It's a system that remembers how you work and improves with every session.
+- **Cron jobs** that run prompts, skills, or scripts on a schedule.
+- **Watchdog patterns** for disk, memory, service, and API health checks.
+- **Morning/daily briefing patterns**.
+- **Digest generation** and incremental knowledge maintenance.
+- **Webhook subscriptions** so external events can trigger agent work after operator approval.
+- **n8n integration** as the scheduled/triggered workflow layer where appropriate.
 
-### Run Any Model You Want
+### Building and product work
 
-Pantheon connects directly to any OpenAI-compatible provider. OpenAI, Anthropic, Ollama (local models), OpenRouter, DeepSeek, Google Gemini, OpenCode Go, or any of 20 plus supported endpoints. No proxy layer, no extra moving parts. Swap models per-God or mid-session without config changes or API key reshuffling.
+Pantheon is not only a chat layer. It is used to plan, build, review, and ship:
 
-Running local models? Ollama integrates out of the box. Your Gods use them the same way they use GPT-4 or Claude.
+- Product strategy artifacts: Lean Canvas, SWOT, PESTLE, Porter, Ansoff, positioning, pricing, GTM, ICPs, personas, OKRs, and PRDs.
+- Build plans and architecture docs.
+- Kanban/card decomposition for multi-agent work.
+- Tiered QA gates and spec-conformance review.
+- Browser verification for real UI behavior.
+- GitHub cleanup, release prep, README/doc discipline, and secret-scan workflows.
 
-### Extend It Your Way
+### Tools available to Gods
 
-- **MCP (Model Context Protocol)** plug in any MCP-compatible tool or server for instant new capabilities.
-- **Webhook subscriptions** trigger God actions from external events: new email, code push, calendar event.
-- **Plugin system** custom Python modules that add entirely new capabilities to the runtime.
-- **Sub-agents** delegate work to parallel AI agents for complex multi-step tasks, each running in isolation.
+Depending on profile and permissions, Gods can use:
 
----
-
-## What You Can Do With It
-
-The features are nice. Here's what they actually look like in real life.
-
-### From curiosity to creation
-
-You hear about a new technology and want to prototype something with it. You talk to **Thoth**. He researches it with you, captures notes, follows rabbit holes, builds understanding. Everything goes into the shared brain.
-
-Next session, you switch to **Hephaestus**. He already knows what you discovered. He reads Thoth's research from the Athenaeum and starts building. No context dump, no repeating yourself. Pick up where the idea left off and turn it into something real.
-
-### A health companion that knows your story
-
-You have a complicated medication schedule and a new symptom you're trying to understand. **Caduceus** helps you research interactions, build a daily routine, and track what you're experiencing. Weeks later, you notice a pattern. You don't have to explain the whole history again. Caduceus remembers. The Athenaeum connects the dots between sessions you'd forgotten about.
-
-### Dive into a new project
-
-You're starting something. A game, a tool, a home renovation, a novel. You create a **Workspace** for it. Drop in reference photos, links, notes through the **Intake Pipeline**. The Athenaeum ingests and categorizes everything automatically.
-
-Research with Thoth. Build with Hephaestus. Catch edge cases with Marvin's brutally honest reviews. Every God involved already has full context because they all share the same evolving brain. The Workspace keeps all the files organized without you thinking about it.
-
-### Learn anything, never lose the thread
-
-You're teaching yourself a new subject. You talk to Thoth in short sessions across days or weeks. Each conversation builds on the last. Not because you summarize what you covered, but because the Athenaeum retains it all. Jump in, ask your question, get an answer that knows what you already understand. Pick up exactly where you left off, even if it's been a week.
-
-### Your brain jumps. The system keeps up.
-
-You start the morning researching something completely unrelated to what you were building yesterday. Thoth is there, already warm, already knows your thinking style. Half an hour later you remember a bug from last week's project. Switch to Hephaestus, the relevant context is waiting. Then a health question pops into your head. Caduceus picks it up without needing the backstory again.
-
-No friction, no "let me recap what we discussed," no losing momentum because you changed subjects. The shared brain adapts to you. Not the other way around. Pantheon is built for the way ADHD brains actually work. Follow the spark, knowing the system will hold the thread until you come back.
-
-### Debug like you have a cynical genius on call
-
-Something is broken and the error log is incomprehensible. You hand it to **Marvin**. He tells you exactly what's wrong, why it's wrong, and why he predicted it would be wrong three days ago. Then he helps you fix it, with commentary. Hand the solution to Hephaestus and it's deployed in minutes.
-
-### One conversation leads to another
-
-An idea hits you mid-session. You throw it into the **Ideas List** with a sentence. It's captured, timestamped, searchable. Days later you're talking to a different God about something else, and the idea resurfaces because the shared brain connected it to what you're discussing now. Nothing you think about in Pantheon is ever truly lost.
+- File read/write/search.
+- Shell commands and long-running processes.
+- Web search and page extraction.
+- Browser automation and screenshots.
+- Image analysis and generation.
+- Text-to-speech.
+- Cron scheduling.
+- Git/GitHub workflows.
+- Databases, APIs, Google Workspace, Airtable, Notion, Linear, Spotify, YouTube, X/Twitter, maps, and other skill-backed integrations.
 
 ---
 
-## Your Digital Brain (The Athenaeum)
+## What You Can Do With Pantheon
 
-The Athenaeum is the shared knowledge layer that every God reads from and writes to. Think of it as a library that grows with you:
+### Research something, then build from it
 
-- **Every conversation** adds to it.
-- **Every document you drop in** gets categorized and indexed.
-- **Every search** gets smarter over time. Both keyword and semantic.
-- **Entities and relationships** are extracted automatically, building a knowledge graph of connected ideas.
-- **Nightly consolidation** distills conversations into manageable summaries, archives old content, and identifies patterns.
-- **Gods query it automatically.** They don't start from zero every time you talk.
+Talk to Thoth about a topic, collect sources, write notes, and let the Athenaeum keep the trail. Later, ask Hephaestus to turn that research into a build plan or working artifact. The builder can use the research without you retyping it.
 
-The Athenaeum is yours. It lives on your machine. You own every byte. No one else trains on it or sees it.
+### Keep a project alive across weeks
+
+Create plans, decisions, docs, GitHub issues, code reviews, QA gates, and deployment notes. Pantheon keeps the connective tissue: what was decided, what is blocked, what changed, and which God owns the next step.
+
+### Run your personal operations layer
+
+Schedule briefings, health checks, reminders, research sweeps, system monitors, and recurring reports. Send results to the chat platform where you actually live.
+
+### Build a second brain that behaves like your brain
+
+Drop in notes, links, transcripts, tasks, ideas, and decisions. Search semantically. Let entities and relationships accumulate. Switch topics without losing the thread.
+
+### Extend the system instead of waiting on a vendor
+
+Add skills, plugins, MCP servers, memory providers, tools, and God profiles. Pantheon is designed to be modified by its owner.
 
 ---
 
 ## What It Runs On
 
-- **Any machine** tested on a 6-year-old mini PC with 8GB RAM. Full stack uses about 3.5GB.
-- **Any OS** Linux (primary), WSL on Windows, macOS.
-- **Any inference provider** OpenAI, Anthropic, OpenRouter, Ollama, DeepSeek, Google Gemini, any OpenAI-compatible endpoint.
-- **Headless ready** runs perfectly on a home server. Connect via web browser from any device on your network.
-- **Store it anywhere** the entire system lives in `~/pantheon/`. Move it, back it up, replicate it. It's just files.
+- **Primary target:** Linux.
+- **Also viable:** WSL and macOS, with some install paths still being polished.
+- **Hardware:** tested on modest home-server hardware; local model usage depends on your machine, but cloud-provider mode is lightweight.
+- **Storage:** repo in `~/pantheon`, Hermes runtime/config in `~/.hermes`, Athenaeum knowledge in `~/athenaeum`.
+- **Models:** use hosted providers, local Ollama, or any OpenAI-compatible endpoint.
 
 ---
 
 ## Quick Start
 
+The installer is currently **Beta**. It is idempotent, logs every run, and is being hardened for fresh machines.
+
 ```bash
-# One command. Installs everything and opens the setup wizard.
-curl -fsSL https://raw.githubusercontent.com/Duskript/Pantheon/main/scripts/install-pantheon.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Duskript/Pantheon/main/install/install-pantheon.sh | bash
 ```
 
-Or to inspect first:
+Inspect first:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Duskript/Pantheon/main/scripts/install-pantheon.sh -o /tmp/install-pantheon.sh
+curl -fsSL https://raw.githubusercontent.com/Duskript/Pantheon/main/install/install-pantheon.sh -o /tmp/install-pantheon.sh
 bash /tmp/install-pantheon.sh
 ```
 
-The installer:
-1. Installs **Hermes Agent** (the runtime engine)
-2. Clones **Pantheon** to `~/pantheon`
-3. Creates a starter `.env` for your API keys
-4. Installs core Gods (Hermes + Hephaestus)
-5. Starts the gateway
-6. Opens the **Welcome Wizard** in your browser
+The default install now focuses on the smooth first-run path:
 
-From there, the Wizard walks you through adding API keys and connecting your first provider. Note: the setup wizard is in **Beta**. It covers the core flow, but you might hit rough edges as we polish it.
+1. Checks prerequisites.
+2. Clones Pantheon to `~/pantheon`.
+3. Installs Hermes Agent from the bundled source.
+4. Creates starter `.env` files.
+5. Installs the core Hermes and Hephaestus profiles.
+6. Installs curated Hephaestus skills.
+7. Starts the local Setup Server on `http://127.0.0.1:9876/welcome.html`.
+8. Opens the Welcome Wizard when possible.
 
-### Manual Setup
+The wizard then helps you add model keys, configure embeddings, and launch the runtime.
 
-If you prefer to set things up step by step:
+For the heavier all-in path:
 
 ```bash
-# 1. Install Hermes Agent (the engine Pantheon runs on)
+bash ~/pantheon/install/install-pantheon.sh --full
+```
+
+`--full` additionally attempts optional services such as Composio, Ollama embeddings, Whisper, systemd user services, cron setup, Olympus UI build/deploy, and endpoint smoke tests.
+
+### Useful installer flags
+
+| Flag | Use |
+|---|---|
+| `--full` | Run the optional heavyweight service phases as well as the core setup. |
+| `--skip-composio-prompt` | Avoid the Composio prompt. Useful for quick local setup. |
+| `--enterprise` | Assume credentials are pre-populated by an enterprise wrapper. |
+| `--non-interactive` | Fail instead of prompting. Useful for CI and repeatable tests. |
+| `--phase N` | Run only one phase for debugging. |
+| `--no-setup-server` | Do not start the local setup server at the end. |
+
+### Manual setup
+
+```bash
+# 1. Install Hermes Agent
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh
 
 # 2. Clone Pantheon
 git clone https://github.com/Duskript/Pantheon.git ~/pantheon
 
-# 3. Add API keys
-nano ~/pantheon/.env
+# 3. Create env files
+cp ~/pantheon/.env.example ~/pantheon/.env
+cp ~/pantheon/install/assets/env/.env.example ~/.hermes/.env
 
-# 4. Install core Gods
+# 4. Install core profiles and skills
+bash ~/pantheon/install/install-pantheon.sh --non-interactive --no-setup-server
+
+# 5. Start the setup wizard when ready
 cd ~/pantheon
-python3 scripts/pantheon-install .
-
-# 5. Start gateway and open Web UI
-hermes gateway &
-open http://localhost:8787
+python3 scripts/setup-server.py
+# open http://127.0.0.1:9876/welcome.html
 ```
-
-That's it. No SaaS signup, no credit card, no data leaving your machine.
 
 ---
 
-## Planned
+## Installer Status
 
-| Feature | Status |
-|---------|--------|
-| **Gods Marketplace** | Browse and install community-made Gods. Pick a personality, click install, start talking. |
+The installer is being actively hardened. Known rough edges that are now addressed or isolated:
+
+- The README now points at the canonical `install/install-pantheon.sh` path.
+- The default path avoids heavyweight optional services until the user asks for `--full`.
+- The setup server is started by the installer again, matching the Welcome Wizard docs.
+- User-systemd phases are skipped with warnings when systemd user services are unavailable.
+- Service files are rendered with `$HOME`/`%h`-portable paths instead of hardcoded single-user paths where the installer controls them.
+- Optional Composio, Ollama, Whisper, cron, and Olympus phases are separated from the first-run happy path.
+
+If something fails, rerun the installer. It is designed to be idempotent and writes logs under `~/.local/share/pantheon-install/`.
+
+---
+
+## Repository Layout
+
+| Path | Purpose |
+|---|---|
+| `hermes-agent/` | Bundled Hermes Agent runtime source and plugin architecture. |
+| `plugins/` | Pantheon-owned Hermes plugins. |
+| `god-packages/` | God profiles, shared skills, and distributable God assets. |
+| `pantheon-core/` | Core Pantheon services including MCP server logic. |
+| `webui/` | Pantheon Web UI and onboarding surfaces. |
+| `mcp-servers/` | Additional MCP servers such as Olympus BTST. |
+| `scripts/` | Operational scripts, setup helpers, daemons, and CLI utilities. |
+| `install/` | Public installer, validation script, and install assets. |
+| `planning/` | Current scope, features, architecture, and API-key references. |
+| `docs/` | Setup and subsystem documentation. |
+
+Runtime state, user data, credentials, local workflows, app payloads, generated outputs, and provider databases are intentionally gitignored.
 
 ---
 
 ## Project Status
 
-Pantheon is actively used and maintained by its creator. The core architecture is stable. Background Gods run 24/7, the knowledge base grows with every conversation, and the Web UI is fully integrated.
+Pantheon is actively used by its creator and is moving toward a clean public release. The core architecture is real and in daily use: specialized Gods, shared memory, skills, plugins, MCP, Web UI, background jobs, and knowledge systems all exist today.
 
-The **setup wizard** is in 🛠️ **Beta**. The install and configuration flow works, but we're still polishing the first-run experience. If you hit a snag, [open an issue](https://github.com/Duskript/Pantheon/issues) or ping us on Reddit.
-
-This is a personal project first. Built because existing AI assistants didn't work the way one person needed them to. Every design decision flows from that. No SaaS, no data harvesting, no prompts to engineer. Just a system that adapts to you.
-
-It's shared in case anyone else finds the same problems worth solving the same way.
+The public install experience is still marked **Beta** until it has passed repeated clean-machine validation.
 
 ---
 
-## A Note on Architecture
+## Planned / Coming Next
 
-Pantheon runs on top of [Hermes Agent](https://hermes-agent.nousresearch.com), an open-source multi-platform AI agent framework by Nous Research. Hermes is the engine; Pantheon is the car. All Pantheon-specific capabilities (the Gods, the Athenaeum, the knowledge graph, the background schedulers, the MCP tools, the Web UI overlays) are built as a layer on top of that runtime.
+| Area | Status |
+|---|---|
+| Gods Marketplace | Planned: browse, install, and share community-made Gods. |
+| Fresh-machine installer hardening | In progress. |
+| Public release polish | In progress. |
+| More packaged God profiles | Ongoing. |
 
-*Built on [Hermes Agent](https://hermes-agent.nousresearch.com), the multi-platform AI agent framework.*
+---
+
+## Philosophy
+
+Pantheon exists because a personal AI system should adapt to its owner, not the other way around.
+
+No SaaS lock-in. No forced single personality. No throwing away the context that makes your work yours. No pretending memory is solved by a longer prompt.
+
+A family of specialists. A shared brain. Your machine. Your rules.
+
+---
+
+Built on [Hermes Agent](https://hermes-agent.nousresearch.com), the multi-platform AI agent framework by Nous Research.

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # install-pantheon.sh — install the Pantheon public release on a fresh CachyOS/Debian/macOS box
 #
-# Source of truth: ~/athenaeum/Codex-Olympus/INSTALL_PIPELINE.md
-# This script is the executable form of that spec. Specs drift; the script
-# is what actually runs. When you change this, update the spec in the same
-# commit and append a decision to DECISIONS.md.
+# Source of truth: install/README.md and the root README Quick Start.
+# This script is the executable install path; keep docs and script in sync.
 #
 # Idempotent: re-running after partial failure completes the rest.
 # Two-mode: --enterprise skips the interactive Composio prompt (assumes
@@ -21,7 +19,9 @@
 #   --enterprise              skip the interactive Composio/n8n prompts
 #   --skip-composio-prompt    skip Composio prompt only (n8n still skipped always)
 #   --non-interactive         fail rather than prompt (for CI/automation)
-#   --phase N                 run only phase N (1-16); for debugging
+#   --phase N                 run only phase N (1-17); for debugging
+#   --full                    run optional heavyweight service phases
+#   --no-setup-server         do not start the first-run setup server
 
 set -euo pipefail
 
@@ -44,6 +44,34 @@ ENTERPRISE_MODE=false
 SKIP_COMPOSIO_PROMPT=false
 NON_INTERACTIVE=false
 ONLY_PHASE=""
+FULL_INSTALL=false
+START_SETUP_SERVER=true
+
+usage() {
+    cat <<'EOF'
+Pantheon installer
+
+Usage:
+  install-pantheon.sh [flags]
+
+Default install:
+  - checks prerequisites
+  - clones/updates Pantheon
+  - installs Hermes Agent
+  - creates env files
+  - installs core Hermes + Hephaestus profiles and curated skills
+  - starts the setup server at http://127.0.0.1:9876/welcome.html
+
+Flags:
+  --full                    run optional heavyweight service phases
+  --enterprise              skip interactive credential prompts
+  --skip-composio-prompt    skip the Composio prompt
+  --non-interactive         fail rather than prompt
+  --phase N                 run only phase N (0-17)
+  --no-setup-server         do not start the setup server at the end
+  -h, --help                show this help
+EOF
+}
 
 # ─── Argument parsing ────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -52,8 +80,10 @@ while [[ $# -gt 0 ]]; do
         --skip-composio-prompt)    SKIP_COMPOSIO_PROMPT=true; shift ;;
         --non-interactive)         NON_INTERACTIVE=true; shift ;;
         --phase)                   ONLY_PHASE="$2"; shift 2 ;;
+        --full)                    FULL_INSTALL=true; shift ;;
+        --no-setup-server)         START_SETUP_SERVER=false; shift ;;
         -h|--help)
-            grep '^#' "$0" | sed 's/^# \?//'
+            usage
             exit 0
             ;;
         *)  echo "Unknown flag: $1" >&2; exit 1 ;;
@@ -79,6 +109,120 @@ phase_done() {
 should_run_phase() {
     local phase="$1"
     [[ -z "$ONLY_PHASE" || "$ONLY_PHASE" == "$phase" ]]
+}
+
+
+run_optional_phase() {
+    local phase="$1"
+    [[ "$FULL_INSTALL" == true ]] && should_run_phase "$phase"
+}
+
+have_user_systemd() {
+    command -v systemctl >/dev/null 2>&1 || return 1
+    systemctl --user show-environment >/dev/null 2>&1 || return 1
+}
+
+open_url() {
+    local url="$1"
+    case "$(uname -s)" in
+        Darwin) open "$url" >/dev/null 2>&1 || warn "Open $url in your browser" ;;
+        Linux)  xdg-open "$url" >/dev/null 2>&1 || warn "Open $url in your browser" ;;
+        *)      warn "Open $url in your browser" ;;
+    esac
+}
+
+render_pantheon_services() {
+    mkdir -p "$SYSTEMD_USER_DIR"
+
+    cat > "$SYSTEMD_USER_DIR/pantheon-webui.service" <<EOF
+[Unit]
+Description=Pantheon Web UI
+Documentation=https://github.com/Duskript/Pantheon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/pantheon/webui
+ExecStart=$(command -v python3) %h/pantheon/webui/server.py
+Restart=always
+RestartSec=5
+Environment=HERMES_WEBUI_INDEX=hermes-ui.html
+Environment=HERMES_WEBUI_HOST=0.0.0.0
+Environment=HERMES_WEBUI_PORT=8787
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
+EOF
+
+    cat > "$SYSTEMD_USER_DIR/pantheon-mcp.service" <<EOF
+[Unit]
+Description=Pantheon MCP Server
+Documentation=https://github.com/Duskript/Pantheon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/pantheon/pantheon-core
+ExecStart=$(command -v python3) %h/pantheon/pantheon-core/mcp_server.py --port 8010
+Restart=on-failure
+RestartSec=5
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+
+    cat > "$SYSTEMD_USER_DIR/composio-bridge.service" <<EOF
+[Unit]
+Description=Composio OAuth Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env npm start
+WorkingDirectory=%h/pantheon/composio-bridge
+Restart=always
+RestartSec=10
+Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+}
+
+start_setup_server() {
+    [[ "$START_SETUP_SERVER" == true ]] || return 0
+    log "Phase 17: start first-run setup server"
+
+    local setup_log="$LOG_DIR/setup-server.log"
+    local setup_url="http://127.0.0.1:9876/welcome.html"
+
+    if curl -fsS -o /dev/null "$setup_url" 2>/dev/null; then
+        ok "setup server already running at $setup_url"
+        phase_done 17
+        return 0
+    fi
+
+    nohup python3 "$PANTHEON_HOME/scripts/setup-server.py" 9876 > "$setup_log" 2>&1 &
+    local setup_pid=$!
+    sleep 1
+
+    if kill -0 "$setup_pid" 2>/dev/null; then
+        ok "setup server running at $setup_url (pid $setup_pid)"
+        log "  setup log: $setup_log"
+        open_url "$setup_url"
+    else
+        warn "setup server did not stay running; check $setup_log"
+    fi
+    phase_done 17
 }
 
 # ─── Phase 0: preflight ──────────────────────────────────────────────────
@@ -196,8 +340,18 @@ phase_3_hermes() {
 phase_4_composio() {
     log "Phase 4: install + start Composio bridge"
 
-    # Install node deps
-    (cd "$PANTHEON_HOME/composio-bridge" && npm ci)
+    # Install node deps. Composio is optional in the public installer; skip cleanly
+    # if the bridge package is absent or not ready on this machine.
+    if [[ ! -f "$PANTHEON_HOME/composio-bridge/package.json" ]]; then
+        warn "composio-bridge package not found; skipping optional Composio bridge"
+        phase_done 4
+        return 0
+    fi
+    (cd "$PANTHEON_HOME/composio-bridge" && npm ci) || {
+        warn "npm ci failed for composio-bridge; skipping optional bridge"
+        phase_done 4
+        return 0
+    }
 
     # Populate ~/.hermes/.env from the install template (if .env missing)
     if [[ ! -f "$HERMES_HOME/.env" ]]; then
@@ -241,13 +395,15 @@ phase_4_composio() {
         fi
     fi
 
-    # Install the systemd service
-    mkdir -p "$SYSTEMD_USER_DIR"
-    cp "$PANTHEON_HOME/install/assets/systemd/composio-bridge.service" \
-       "$SYSTEMD_USER_DIR/composio-bridge.service"
+    if ! have_user_systemd; then
+        warn "systemd --user is unavailable; skipping Composio service start"
+        phase_done 4
+        return 0
+    fi
 
-    systemctl --user daemon-reload
-    systemctl --user enable --now composio-bridge.service
+    render_pantheon_services
+    systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
+    systemctl --user enable --now composio-bridge.service || warn "could not enable/start composio-bridge.service"
 
     # Wait for health (max 30s)
     local i=0
@@ -285,14 +441,18 @@ phase_5_ollama() {
             ;;
     esac
 
-    systemctl --user enable --now ollama.service
+    if have_user_systemd; then
+        systemctl --user enable --now ollama.service || warn "could not enable/start ollama.service"
+    elif command -v ollama >/dev/null 2>&1; then
+        warn "systemd --user unavailable; start Ollama manually with: ollama serve"
+    fi
 
     # Pull nomic-embed-text only (wizard pulls chat models on demand)
     log "  pulling nomic-embed-text (this may take a minute)..."
-    ollama pull nomic-embed-text
+    ollama pull nomic-embed-text || warn "ollama pull failed; configure embeddings later in the wizard"
 
     # Verify
-    ollama list | grep -q nomic-embed-text || die "nomic-embed-text not in ollama list after pull"
+    ollama list | grep -q nomic-embed-text || warn "nomic-embed-text not in ollama list yet"
     ok "Ollama installed with nomic-embed-text"
     phase_done 5
 }
@@ -419,22 +579,24 @@ phase_9_hephaestus_skills() {
 phase_10_services() {
     log "Phase 10: install + start Pantheon systemd services"
 
-    mkdir -p "$SYSTEMD_USER_DIR"
+    if ! have_user_systemd; then
+        warn "systemd --user is unavailable; skipping service installation"
+        warn "use the Welcome Wizard or run services manually after setup"
+        phase_done 10
+        return 0
+    fi
 
-    # pantheon-webui
-    cp "$PANTHEON_HOME/webui/pantheon-webui.service" \
-       "$SYSTEMD_USER_DIR/pantheon-webui.service"
-    # pantheon-mcp
-    cp "$PANTHEON_HOME/pantheon-core/pantheon-mcp.service" \
-       "$SYSTEMD_USER_DIR/pantheon-mcp.service"
-    # demeter-watcher
-    cp "$PANTHEON_HOME/webui/demeter-watcher.service" \
-       "$SYSTEMD_USER_DIR/demeter-watcher.service"
+    render_pantheon_services
+    if [[ -f "$PANTHEON_HOME/webui/demeter-watcher.service" ]]; then
+        cp "$PANTHEON_HOME/webui/demeter-watcher.service"            "$SYSTEMD_USER_DIR/demeter-watcher.service"
+    fi
 
-    systemctl --user daemon-reload
-    systemctl --user enable --now pantheon-webui.service
-    systemctl --user enable --now pantheon-mcp.service
-    systemctl --user enable --now demeter-watcher.service
+    systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
+    systemctl --user enable --now pantheon-webui.service || warn "could not enable/start pantheon-webui.service"
+    systemctl --user enable --now pantheon-mcp.service || warn "could not enable/start pantheon-mcp.service"
+    if [[ -f "$SYSTEMD_USER_DIR/demeter-watcher.service" ]]; then
+        systemctl --user enable --now demeter-watcher.service || warn "could not enable/start demeter-watcher.service"
+    fi
 
     # Wait for webui on :8787 (max 30s)
     local i=0
@@ -530,18 +692,18 @@ phase_16_summary() {
 ║  Pantheon install complete                                    ║
 ╚══════════════════════════════════════════════════════════════╝
 
-  Wizard:    http://localhost:$PANTHEON_WEBUI_PORT/onboarding/welcome
-  Composio:  http://localhost:$COMPOSIO_BRIDGE_PORT/health
-  MCP:       http://localhost:$PANTHEON_MCP_PORT/mcp
+  Setup:     http://127.0.0.1:9876/welcome.html
+  Web UI:    http://localhost:$PANTHEON_WEBUI_PORT
+  Composio:  http://localhost:$COMPOSIO_BRIDGE_PORT/health  (--full only)
+  MCP:       http://localhost:$PANTHEON_MCP_PORT/mcp       (--full or wizard launch)
 
   Logs:      $LOG_FILE
 
 Next steps:
-  1. Open the wizard URL above
-  2. Walk through the 6 steps
-  3. If Composio health is "composio:false", fill in
-     $HERMES_HOME/.env with your keys (see docs/COMPOSIO_SETUP.md)
-  4. Run validate-pantheon.sh any time to check system health
+  1. Open the setup URL above
+  2. Add model and embedding keys
+  3. Launch Pantheon from the wizard
+  4. Re-run with --full later if you want optional local services installed
 
 EOF
     phase_done 16
@@ -551,6 +713,7 @@ EOF
 main() {
     log "Pantheon install starting (log: $LOG_FILE)"
     [[ "$ENTERPRISE_MODE" == true ]] && log "  mode: enterprise"
+    [[ "$FULL_INSTALL" == true ]] && log "  mode: full optional service install"
     [[ -n "$ONLY_PHASE" ]] && log "  running only phase $ONLY_PHASE"
 
     phase_0_preflight
@@ -559,19 +722,20 @@ main() {
     should_run_phase 1 && phase_1_packages
     should_run_phase 2 && phase_2_clone
     should_run_phase 3 && phase_3_hermes
-    should_run_phase 4 && phase_4_composio
-    should_run_phase 5 && phase_5_ollama
-    should_run_phase 6 && phase_6_whisper
+    run_optional_phase 4 && phase_4_composio
+    run_optional_phase 5 && phase_5_ollama
+    run_optional_phase 6 && phase_6_whisper
     should_run_phase 7 && phase_7_pantheon_env
     should_run_phase 8 && phase_8_god_profiles
     should_run_phase 9 && phase_9_hephaestus_skills
-    should_run_phase 10 && phase_10_services
-    should_run_phase 11 && phase_11_cron
-    should_run_phase 12 && phase_12_olympus_ui
+    run_optional_phase 10 && phase_10_services
+    run_optional_phase 11 && phase_11_cron
+    run_optional_phase 12 && phase_12_olympus_ui
     should_run_phase 13 && phase_13_god_exports
-    should_run_phase 14 && phase_14_wizard_smoke
-    should_run_phase 15 && phase_15_intake
+    run_optional_phase 14 && phase_14_wizard_smoke
+    run_optional_phase 15 && phase_15_intake
     should_run_phase 16 && phase_16_summary
+    should_run_phase 17 && start_setup_server
 
     log "Done."
 }
