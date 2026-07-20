@@ -31,6 +31,8 @@ The index is **append-only**. Old decisions are never edited. Reversed decisions
 
 | Date | Title | One-line summary | File |
 |---|---|---|---|
+| 2026-07-20 | Content Ops Destination Registry | Content Operations targets are data-driven destinations with cross-post joins, not a fixed `surface` enum. | [2026-07-20-content-ops-destination-registry.md](2026-07-20-content-ops-destination-registry.md) |
+| 2026-07-20 | Content Ops React Mobile UI Pivot | Content Operations UI moved from the rejected Appsmith experiment to a custom React/Vite mobile app served by Flask. | [2026-07-20-content-ops-react-mobile-ui-pivot.md](2026-07-20-content-ops-react-mobile-ui-pivot.md) |
 | 2026-06-20 | Conductor UI Phase D closure — docs + SDK policy + Phase 4.5 gap | Phase D closed: feature flag verified, 3 docs written, decisions locked; Phase 4.5 (Credentials Store) is NOT actually shipped in the tree. | [2026-06-20-conductor-ui-phase-d-docs.md](2026-06-20-conductor-ui-phase-d-docs.md) |
 | 2026-06-16 | Hephaestus Rework — God of Building and Architecture | Hephaestus is no longer the planner. He's the conductor. Konan + Thoth develop plans, Hephaestus executes. | [design/hephaestus-rework-workflow-god.md](../../../athenaeum/Codex-Pantheon/design/hephaestus-rework-workflow-god.md) |
 | 2026-06-16 | Hephaestus Rework Execution Complete | All 7 steps of the rework execution order complete. SOUL.md, gods.yaml, 8 skills, dispatcher updates, decision logged. | [2026-06-16-hephaestus-rework-complete.md](2026-06-16-hephaestus-rework-complete.md) |
@@ -61,6 +63,7 @@ The index is **append-only**. Old decisions are never edited. Reversed decisions
 
 ### Architecture
 
+- 2026-07-20: [Content Ops Destination Registry](2026-07-20-content-ops-destination-registry.md) — destination registry + cross-post join table replaces fixed surface enum for target routing
 - 2026-06-16: [Hephaestus Rework — God of Building and Architecture](hephaestus-rework-workflow-god.md)
 - 2026-06-16: [Hephaestus Rework Execution Complete](2026-06-16-hephaestus-rework-complete.md) — all 7 steps executed
 - 2026-06-16: [Build Path Convention](build-path-convention.md)
@@ -93,6 +96,8 @@ The index is **append-only**. Old decisions are never edited. Reversed decisions
 
 ### Build plans
 
+- 2026-07-20: [Content Ops Destination Registry](2026-07-20-content-ops-destination-registry.md)
+- 2026-07-20: [Content Ops React Mobile UI Pivot](2026-07-20-content-ops-react-mobile-ui-pivot.md)
 - 2026-06-16: [Conductor UI build plan v1.1](../../../pantheon/plans/conductor-ui-build-plan.md)
 
 ## How to add a new decision
