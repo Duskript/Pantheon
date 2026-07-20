@@ -210,6 +210,12 @@ pipeline.py
 qa-reviews/
 .hermes-synthesis-design-references.md
 
+# Skill packages may legitimately contain pipeline.py modules.
+!god-packages/shared-skills/last30days/scripts/lib/pipeline.py
+
+# Large example media from vendored skills — not needed for Pantheon runtime.
+god-packages/shared-skills/last30days/assets/
+
 # god-templates: instance-generated, not part of upstream
 god-template/
 
@@ -268,3 +274,35 @@ shared/decisions/konan/
 
 # athenaeum-writes (running log, not source)
 shared/athenaeum-writes.md
+
+# =============================================================================
+# Added 2026-07-20 — keep current Pantheon update scoped to core system
+# =============================================================================
+# Product/client apps and generated workflow outputs are local artifacts, not core.
+craigslist_leads.html
+craigslist_leads.json
+content-dashboard/
+plans/features/
+shared/active/*
+!shared/active/INDEX.md
+!shared/active/2026-06-11.md
+!shared/active/conductor-*.md
+!shared/active/conductor-*.txt
+!shared/active/conductor-v2-*.md
+shared/apify-publisher-*.md
+va-deploy-live-hashes.txt
+
+# Runtime artifacts from Conductor, Hermes Dojo, phone daemon, and scratch probes.
+conductor/artifacts/
+hermes-dojo/logs/
+hermes-dojo/tmp/
+hermes-dojo/*.db
+hermes-dojo/*.jsonl
+hermes-dojo/batch-notes-*-crystallization.md
+hermes-dojo/scripts/_*.py
+phone-daemon/
+scoped/
+
+# Personal scheduled workflows and screenshot/debug captures.
+cron/dawn-patrol-notion.py
+scripts/facebook_current.png

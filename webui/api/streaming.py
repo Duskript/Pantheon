@@ -2384,6 +2384,7 @@ def _run_agent_streaming(
                 import json as _json
                 from api.config import SESSION_AGENT_CACHE, SESSION_AGENT_CACHE_LOCK
                 _sig_blob = _json.dumps([
+                    _resolved_profile or '',
                     resolved_model or '',
                     _hashlib.sha256((resolved_api_key or '').encode()).hexdigest()[:16],
                     resolved_base_url or '',

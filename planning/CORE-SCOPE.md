@@ -1,12 +1,12 @@
 # Pantheon Core — Package Scope
 
-> Last updated: 2026-05-11
-> Written for the Phase 5 README and installer build.
+> Last updated: 2026-07-20
+> Written for the current Pantheon core update.
 > Source: Direct decision with Konan.
 
 ## Philosophy
 
-Pantheon Core ships just enough to run a Pantheon instance. Two gods (Hermes + Hephaestus), a WebUI with the Pantheon overlay, LiteLLM for unified model routing, and the background infrastructure (Athenaeum, MCP server, cron gods). Everything else is user-built.
+Pantheon Core ships the reusable Pantheon system: the Hermes-backed runtime layer, god/profile conventions, the WebUI overlay, MCP integrations, reusable shared skills, and system daemons that make a Pantheon instance work. Personal client apps, one-off workflows, lead files, generated logs, and operator-specific runtime state stay local.
 
 ---
 
@@ -56,6 +56,11 @@ The frontend, overhauled with Pantheon-specific additions:
 - `reembed-athenaeum.py` + `reembed.sh` — Vector re-embedding pass
 - `spot-fix-embed.py` — Targeted vector repair
 - `docker-compose.yml` — ollama + chromadb + pantheon-core services
+- `phone-daemon.py` — optional ADB/uiautomator2 phone notification daemon; runtime logs stay ignored
+
+### mcp-servers/
+Small MCP server adapters that expose local Pantheon-adjacent systems through the Hermes MCP client. Current shipment includes:
+- `olympus-btst-mcp/server.py` — stdio MCP wrapper for the BTST API (`BTST_API_URL`, default local API)
 
 ### Litellm
 Included as a managed service. Ships with `litellm-config.yaml` (model-list template) and auto-starts on install.
@@ -72,8 +77,13 @@ Only the core gods ship:
 
 ### god-packages/
 - `god-template/` — `god.yaml`, `harness.yaml`, `README.md` — the canonical god creation template
-- `shared-skills/` — Skills shared across all gods (auto-compact-topic-shift, etc.)
+- `shared-skills/` — Skills shared across all gods (auto-compact-topic-shift, dispatch/monitoring, product/tooling skills, etc.)
 - NOT included: `god-apollo/` (instance-specific)
+
+### Reusable shared skills
+New reusable shared-skill packages are in scope when they are general Pantheon capabilities rather than one-off workflow outputs. Current additions include:
+- `last30days/` — upstream social/current-research skill packaged for Pantheon use
+- `pantheon-phone-gateway/` — operator-phone interaction constraints and ADB/uiautomator2 procedure
 
 ### templates/god/
 Shared Brain Protocol template for every new god:
@@ -124,6 +134,9 @@ Architecture and reference documents:
 | Actual Athenaeum content | Codex-SKC, user knowledge files. Scaffold structure ships (`init-athenaeum.sh`), content does not. |
 | `gods/messages/` | Runtime inter-god message inbox data. Ephemeral. |
 | `.env` files | API keys, secrets. `.env.example` ships, `.env` does not. |
+| `phone-daemon/` | Runtime notification logs, seen-state, and reply queues from the optional phone daemon. |
+| `content-dashboard/`, `plans/features/`, `shared/active/*` non-canonical briefs | Product/client apps and workflow state built on top of Pantheon, not Pantheon Core. |
+| `hermes-dojo/*.db`, `hermes-dojo/logs/`, generated batch notes | Runtime learning artifacts; only reusable Dojo scripts/references ship. |
 
 ---
 

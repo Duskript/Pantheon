@@ -1,6 +1,6 @@
 # Pantheon — Feature Inventory
 
-> **Canonical feature catalog — Last updated: 2026-05-20**
+> **Canonical feature catalog — Last updated: 2026-07-20**
 > Every feature that makes Pantheon what it is. Described at a high level: what it does, why it matters, and how it works.
 
 ---
@@ -130,6 +130,12 @@ A structured logging service that records system events, gate interventions, and
 ### Cron Job System
 A scheduled job system managed via Hermes Agent's cron subsystem. Handles periodic tasks: Hades nightly runs, Shared Context digest generation (every 2 hours), Ichor Subconscious Engine ticks, Ichor Forge analysis, heartbeat monitoring, and Demeter watch cycles. Each god also has its own per-god cron/ directory for god-specific schedules.
 
+### Hermes Dojo — Skill Crystallization Loop
+A lightweight self-improvement system that mines Ichor events and failure/correction patterns for reusable skill candidates. Its reusable scripts live under `hermes-dojo/scripts/`; generated batch notes, SQLite databases, and logs are runtime artifacts and do not ship as core source.
+
+### Pantheon Phone Gateway
+An optional phone-integration layer for Android devices using ADB and uiautomator2. The notification daemon (`scripts/phone-daemon.py`) passively routes phone notifications into local JSONL queues, while the `pantheon-phone-gateway` shared skill defines the hard rule that gods interact with phone UI via structured XML/ADB rather than vision screenshots. Runtime queues and logs live under `phone-daemon/` and stay local.
+
 ### Heartbeat Monitor
 A system that periodically checks the liveness of Pantheon services. Verifies that the MCP server, Web UI, and backend services are responding correctly, providing early warning of service degradation.
 
@@ -226,6 +232,9 @@ Browser automation MCP server powered by Playwright. Provides web navigation, cl
 
 ### n8n Integration Platform
 Self-hosted workflow automation platform providing OAuth2 credential management for 449+ service types including Gmail, Google Calendar, Google Drive, Slack, Notion, GitHub, Discord, Outlook, and Microsoft Teams. Handles OAuth flows, token refresh, and credential lifecycle. Accessible via REST API at `localhost:5678` and MCP server at `localhost:5678/mcp-server/http`. The primary external service connector for Pantheon.
+
+### Olympus BTST MCP
+A stdio MCP adapter (`mcp-servers/olympus-btst-mcp/server.py`) that exposes BTST CMS/blog/media/forms/kanban/comment APIs to Hermes agents. It targets a local `BTST_API_URL` by default and keeps the app-specific data outside the Pantheon repo.
 
 ---
 

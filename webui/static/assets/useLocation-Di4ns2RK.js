@@ -1,0 +1,1 @@
+import{In as e,Pn as t,Rn as n,Vn as r,jn as i}from"./index-MrTyhktH.js";var a=r(n(),1);function o(n){let r=t(),o=(0,a.useRef)(void 0);return i(r.stores.location,t=>{let i=n?.select?n.select(t):t;if(n?.structuralSharing??r.options.defaultStructuralSharing){let t=e(o.current,i);return o.current=t,t}return i})}export{o as t};

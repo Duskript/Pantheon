@@ -60,6 +60,7 @@ _MESSAGING_RAW_SOURCES = {str(s).strip().lower() for s in MESSAGING_SOURCES}
 # disk-heavy). Cache the serialised payload for 30 s so the UI doesn't hang.
 _GODS_CACHE: dict | None = None
 _GODS_CACHE_TS: float = 0.0
+_GODS_CACHE_PROFILE: str | None = None
 _PROJECTS_CACHE: dict | None = None
 _PROJECTS_CACHE_TS: float = 0.0
 _MESSAGING_SESSION_METADATA_CACHE: dict[str, object] = {
@@ -2241,7 +2242,8 @@ button:hover{background:rgba(124,185,255,.25)}
   <h1>{{BOT_NAME}}</h1>
   <p class="sub">{{LOGIN_SUBTITLE}}</p>
   <form id="login-form" data-invalid-pw="{{LOGIN_INVALID_PW}}" data-conn-failed="{{LOGIN_CONN_FAILED}}">
-    <input type="password" id="pw" placeholder="{{LOGIN_PLACEHOLDER}}" autofocus>
+    <input type="text" id="username" placeholder="Username" value="{{LOGIN_USERNAME}}" autocomplete="username" autofocus>
+    <input type="password" id="pw" placeholder="{{LOGIN_PLACEHOLDER}}" autocomplete="current-password">
     <button type="submit">{{LOGIN_BTN}}</button>
   </form>
   <div class="err" id="err"></div>
@@ -3368,9 +3370,11 @@ a:hover{{text-decoration:underline}}
         from urllib.parse import quote
         from api.updates import WEBUI_VERSION
         version_token = quote(WEBUI_VERSION, safe="")
+        _default_username = os.getenv("OLYMPUS_ADMIN_USER", "konan").strip() or "konan"
         _page = (
             _LOGIN_PAGE_HTML.replace("{{BOT_NAME}}", _bn)
             .replace("{{BOT_NAME_INITIAL}}", _bn[0].upper())
+            .replace("{{LOGIN_USERNAME}}", _html.escape(_default_username))
             .replace("{{WEBUI_VERSION}}", version_token)
             .replace("{{LANG}}", _html.escape(_login_strings["lang"]))
             .replace("{{LOGIN_TITLE}}", _html.escape(_login_strings["title"]))
@@ -4647,13 +4651,23 @@ a:hover{{text-decoration:underline}}
     # Cached for 30 s — the underlying profile scan can take 20+ s on some
     # runs (hermes_cli.profiles.list_profiles is disk-heavy).
     if parsed.path == "/api/gods":
-        global _GODS_CACHE, _GODS_CACHE_TS
+        global _GODS_CACHE, _GODS_CACHE_TS, _GODS_CACHE_PROFILE
         now = time.time()
-        if _GODS_CACHE is not None and now - _GODS_CACHE_TS < 30:
-            return j(handler, _GODS_CACHE)
-
         from api.profiles import list_profiles_api, get_active_profile_name
         from api.god_runtime import _get_god_state
+        from api.helpers import get_profile_cookie
+
+        # /api/gods is profile-sensitive because it includes is_active.
+        # Keep the expensive roster scan cached, but never serve one client's
+        # active-profile flags to another profile.
+        cookie_profile = get_profile_cookie(handler)
+        active_profile = cookie_profile if cookie_profile else get_active_profile_name()
+        if (
+            _GODS_CACHE is not None
+            and _GODS_CACHE_PROFILE == active_profile
+            and now - _GODS_CACHE_TS < 30
+        ):
+            return j(handler, _GODS_CACHE)
 
         profiles = list_profiles_api()
         gods = []
@@ -4663,19 +4677,20 @@ a:hover{{text-decoration:underline}}
             is_god = p.get("is_god", bool(god_md))
             hidden = p.get("hidden", god_md.get("hidden", False) if isinstance(god_md, dict) else False)
             # Only show profiles that are actual Pantheon gods, skip hidden unless it's the default
-            if not is_god:
+            is_default_profile = p.get("is_default", False) or name == "default"
+            if not is_god and not is_default_profile:
                 continue
-            if hidden and not p.get("is_default", False):
+            if hidden and not is_default_profile:
                 continue
             state = _get_god_state(name)
             gods.append({
                 "name": name,
-                "display_name": god_md.get("display_name", name.capitalize()),
+                "display_name": god_md.get("display_name", "Hermes" if is_default_profile else name.capitalize()),
                 "icon": god_md.get("icon", "🧑‍💻"),
-                "color": god_md.get("color", "#748FFC"),
-                "domain": god_md.get("domain", "Specialist"),
+                "color": god_md.get("color", "#f0d080" if is_default_profile else "#748FFC"),
+                "domain": god_md.get("domain", "Messenger / Ops" if is_default_profile else "Specialist"),
                 "is_active": p.get("is_active", False),
-                "is_default": p.get("is_default", False),
+                "is_default": is_default_profile,
                 "gateway_running": state["state"] == "awake",
                 "gateway_state": state["state"],
                 "gateway_pid": state.get("pid"),
@@ -4683,10 +4698,6 @@ a:hover{{text-decoration:underline}}
                 "provider": p.get("provider"),
                 "skill_count": p.get("skill_count", 0),
             })
-        # Use cookie-based profile if set, fall back to process-global
-        from api.helpers import get_profile_cookie
-        cookie_profile = get_profile_cookie(handler)
-        active_profile = cookie_profile if cookie_profile else get_active_profile_name()
         # Update is_active based on cookie
         for g in gods:
             g["is_active"] = (g["name"] == active_profile)
@@ -4705,6 +4716,7 @@ a:hover{{text-decoration:underline}}
         payload = {"gods": gods, "active": active_profile, "display_name_warnings": warnings}
         _GODS_CACHE = payload
         _GODS_CACHE_TS = time.time()
+        _GODS_CACHE_PROFILE = active_profile
         return j(handler, payload)
 
     # ── Single God Detail (GET) ──
@@ -8602,11 +8614,13 @@ _STATIC_MIME = {
     "ico": "image/x-icon",
     "gif": "image/gif",
     "webp": "image/webp",
+    "json": "application/json",
+    "webmanifest": "application/manifest+json",
     "woff": "font/woff",
     "woff2": "font/woff2",
 }
 # MIME types that are text-based and should carry charset=utf-8
-_TEXT_MIME_TYPES = {"text/css", "application/javascript", "text/html", "image/svg+xml", "text/plain"}
+_TEXT_MIME_TYPES = {"text/css", "application/javascript", "application/json", "application/manifest+json", "text/html", "image/svg+xml", "text/plain"}
 
 
 def _serve_static(handler, parsed):
