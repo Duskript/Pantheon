@@ -214,6 +214,12 @@ A binary plugin that implements an achievement/trophy system for the Hermes Agen
 ### rtk-rewrite Plugin
 A binary plugin for RTK (Real-Time Knowledge) prompt rewriting. Modifies prompts at the gateway level to inject relevant context before they reach the language model.
 
+### Hermes Agent Plugin Catalog
+Pantheon now carries the Hermes Agent plugin architecture as part of the reusable base. Plugin families include model providers, web search providers, browser providers, image/video generation providers, dashboard authentication, context engines, cron extensions, observability integrations, and platform adapters. This keeps Pantheon extensible without hardcoding every integration into the core agent loop.
+
+### Pluggable Memory Providers
+Hermes Agent's external memory-provider system is present in the core snapshot. Providers are discovered from `plugins/memory/<name>/` and activated through `memory.provider`; built-in profile memory remains active alongside one configured external provider. The current bundled provider catalog includes `byterover`, `hindsight`, `holographic`, `honcho`, `mem0`, `openviking`, `retaindb`, and `supermemory`. Runtime stores, API keys, auth files, and provider-local databases do not ship.
+
 ---
 
 ## MCP Servers
