@@ -279,7 +279,7 @@ def main() -> None:
     print(output)
 
     if args.save:
-        Path(args.save).write_text(output, encoding="utf-8")
+        Path(args.save).expanduser().write_text(output, encoding="utf-8")
         logger.info("Report saved to %s", args.save)
 
 
