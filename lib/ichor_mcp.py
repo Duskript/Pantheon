@@ -28,6 +28,7 @@ from mcp.server.fastmcp import FastMCP
 
 from lib.ichor_gates import GatePipeline, LogicGate, PhaseDetectionGate, ReadCache, StateGate
 from lib.ichor_hybrid import MemoryTrait
+from lib.ichor.context_pack import build_context_pack
 
 logger = logging.getLogger("ichor-mcp")
 
@@ -46,6 +47,7 @@ TOOL_NAMES = [
     "ichor_fold",
     "ichor_expand",
     "ichor_compare",
+    "ichor_context_pack",
 ]
 
 mcp = FastMCP("Ichor MCP")
@@ -209,6 +211,14 @@ def _filter_historical(results: list[dict[str, Any]], include_historical: bool) 
     return filtered
 
 
+def _clamp_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (OverflowError, TypeError, ValueError):
+        parsed = default
+    return min(max(minimum, parsed), maximum)
+
+
 @mcp.tool(description="Store an Ichor memory event.")
 def ichor_store(
     namespace: str = "default",
@@ -284,6 +294,38 @@ def ichor_retrieve(
     except Exception as exc:
         result = {"error": f"ichor_retrieve failed: {exc}"}
         _audit("ichor_retrieve", payload, result, False, started_at)
+        return _json_dumps(result)
+
+
+@mcp.tool(description="Build a bounded, source-backed Ichor context pack. Defaults to dry-run/manual-safe mode.")
+def ichor_context_pack(
+    query: str,
+    god_name: str = "",
+    phase: str = "",
+    task_type: str = "",
+    max_items: int = 8,
+    max_tokens: int = 900,
+    max_ms: int = 350,
+    include_graph: bool = True,
+) -> str:
+    bounded_max_items = _clamp_int(max_items, default=8, minimum=1, maximum=8)
+    bounded_max_tokens = _clamp_int(max_tokens, default=900, minimum=1, maximum=900)
+    bounded_max_ms = _clamp_int(max_ms, default=350, minimum=1, maximum=350)
+    try:
+        result = build_context_pack(
+            query=query,
+            god_name=god_name,
+            phase=phase,
+            task_type=task_type,
+            max_items=bounded_max_items,
+            max_tokens=bounded_max_tokens,
+            max_ms=bounded_max_ms,
+            include_graph=include_graph,
+            dry_run=True,
+        )
+        return _json_dumps(result)
+    except Exception as exc:
+        result = {"error": f"ichor_context_pack failed: {exc}"}
         return _json_dumps(result)
 
 
