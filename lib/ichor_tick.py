@@ -58,7 +58,9 @@ TICK_VERSION = "1.0.0"
 # Added "finalize" step (2026-06-21): flips provisional L2 entities to
 # canonical so they're queryable. Runs right after extraction.
 TICK_STEPS = ("gather", "extract", "finalize", "analyze", "improve", "brief", "export", "verify")
-MAX_TICK_SECONDS = 30.0
+# Default stays 30s for the original D1 gate/test; systemd can raise this for
+# the live consolidated tick so slower maintenance phases do not abort early.
+MAX_TICK_SECONDS = float(os.environ.get("ICHOR_TICK_MAX_SECONDS", "30.0"))
 
 # ---------------------------------------------------------------------------
 # Paths — detect real HOME even when running inside a profile (where HOME
@@ -302,21 +304,24 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
     
     # Live path: resolve provider + key before spending any time.
     try:
-        from lib.ichor.llm import _resolve_llm_provider
+        from lib.ichor.llm import _resolve_llm_provider, _load_provider_config
         from lib.ichor.entities import extract_incremental
         from lib.ichor.entities.schema import get_conn as _get_l2_conn
     except Exception as e:
         return {"skipped": f"l2_module_import_failed: {e}", "cursor": cursor}
     
-    provider_cfg = _resolve_llm_provider("marvin") or _resolve_llm_provider("opencode-go")
+    # First prefer Marvin's god/profile provider, then fall back to the
+    # provider named opencode-go. The previous code called
+    # _resolve_llm_provider("opencode-go"), which treats opencode-go as a
+    # god/profile name and therefore never found the provider config.
+    provider_cfg = _resolve_llm_provider("marvin") or _load_provider_config("opencode-go")
     if not isinstance(provider_cfg, dict):
         return {"skipped": "llm_provider_not_configured", "cursor": cursor}
     
     import os as _os
     provider_name = provider_cfg.get("name") or "opencode-go"
-    api_key = provider_cfg.get("api_key") or _os.environ.get(
-        f"{provider_name.upper()}_API_KEY", ""
-    )
+    provider_env_name = f"{str(provider_name).upper().replace('-', '_')}_API_KEY"
+    api_key = provider_cfg.get("api_key") or _os.environ.get(provider_env_name, "")
     if not api_key:
         return {"skipped": f"no_api_key_for_{provider_name}", "cursor": cursor}
     

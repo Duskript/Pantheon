@@ -1,5 +1,5 @@
 {
-  "comment": "Pantheon Cron Job Manifest \u2014 all cron jobs managed by install-pantheon.sh",
+  "comment": "Pantheon Cron Job Manifest — all cron jobs managed by install-pantheon.sh",
   "created": "2026-05-21",
   "hermes_cron_jobs": [
     {
@@ -19,11 +19,11 @@
       "name": "Athenaeum entity extraction (pre-Hades)",
       "schedule": "45 23 * * *",
       "deliver": "local",
-      "prompt": "Run the Athenaeum entity extraction pipeline. python3 ~/athenaeum/scripts/extract-entities.py",
-      "workdir": "/home/konan/athenaeum"
+      "prompt": "Run the Athenaeum entity extraction pipeline. cd ~/athenaeum && bash scripts/run-extract-entities.sh  # wrapper that routes via local OpenCode Go gateway (bypasses exhausted MiniMax key)",
+      "workdir": "~/athenaeum"
     },
     {
-      "name": "Ichor Forge \u2014 Nightly Harness Analysis",
+      "name": "Ichor Forge — Nightly Harness Analysis",
       "schedule": "30 23 * * *",
       "deliver": "local",
       "skills": [
@@ -38,8 +38,8 @@
       "name": "Ichor Structural Extractor",
       "schedule": "*/15 * * * *",
       "deliver": "local",
-      "prompt": "Run the deterministic Ichor structural extractor for the newest session transcripts and configured git repos. python3 ~/pantheon/scripts/structural_extractor.py --session-dir ~/.hermes/sessions --project-dir ~/pantheon --project-dir ~/athenaeum",
-      "workdir": "/home/konan/pantheon",
+      "prompt": "Run the deterministic Ichor structural extractor for the newest session transcripts and configured git repos. cd ~/pantheon && PYTHONPATH=~/pantheon python3 scripts/structural_extractor.py --session-dir ~/.hermes/sessions --project-dir ~/pantheon --project-dir ~/athenaeum",
+      "workdir": "~/pantheon",
       "enabled_toolsets": [
         "terminal",
         "file"
@@ -100,7 +100,7 @@
   "merged_jobs": [
     {
       "name": "Session Prune (cron + old)",
-      "status": "REMOVED \u2014 merged into Hades Nightly Consolidation as last step (2026-05-31)"
+      "status": "REMOVED — merged into Hades Nightly Consolidation as last step (2026-05-31)"
     }
   ]
 }

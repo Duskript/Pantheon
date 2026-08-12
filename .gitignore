@@ -306,3 +306,45 @@ scoped/
 # Personal scheduled workflows and screenshot/debug captures.
 cron/dawn-patrol-notion.py
 scripts/facebook_current.png
+# =============================================================================
+# Added 2026-08-12 — local runtime/privacy artifacts from ops + phone automation
+# =============================================================================
+# Keep public Pantheon commits focused on source, docs, tests, and manifests.
+.ops-backups/
+.scratch/
+.upgrade-*/
+artifacts/
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# Local sales/gig monitoring snapshots and bridge probes.
+craigslist_leads.html
+craigslist_leads.json
+composio-bridge/check-sales.js
+composio-bridge/find-gumroad.js
+
+# Generated per-day Dawn Patrol posting helpers; cron source lives in scripts/.
+cron/post-dawn-patrol-*.py
+
+# Phone automation captures contain screenshots, UI XML, and marketplace context.
+phone-bridge/
+phone-live-validation/
+phone-queue/
+phone-skill-validation-*.json
+
+# Local report/debug scripts and outputs from tech-debt scans.
+reports/file-real.sh
+reports/file-tech-debt-issues.sh
+reports/file_real.py
+reports/filter_and_batch.py
+reports/scan_all_passes.py
+reports/strict_filter.py
+reports/tech-debt-*.log
+reports/tech-debt-*.txt
+reports/tech_debt_scan_*.py
+
+# Runtime shared scratch; canonical decision docs are selectively tracked.
+shared/tmp/

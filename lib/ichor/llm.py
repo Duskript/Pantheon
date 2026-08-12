@@ -211,9 +211,9 @@ def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
     model_name = model or provider_cfg.get("default_model", "")
     if not model_name:
         raise ValueError("no model specified for provider")
-    api_key = provider_cfg.get("api_key", "") or os.environ.get(
-        f"{provider_cfg.get('name', 'PROVIDER').upper()}_API_KEY", ""
-    )
+    provider_name = str(provider_cfg.get("name", "PROVIDER"))
+    provider_env_name = f"{provider_name.upper().replace('-', '_')}_API_KEY"
+    api_key = provider_cfg.get("api_key", "") or os.environ.get(provider_env_name, "")
 
     url = f"{api_base}/chat/completions"
     body = json.dumps({
