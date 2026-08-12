@@ -39,7 +39,9 @@ No service restart required.
 from __future__ import annotations
 
 import importlib
+import json
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -54,6 +56,7 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 GOLDEN_QUERIES_PATH = Path(_ROOT) / "tests" / "fixtures" / "ichor_golden_queries.yaml"
+DRY_RUN_SCRIPT_PATH = Path(_ROOT) / "scripts" / "dry-run-ichor-context-pack.py"
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -213,6 +216,123 @@ class TestBaseline(unittest.TestCase):
                     len(token), 0,
                     f"query {q['id']}!r: empty must_include token",
                 )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# PHASE 0 DRY-RUN: measurement scaffold, no context-pack behavior
+# ─────────────────────────────────────────────────────────────────────
+
+class TestPhase0DryRunCLI(unittest.TestCase):
+    """Phase 0 dry-run measurement harness."""
+
+    def _run_json(self, *extra_args: str) -> Dict[str, Any]:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = _ROOT
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(DRY_RUN_SCRIPT_PATH),
+                "--god",
+                "thoth",
+                "--phase",
+                "research",
+                "--query",
+                "Conductor v2",
+                "--max-items",
+                "8",
+                "--format",
+                "json",
+                *extra_args,
+            ],
+            cwd=_ROOT,
+            env=env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return json.loads(proc.stdout)
+
+    def test_dry_run_json_emits_runtime_safety_fields(self) -> None:
+        payload = self._run_json()
+        for key in (
+            "would_mutate_runtime",
+            "would_rotate_session",
+            "would_rewrite_transcript",
+            "would_change_config",
+            "would_restart_gateway",
+        ):
+            self.assertIn(key, payload)
+            self.assertIs(payload[key], False)
+
+    def test_dry_run_json_emits_metric_schema_without_llm_or_writes(self) -> None:
+        payload = self._run_json("--compare-default-compressor")
+        metrics = payload["metrics"]
+        for key in (
+            "wall_ms",
+            "rss_delta_kb",
+            "peak_rss_kb",
+            "db_reads",
+            "db_writes",
+            "rows_examined",
+            "tokens_estimated",
+            "llm_calls",
+            "api_calls",
+            "cache_read_tokens",
+            "cache_write_tokens",
+        ):
+            self.assertIn(key, metrics)
+        self.assertEqual(metrics["llm_calls"], 0)
+        self.assertEqual(metrics["api_calls"], 0)
+        self.assertEqual(metrics["db_reads"], 0)
+        self.assertEqual(metrics["db_writes"], 0)
+        self.assertIn("candidate_context_pack", payload)
+        self.assertIs(payload["candidate_context_pack"]["would_build_context_pack"], False)
+        self.assertIn("default_compressor_baseline", payload)
+        self.assertNotIn("compressed_messages", payload["default_compressor_baseline"])
+        self.assertIs(payload["default_compressor_baseline"]["would_call_compress_method"], False)
+        self.assertEqual(payload["default_compressor_baseline"]["api_calls"], 0)
+
+    def test_dry_run_script_avoids_forbidden_runtime_mutation_paths(self) -> None:
+        script = DRY_RUN_SCRIPT_PATH.read_text(encoding="utf-8")
+        for forbidden in (
+            "_compress_context",
+            ".compress(",
+            "SessionDB",
+            ".end_session(",
+            "continuation session",
+            "config.yaml",
+            "systemctl",
+            "hermes-gateway",
+        ):
+            self.assertNotIn(forbidden, script)
+
+    def test_dry_run_markdown_reports_non_mutation(self) -> None:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = _ROOT
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(DRY_RUN_SCRIPT_PATH),
+                "--god",
+                "thoth",
+                "--phase",
+                "research",
+                "--query",
+                "Conductor v2",
+                "--max-items",
+                "8",
+                "--compare-default-compressor",
+                "--format",
+                "markdown",
+            ],
+            cwd=_ROOT,
+            env=env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertIn("would_mutate_runtime: false", proc.stdout)
+        self.assertIn("llm_calls: 0", proc.stdout)
 
 
 # ─────────────────────────────────────────────────────────────────────
