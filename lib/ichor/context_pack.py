@@ -213,13 +213,15 @@ def _sanitize_fts(query: str) -> str:
 
 
 def _needs_memory_context(query: str, god_name: str, phase: str, task_type: str) -> bool:
-    """Cheap no-read classifier: casual turns avoid DB and prompt growth."""
-    terms = _terms(query, god_name, phase, task_type)
-    if terms & MEMORY_TRIGGER_TERMS:
-        return True
-    if ROLE_TAGS & terms:
-        return True
-    return False
+    """Cheap no-read classifier: casual turns avoid DB and prompt growth.
+
+    God and role labels are ranking hints, not memory-need signals. A casual
+    chat turn should not become a DB read just because the active profile is
+    named ``thoth`` or ``hephaestus``.
+    """
+    del god_name, phase
+    terms = _terms(query, task_type)
+    return bool(terms & MEMORY_TRIGGER_TERMS)
 
 
 @lru_cache(maxsize=64)
@@ -266,6 +268,30 @@ def _row_value(row: sqlite3.Row, key: str) -> str:
     return "" if value is None else str(value)
 
 
+def _fallback_title(source: str, source_id: str) -> str:
+    label = (source or "ichor_source").replace("_", " ").strip()
+    label = label[:1].upper() + label[1:] if label else "Ichor source"
+    suffix = source_id.rsplit(":", 1)[-1] if source_id else ""
+    return f"{label} {suffix}".strip()
+
+
+def _clean_title(title: str, *, source: str, source_id: str) -> str:
+    raw = title or ""
+    raw_lower = raw.lower()
+    raw_fragment_markers = ("`", "|", "\n", "<", ">", "http", "www", "**", "#", "'", "=", ":", "/")
+    if any(marker in raw_lower for marker in raw_fragment_markers):
+        return _fallback_title(source, source_id)
+    full = " ".join(raw.split())
+    if not full:
+        return _fallback_title(source, source_id)
+    compact = full[:180]
+    if compact.endswith((",", ";")) or not compact[:1].isupper():
+        return _fallback_title(source, source_id)
+    if len(compact.split()) > 9 and not compact.endswith((".", ")")):
+        return _fallback_title(source, source_id)
+    return compact
+
+
 def _db_item(
     *,
     source: str,
@@ -279,7 +305,7 @@ def _db_item(
     if not clean:
         return None
     return {
-        "title": title[:180] or source_id,
+        "title": _clean_title(title, source=source, source_id=source_id),
         "text": clean[:420],
         "snippet": clean[:320],
         "source": source,

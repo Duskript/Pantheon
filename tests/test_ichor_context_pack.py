@@ -361,18 +361,55 @@ class TestContract:
         """Casual turns should stay a zero-read/no-injection fast path."""
         from lib.ichor.context_pack import build_context_pack  # type: ignore
 
-        pack = build_context_pack(
-            "random casual hello", god_name="hermes", phase="chat", max_items=8,
-        )
+        for god in ("hermes", "thoth", "hephaestus"):
+            pack = build_context_pack(
+                "random casual hello", god_name=god, phase="chat", max_items=8,
+            )
 
-        assert pack["coverage"]["status"] == "low"
-        assert pack["coverage"]["returned"] == 0
-        assert pack["injectable_context"] == ""
-        assert pack["metrics"]["db_reads"] == 0
-        assert pack["metrics"]["db_writes"] == 0
-        assert pack["metrics"]["llm_calls"] == 0
-        assert pack["metrics"]["api_calls"] == 0
-        assert "classifier_no_memory_need" in pack["omitted"]["reasons"]
+            assert pack["coverage"]["status"] == "low"
+            assert pack["coverage"]["returned"] == 0
+            assert pack["injectable_context"] == ""
+            assert pack["metrics"]["db_reads"] == 0
+            assert pack["metrics"]["db_writes"] == 0
+            assert pack["metrics"]["llm_calls"] == 0
+            assert pack["metrics"]["api_calls"] == 0
+            assert "classifier_no_memory_need" in pack["omitted"]["reasons"]
+
+    def test_db_candidate_titles_are_clean_human_labels(self) -> None:
+        """DB-backed source titles should not expose markdown/table fragments."""
+        from lib.ichor.context_pack import _db_item  # type: ignore
+
+        bad_titles = [
+            'engineering/debug context, while: ```text ichor_context_pack("Conductor',
+            "args: 'ok', description='LCM status",
+            "On, every God profile https://example.invalid/path",
+            "clear **build sequence** for Conductor",
+            "For the Ichor-backed context idea,",
+            "Use `context_pack` helper",
+            "Example www.example.com",
+            "Example HTTPS://example.invalid",
+            "Example WWW.example.com",
+            "Example WWW portal",
+            "Clean title\nwith table-ish fragment",
+            "Conductor #setup",
+            f"Title{'x' * 190} https://example.invalid",
+        ]
+
+        for title in bad_titles:
+            item = _db_item(
+                source="ichor_claims",
+                source_id="ichor_claims:123",
+                title=title,
+                text="A useful source-backed Ichor context claim.",
+                source_path="session-123",
+            )
+
+            assert item is not None
+            assert item["title"] == "Ichor claims 123"
+            assert "```" not in item["title"]
+            assert "|" not in item["title"]
+            assert "http" not in item["title"].lower()
+            assert "**" not in item["title"]
 
     def test_golden_query_distinguishes_hephaestus_and_thoth(self) -> None:
         """For 'Conductor v2', hephaestus sees NATS/MCP/endpoint/systemd
