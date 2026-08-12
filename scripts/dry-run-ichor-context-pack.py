@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Phase 0 dry-run measurement scaffold for Ichor context packs.
+"""Dry-run measurement scaffold for Ichor context packs.
 
-This command intentionally does not build or inject an Ichor context pack.
-It measures a bounded synthetic transcript and, when requested, compares cheap
-default ContextCompressor feasibility metrics without calling compress().
+This command builds the candidate pack for reporting only. It measures a
+bounded synthetic transcript and, when requested, compares cheap default
+ContextCompressor feasibility metrics without calling the compression method.
 """
 from __future__ import annotations
 
@@ -152,20 +152,6 @@ def _default_compressor_baseline(messages: list[dict[str, str]], tokens: int, wa
     }
 
 
-def _candidate_context_pack_scaffold(tokens: int, rows_examined: int) -> dict[str, Any]:
-    return {
-        "implemented": False,
-        "phase": "phase0_scaffold_only",
-        "would_build_context_pack": False,
-        "tokens_estimated": tokens,
-        "rows_examined": rows_examined,
-        "llm_calls": 0,
-        "api_calls": 0,
-        "db_reads": 0,
-        "db_writes": 0,
-    }
-
-
 def _build_payload(args: argparse.Namespace) -> dict[str, Any]:
     warnings: list[str] = []
     rss_before = _rss_kb()
@@ -173,6 +159,48 @@ def _build_payload(args: argparse.Namespace) -> dict[str, Any]:
 
     messages, rows_examined = _synthetic_messages(args, warnings)
     tokens = _estimate_tokens(messages, warnings)
+    try:
+        from lib.ichor.context_pack import build_context_pack
+        candidate_context_pack = build_context_pack(
+            args.query,
+            god_name=args.god,
+            phase=args.phase,
+            max_items=args.max_items,
+            dry_run=True,
+        )
+    except Exception as exc:
+        warnings.append(f"context pack builder unavailable: {exc}")
+        candidate_context_pack = {
+            "query": args.query,
+            "god": args.god,
+            "phase": args.phase,
+            "injectable_context": "",
+            "coverage": {
+                "status": "unknown",
+                "returned": 0,
+                "omitted": 0,
+                "warnings": ["context_pack_builder_unavailable"],
+            },
+            "current_decisions": [],
+            "hard_constraints": [],
+            "relevant_files": [],
+            "risks": [],
+            "related_entities": [],
+            "recent_changes": [],
+            "source_links": [],
+            "omitted": {"count": 0, "reasons": ["builder_unavailable"]},
+            "metrics": {
+                "wall_ms": 0,
+                "db_reads": 0,
+                "db_writes": 0,
+                "rows_examined": 0,
+                "tokens_estimated": 0,
+                "llm_calls": 0,
+                "api_calls": 0,
+                "rss_delta_kb": None,
+                "mode": "dry_run",
+            },
+        }
 
     payload: dict[str, Any] = {
         "mode": "dry_run",
@@ -187,10 +215,7 @@ def _build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "would_restart_gateway": False,
         "warnings": warnings,
     }
-    payload["candidate_context_pack"] = _candidate_context_pack_scaffold(
-        tokens,
-        rows_examined,
-    )
+    payload["candidate_context_pack"] = candidate_context_pack
     if args.compare_default_compressor:
         payload["default_compressor_baseline"] = _default_compressor_baseline(
             messages, tokens, warnings,
@@ -207,11 +232,11 @@ def _build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "wall_ms": wall_ms,
         "rss_delta_kb": rss_delta_kb,
         "peak_rss_kb": peak_rss_kb,
-        "db_reads": 0,
+        "db_reads": candidate_context_pack["metrics"]["db_reads"],
         "db_writes": 0,
         "fixture_reads": 1 if FIXTURE_PATH.exists() else 0,
-        "rows_examined": rows_examined,
-        "tokens_estimated": tokens,
+        "rows_examined": rows_examined + candidate_context_pack["metrics"]["rows_examined"],
+        "tokens_estimated": tokens + candidate_context_pack["metrics"]["tokens_estimated"],
         "llm_calls": 0,
         "api_calls": 0,
         "cache_read_tokens": 0,
