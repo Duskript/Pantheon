@@ -1,27 +1,23 @@
 """
-Ichor-Retrieval Phase 0 baseline + Phase 9 contract tests.
+Ichor-Retrieval Phase 0 baseline + Phase 1 context-pack contract tests.
 
 Spec: ~/pantheon/plans/ichor-athenaeum-god-aware-retrieval-build-spec-v1.md
-      §Phase 0 (baseline) + §Phase 9 (ichor_context_pack)
+      §Phase 0 (baseline) + Phase 1 (build_context_pack)
 
 This file consumes the golden-queries fixture at
     tests/fixtures/ichor_golden_queries.yaml
 
-and asserts the Phase 9 contract: a god-aware context pack whose
+and asserts the Phase 1 contract: a god-aware context pack whose
 shape is determined by the (god, phase) tuple.
 
 Phase 0 baseline:
 
-  * `ichor_context_pack` is NOT implemented yet. We assert its
-    absence at every import path: `lib.ichor.context_pack`,
-    `pantheon-core.mcp_server`, and the broader `lib.ichor.*`
-    namespace. When Phase 9 ships, the importer resolves and these
-    tests start to fail — that's the signal to switch to the
-    TestContract class below.
+  * The golden-query fixture is readable and distinguishes god-specific
+    expectations before implementation work begins.
 
-Phase 9 contract (xfail until Phase 9 ships):
+Phase 1 contract:
 
-  * `ichor_context_pack(query, god_name, phase, task_type, max_items)`
+  * `build_context_pack(query, god_name, phase, task_type, max_items)`
     returns a dict with the spec's required keys.
   * The golden queries distinguish Hephaestus and Thoth expectations
     for the SAME query text.
@@ -39,13 +35,14 @@ No service restart required.
 from __future__ import annotations
 
 import importlib
+import json
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
 from typing import Any, Dict, List
 
-import pytest
 import yaml
 
 
@@ -54,6 +51,7 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 GOLDEN_QUERIES_PATH = Path(_ROOT) / "tests" / "fixtures" / "ichor_golden_queries.yaml"
+DRY_RUN_SCRIPT_PATH = Path(_ROOT) / "scripts" / "dry-run-ichor-context-pack.py"
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -121,28 +119,11 @@ def _has_context_pack_callable() -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────
-# BASELINE: documents current state (ichor_context_pack not shipped)
+# BASELINE: fixture and dry-run safety guards
 # ─────────────────────────────────────────────────────────────────────
 
 class TestBaseline(unittest.TestCase):
-    """Phase 0 baseline — proves ichor_context_pack is not yet shipped.
-
-    These tests pass NOW. When Phase 9 lands, they should be removed
-    (or migrated to the TestContract class) because the function
-    exists and the baseline no longer applies.
-    """
-
-    def test_ichor_context_pack_not_yet_importable(self) -> None:
-        """WEAKNESS: ichor_context_pack does not exist yet.
-
-        Spec §Phase 9 requires the function at
-        `lib/ichor/context_pack.py`. Today the module is not there.
-        """
-        self.assertFalse(
-            _has_context_pack_callable(),
-            "ichor_context_pack / build_context_pack is already importable — "
-            "this baseline test is stale. Move to the TestContract class.",
-        )
+    """Phase 0 baseline fixture guards that remain valid in Phase 1."""
 
     def test_golden_queries_fixture_loads(self) -> None:
         """The golden-queries fixture is readable and well-formed.
@@ -216,25 +197,140 @@ class TestBaseline(unittest.TestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────
-# CONTRACT: Phase 9 deliverables (xfail until Phase 9 ships)
+# PHASE 0 DRY-RUN: measurement scaffold, no context-pack behavior
+# ─────────────────────────────────────────────────────────────────────
+
+class TestPhase0DryRunCLI(unittest.TestCase):
+    """Phase 0 dry-run measurement harness."""
+
+    def _run_json(self, *extra_args: str) -> Dict[str, Any]:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = _ROOT
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(DRY_RUN_SCRIPT_PATH),
+                "--god",
+                "thoth",
+                "--phase",
+                "research",
+                "--query",
+                "Conductor v2",
+                "--max-items",
+                "8",
+                "--format",
+                "json",
+                *extra_args,
+            ],
+            cwd=_ROOT,
+            env=env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return json.loads(proc.stdout)
+
+    def test_dry_run_json_emits_runtime_safety_fields(self) -> None:
+        payload = self._run_json()
+        for key in (
+            "would_mutate_runtime",
+            "would_rotate_session",
+            "would_rewrite_transcript",
+            "would_change_config",
+            "would_restart_gateway",
+        ):
+            self.assertIn(key, payload)
+            self.assertIs(payload[key], False)
+
+    def test_dry_run_json_emits_metric_schema_without_llm_or_writes(self) -> None:
+        payload = self._run_json("--compare-default-compressor")
+        metrics = payload["metrics"]
+        for key in (
+            "wall_ms",
+            "rss_delta_kb",
+            "peak_rss_kb",
+            "db_reads",
+            "db_writes",
+            "rows_examined",
+            "tokens_estimated",
+            "llm_calls",
+            "api_calls",
+            "cache_read_tokens",
+            "cache_write_tokens",
+        ):
+            self.assertIn(key, metrics)
+        self.assertEqual(metrics["llm_calls"], 0)
+        self.assertEqual(metrics["api_calls"], 0)
+        self.assertEqual(metrics["db_writes"], 0)
+        self.assertIn("candidate_context_pack", payload)
+        candidate = payload["candidate_context_pack"]
+        self.assertIn("injectable_context", candidate)
+        self.assertEqual(candidate["metrics"]["llm_calls"], 0)
+        self.assertEqual(candidate["metrics"]["api_calls"], 0)
+        self.assertEqual(candidate["metrics"]["db_writes"], 0)
+        self.assertIn("default_compressor_baseline", payload)
+        self.assertNotIn("compressed_messages", payload["default_compressor_baseline"])
+        self.assertIs(payload["default_compressor_baseline"]["would_call_compress_method"], False)
+        self.assertEqual(payload["default_compressor_baseline"]["api_calls"], 0)
+
+    def test_dry_run_script_avoids_forbidden_runtime_mutation_paths(self) -> None:
+        script = DRY_RUN_SCRIPT_PATH.read_text(encoding="utf-8")
+        for forbidden in (
+            "_compress_context",
+            ".compress(",
+            "SessionDB",
+            ".end_session(",
+            "continuation session",
+            "config.yaml",
+            "systemctl",
+            "hermes-gateway",
+        ):
+            self.assertNotIn(forbidden, script)
+
+    def test_dry_run_markdown_reports_non_mutation(self) -> None:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = _ROOT
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(DRY_RUN_SCRIPT_PATH),
+                "--god",
+                "thoth",
+                "--phase",
+                "research",
+                "--query",
+                "Conductor v2",
+                "--max-items",
+                "8",
+                "--compare-default-compressor",
+                "--format",
+                "markdown",
+            ],
+            cwd=_ROOT,
+            env=env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertIn("would_mutate_runtime: false", proc.stdout)
+        self.assertIn("llm_calls: 0", proc.stdout)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# CONTRACT: Phase 1 deliverables
 # ─────────────────────────────────────────────────────────────────────
 
 class TestContract:
-    """Phase 9 contract — god-aware context pack.
-
-    These tests are xfail until Phase 9 ships. When they start
-    passing, remove the markers and the TestBaseline half becomes
-    historical reference.
-    """
+    """Phase 1 contract — god-aware context pack."""
 
     def test_ichor_context_pack_is_callable(self) -> None:
         assert _has_context_pack_callable(), (
-            "Phase 9 must ship ichor_context_pack (or build_context_pack) "
+            "Phase 1 must ship ichor_context_pack (or build_context_pack) "
             "at one of: " + ", ".join(_candidate_import_paths())
         )
 
     def test_context_pack_return_shape(self) -> None:
-        """Phase 9 must return the spec's required shape."""
+        """Phase 1 must return the spec's required shape."""
         from lib.ichor.context_pack import build_context_pack  # type: ignore
         pack = build_context_pack(
             "Conductor v2", god_name="hephaestus", phase="debug",
@@ -242,10 +338,11 @@ class TestContract:
         )
         required_keys = {
             "query", "god", "phase",
+            "injectable_context",
             "coverage",
             "current_decisions", "hard_constraints", "relevant_files",
             "risks", "related_entities", "recent_changes",
-            "source_links", "omitted",
+            "source_links", "omitted", "metrics",
         }
         for key in required_keys:
             assert key in pack, f"context_pack missing required key: {key!r}"
@@ -254,6 +351,65 @@ class TestContract:
         assert isinstance(pack["omitted"], dict)
         assert "count" in pack["omitted"]
         assert "reasons" in pack["omitted"]
+        assert isinstance(pack["injectable_context"], str)
+        assert pack["injectable_context"]
+        assert pack["metrics"]["llm_calls"] == 0
+        assert pack["metrics"]["api_calls"] == 0
+        assert pack["metrics"]["db_writes"] == 0
+
+    def test_context_pack_noop_path_has_no_db_or_prompt_growth(self) -> None:
+        """Casual turns should stay a zero-read/no-injection fast path."""
+        from lib.ichor.context_pack import build_context_pack  # type: ignore
+
+        for god in ("hermes", "thoth", "hephaestus"):
+            pack = build_context_pack(
+                "random casual hello", god_name=god, phase="chat", max_items=8,
+            )
+
+            assert pack["coverage"]["status"] == "low"
+            assert pack["coverage"]["returned"] == 0
+            assert pack["injectable_context"] == ""
+            assert pack["metrics"]["db_reads"] == 0
+            assert pack["metrics"]["db_writes"] == 0
+            assert pack["metrics"]["llm_calls"] == 0
+            assert pack["metrics"]["api_calls"] == 0
+            assert "classifier_no_memory_need" in pack["omitted"]["reasons"]
+
+    def test_db_candidate_titles_are_clean_human_labels(self) -> None:
+        """DB-backed source titles should not expose markdown/table fragments."""
+        from lib.ichor.context_pack import _db_item  # type: ignore
+
+        bad_titles = [
+            'engineering/debug context, while: ```text ichor_context_pack("Conductor',
+            "args: 'ok', description='LCM status",
+            "On, every God profile https://example.invalid/path",
+            "clear **build sequence** for Conductor",
+            "For the Ichor-backed context idea,",
+            "Use `context_pack` helper",
+            "Example www.example.com",
+            "Example HTTPS://example.invalid",
+            "Example WWW.example.com",
+            "Example WWW portal",
+            "Clean title\nwith table-ish fragment",
+            "Conductor #setup",
+            f"Title{'x' * 190} https://example.invalid",
+        ]
+
+        for title in bad_titles:
+            item = _db_item(
+                source="ichor_claims",
+                source_id="ichor_claims:123",
+                title=title,
+                text="A useful source-backed Ichor context claim.",
+                source_path="session-123",
+            )
+
+            assert item is not None
+            assert item["title"] == "Ichor claims 123"
+            assert "```" not in item["title"]
+            assert "|" not in item["title"]
+            assert "http" not in item["title"].lower()
+            assert "**" not in item["title"]
 
     def test_golden_query_distinguishes_hephaestus_and_thoth(self) -> None:
         """For 'Conductor v2', hephaestus sees NATS/MCP/endpoint/systemd
@@ -338,24 +494,54 @@ class TestContract:
                 f"Rheta copywriting pack missing must_include token {token!r}"
             )
 
+    def test_context_pack_recalls_own_dry_run_design_for_followup_query(self) -> None:
+        """A real operator follow-up should retrieve the context-pack design itself.
 
-# Mark contract tests as expected-to-fail (Phase 9 not yet shipped)
-_XFAIL_REASON = (
-    "Phase 9 (ichor_context_pack) not yet shipped — see "
-    "ichor-athenaeum-god-aware-retrieval-build-spec-v1.md §Phase 9"
-)
+        This guards the intended effect beyond canned Conductor examples:
+        asking where the Ichor context-pack work stands should return a
+        source-backed pack with the dry-run/manual/no-LCM safety decision.
+        """
+        from lib.ichor.context_pack import build_context_pack  # type: ignore
 
-for _name in (
-    "test_ichor_context_pack_is_callable",
-    "test_context_pack_return_shape",
-    "test_golden_query_distinguishes_hephaestus_and_thoth",
-    "test_context_pack_has_source_evidence_per_claim",
-    "test_rheta_pricing_golden_query",
-):
-    setattr(
-        TestContract,
-        _name,
-        pytest.mark.xfail(reason=_XFAIL_REASON, strict=False)(
-            getattr(TestContract, _name)
-        ),
-    )
+        pack = build_context_pack(
+            "where did we leave the Ichor context pack?",
+            god_name="hermes",
+            phase="ops",
+            max_items=8,
+            dry_run=True,
+        )
+        pack_text = pack["injectable_context"].lower()
+        source_paths = "\n".join(link["source_path"] for link in pack["source_links"])
+
+        assert pack["coverage"]["status"] == "ok"
+        assert pack["coverage"]["returned"] >= 2
+        assert "dry-run" in pack_text or "dry_run" in pack_text
+        assert "manual" in pack_text
+        assert "lcm" in pack_text
+        assert "ichor-context-pack-compressor-augmentation" in source_paths
+        assert pack["metrics"]["llm_calls"] == 0
+        assert pack["metrics"]["api_calls"] == 0
+        assert pack["metrics"]["db_writes"] == 0
+        assert pack["metrics"]["tokens_estimated"] <= 900
+
+    def test_context_pack_operator_query_stays_bounded_without_runtime_mutation(self) -> None:
+        """Follow-up recall can improve without becoming a live compression path."""
+        from lib.ichor.context_pack import build_context_pack  # type: ignore
+
+        pack = build_context_pack(
+            "should we enable the Ichor context pack canary now?",
+            god_name="hermes",
+            phase="ops",
+            max_items=8,
+            max_tokens=900,
+            max_ms=350,
+            dry_run=True,
+        )
+
+        assert pack["coverage"]["returned"] > 0
+        assert pack["metrics"]["mode"] == "dry_run"
+        assert pack["metrics"]["llm_calls"] == 0
+        assert pack["metrics"]["api_calls"] == 0
+        assert pack["metrics"]["db_writes"] == 0
+        assert pack["metrics"]["tokens_estimated"] <= 900
+        assert pack["metrics"]["wall_ms"] <= 350
