@@ -112,6 +112,32 @@ Expected invariant highlights:
 - `metrics.db_writes == 0`
 - returned pack includes `injectable_context` and source links when coverage is available
 
+## Operator follow-up recall smoke
+
+This branch also covers real operator follow-up questions about the context-pack work itself, not only canned golden-query examples:
+
+```bash
+PYTHONPATH=/home/konan/pantheon-ichor-context-pack-dry-run \
+python3 scripts/dry-run-ichor-context-pack.py \
+  --god hermes \
+  --phase ops \
+  --query "where did we leave the Ichor context pack?" \
+  --max-items 8 \
+  --compare-default-compressor \
+  --format json
+```
+
+Expected highlights:
+
+- `candidate_context_pack.coverage.status == "ok"`
+- context mentions dry-run/manual promotion discipline
+- context repeats the no-LCM/no-runtime-mutation guard
+- context names the canary gate before live use
+- `candidate_context_pack.metrics.llm_calls == 0`
+- `candidate_context_pack.metrics.api_calls == 0`
+- `candidate_context_pack.metrics.db_writes == 0`
+
+
 ## Verification recipe
 
 Use the Hermes Agent venv when this host's `/bin/python3` lacks pytest:
@@ -124,10 +150,10 @@ PYTHONPATH=/home/konan/pantheon-ichor-context-pack-dry-run:$PYTHONPATH \
   -q
 ```
 
-Current expected result after Phase 2:
+Current expected result after the operator-follow-up recall gate:
 
 ```text
-26 passed
+29 passed
 ```
 
 ## Canary/live wiring gate

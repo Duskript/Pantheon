@@ -178,6 +178,48 @@ ANCHORS: tuple[Anchor, ...] = (
         tags=("pantheon", "pricing", "$5k", "managed", "dedicated", "infrastructure", "rheta", "copywriting"),
         priority=94,
     ),
+    Anchor(
+        section="current_decisions",
+        title="Ichor context pack remains dry-run/manual before promotion",
+        text=(
+            "The Ichor context-pack design says not to replace the default "
+            "compressor first: keep the fleet on the built-in compressor, build "
+            "a bounded dry-run/manual augmentation, and promote only after "
+            "benchmarks prove default-compressor-weight behavior."
+        ),
+        source_path="/home/konan/athenaeum/Codex-Pantheon/design/ichor-context-pack-compressor-augmentation.md",
+        source_id="ichor-context-pack-dry-run-manual-before-promotion",
+        tags=("ichor", "context", "pack", "compressor", "dry", "run", "dry-run", "manual", "canary", "lcm", "hermes", "ops"),
+        priority=98,
+    ),
+    Anchor(
+        section="hard_constraints",
+        title="Context pack safety gates block LCM-style runtime mutation",
+        text=(
+            "The design explicitly avoids the hermes-lcm failure mode: no "
+            "resident per-session DAG or index, no transcript rewrite, no "
+            "session rotation, no config mutation, no gateway restart, and no "
+            "live context-engine replacement before canary sign-off."
+        ),
+        source_path="/home/konan/athenaeum/Codex-Pantheon/design/ichor-context-pack-compressor-augmentation.md",
+        source_id="ichor-context-pack-safety-gates-no-lcm-runtime-mutation",
+        tags=("ichor", "context", "pack", "compressor", "dry", "run", "dry-run", "manual", "canary", "lcm", "runtime", "mutation", "hermes", "ops"),
+        priority=97,
+    ),
+    Anchor(
+        section="risks",
+        title="Canary only after source-grounding and weight benchmarks",
+        text=(
+            "Before live profile use, the context pack must run golden queries, "
+            "long-history replay, source-grounding comparisons against the "
+            "default compressor, prompt-cache checks, and rollback proof for a "
+            "single disposable canary profile."
+        ),
+        source_path="/home/konan/athenaeum/Codex-Pantheon/design/ichor-context-pack-compressor-augmentation.md",
+        source_id="ichor-context-pack-canary-gates-before-live-use",
+        tags=("ichor", "context", "pack", "compressor", "canary", "benchmark", "source", "grounding", "rollback", "hermes", "ops"),
+        priority=96,
+    ),
 )
 
 

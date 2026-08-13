@@ -493,3 +493,55 @@ class TestContract:
             assert token.lower() in pack_text, (
                 f"Rheta copywriting pack missing must_include token {token!r}"
             )
+
+    def test_context_pack_recalls_own_dry_run_design_for_followup_query(self) -> None:
+        """A real operator follow-up should retrieve the context-pack design itself.
+
+        This guards the intended effect beyond canned Conductor examples:
+        asking where the Ichor context-pack work stands should return a
+        source-backed pack with the dry-run/manual/no-LCM safety decision.
+        """
+        from lib.ichor.context_pack import build_context_pack  # type: ignore
+
+        pack = build_context_pack(
+            "where did we leave the Ichor context pack?",
+            god_name="hermes",
+            phase="ops",
+            max_items=8,
+            dry_run=True,
+        )
+        pack_text = pack["injectable_context"].lower()
+        source_paths = "\n".join(link["source_path"] for link in pack["source_links"])
+
+        assert pack["coverage"]["status"] == "ok"
+        assert pack["coverage"]["returned"] >= 2
+        assert "dry-run" in pack_text or "dry_run" in pack_text
+        assert "manual" in pack_text
+        assert "lcm" in pack_text
+        assert "ichor-context-pack-compressor-augmentation" in source_paths
+        assert pack["metrics"]["llm_calls"] == 0
+        assert pack["metrics"]["api_calls"] == 0
+        assert pack["metrics"]["db_writes"] == 0
+        assert pack["metrics"]["tokens_estimated"] <= 900
+
+    def test_context_pack_operator_query_stays_bounded_without_runtime_mutation(self) -> None:
+        """Follow-up recall can improve without becoming a live compression path."""
+        from lib.ichor.context_pack import build_context_pack  # type: ignore
+
+        pack = build_context_pack(
+            "should we enable the Ichor context pack canary now?",
+            god_name="hermes",
+            phase="ops",
+            max_items=8,
+            max_tokens=900,
+            max_ms=350,
+            dry_run=True,
+        )
+
+        assert pack["coverage"]["returned"] > 0
+        assert pack["metrics"]["mode"] == "dry_run"
+        assert pack["metrics"]["llm_calls"] == 0
+        assert pack["metrics"]["api_calls"] == 0
+        assert pack["metrics"]["db_writes"] == 0
+        assert pack["metrics"]["tokens_estimated"] <= 900
+        assert pack["metrics"]["wall_ms"] <= 350
