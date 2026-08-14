@@ -212,7 +212,7 @@ def _run_default_compressor(case: BenchmarkCase) -> dict[str, Any]:
     tokens_before = _estimate_messages_tokens(messages)
     call_counter = {"llm_calls": 0}
 
-    def bound_fake_summary(self: Any, turns: list[dict[str, Any]], focus_topic: str | None = None) -> str:
+    def bound_fake_summary(self: Any, turns: list[dict[str, Any]], focus_topic: str | None = None, **_kwargs: Any) -> str:
         return _fake_summary(case, call_counter, self, turns, focus_topic)
 
     compressor._generate_summary = MethodType(bound_fake_summary, compressor)  # type: ignore[attr-defined]

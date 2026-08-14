@@ -35,6 +35,8 @@ class TurnCase:
     turns: int
     expect_pack: bool
     filler_topic: str
+    payload_repeat: int = 26
+    context_length: int = 128_000
 
 
 CASES = (
@@ -58,6 +60,15 @@ CASES = (
         turns=7,
         expect_pack=False,
         filler_topic="casual acknowledgement unrelated filler weather chatter low signal",
+    ),
+    TurnCase(
+        case_id="long-threshold-compressor-pressure",
+        query="Ichor context engine must preserve decisions after the default compressor threshold fires.",
+        turns=14,
+        expect_pack=True,
+        filler_topic="long transcript threshold pressure exact recall default compressor comparison",
+        payload_repeat=80,
+        context_length=64_000,
     ),
 )
 
@@ -96,7 +107,7 @@ def _long_payload(case: TurnCase, turn: int, role: str) -> str:
         )
     else:
         core += "No durable memory context should be selected for the current no-op acknowledgement. "
-    return core * 26
+    return core * case.payload_repeat
 
 
 def _assistant_payload(case: TurnCase, turn: int) -> str:
@@ -125,18 +136,18 @@ def _new_default_compressor(case: TurnCase) -> tuple[Any, dict[str, int]]:
     compressor = ContextCompressor(
         model="ichor-context-engine-turn-benchmark",
         quiet_mode=True,
-        config_context_length=128_000,
+        config_context_length=case.context_length,
     )
     counter = {"llm_calls": 0}
 
-    def bound_fake_summary(self: Any, turns: list[dict[str, Any]], focus_topic: str | None = None) -> str:
+    def bound_fake_summary(self: Any, turns: list[dict[str, Any]], focus_topic: str | None = None, **_kwargs: Any) -> str:
         return _fake_summary(case, counter, self, turns, focus_topic)
 
     compressor._generate_summary = MethodType(bound_fake_summary, compressor)  # type: ignore[attr-defined]
     return compressor, counter
 
 
-def _new_ichor_engine() -> Any:
+def _new_ichor_engine(case: TurnCase) -> Any:
     import importlib
 
     for loaded in list(sys.modules):
@@ -147,6 +158,10 @@ def _new_ichor_engine() -> Any:
     sys.path.insert(0, str(HERMES_AGENT))
     module = importlib.import_module("plugins.context_engine.ichor")
     engine = module.IchorContextEngine(fresh_tail_turns=6, max_pack_tokens=700, max_pack_ms=120)
+    engine.update_model(
+        model="ichor-context-engine-turn-benchmark",
+        context_length=case.context_length,
+    )
     engine.on_session_start("turn-benchmark")
     return engine
 
@@ -179,7 +194,7 @@ def _simulate_default(case: TurnCase) -> dict[str, Any]:
 
 
 def _simulate_ichor(case: TurnCase) -> dict[str, Any]:
-    engine = _new_ichor_engine()
+    engine = _new_ichor_engine(case)
     raw_messages: list[dict[str, str]] = [{"role": "system", "content": "Ichor context engine per-turn benchmark."}]
     per_turn: list[dict[str, Any]] = []
     injected_any = False
@@ -253,6 +268,7 @@ def run_case(case: TurnCase, artifact_dir: Path) -> dict[str, Any]:
         "would_change_config": False,
         "would_enable_lcm": False,
         "would_flip_fleet_default": False,
+        "default_compressor_exercised": default["compressions"] > 0,
     }
     (artifact_dir / f"{case.case_id}.json").write_text(json.dumps(row, indent=2, sort_keys=True), encoding="utf-8")
     return row
@@ -272,11 +288,16 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     noop_rows = [row for row in rows if not row["expect_pack"]]
     if not all(row["ichor_context_engine"]["noop_clean"] for row in noop_rows):
         blockers.append("noop_not_clean")
+    threshold_rows = [row for row in rows if row["default_compressor"]["compressions"] > 0]
+    if not threshold_rows:
+        blockers.append("default_compressor_never_exercised")
     if not all(row["ichor_context_engine"]["all_turns_have_expand_handles"] for row in rows):
         blockers.append("missing_expand_handles")
     return {
         "rows_run": len(rows),
         "turns_run": turns,
+        "default_compressor_exercised_rows": len(threshold_rows),
+        "threshold_crossing_case_ids": [row["case_id"] for row in threshold_rows],
         "baseline_label": "full transcript resend baseline until compressor threshold",
         "token_estimate_method": "len_div_4_heuristic",
         "default_total_tokens": default_total,

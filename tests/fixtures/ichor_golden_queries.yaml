@@ -1,0 +1,95 @@
+# Ichor Golden Queries — god-aware retrieval acceptance set
+#
+# Spec: ~/pantheon/plans/ichor-athenaeum-god-aware-retrieval-build-spec-v1.md §Phase 0
+#
+# Each query is paired with the (god, phase) it is being asked from, plus
+# must_include tokens that the answer MUST contain (substring match against
+# the result's title/snippet/raw_text) and must_not_top3 tokens that the
+# top-3 ranked results MUST NOT contain (e.g. generic index docs, raw test
+# fixtures, unhydrated vector stubs).
+#
+# The first two rows are deliberately the same query text for two different
+# gods. They prove the system differentiates role-specific context.
+#
+# Test files that consume this fixture:
+#   tests/test_ichor_context_pack.py
+#   tests/test_ichor_retrieval_observability.py
+#   (indirectly: tests/test_ichor_graph_*)
+
+version: 1
+spec: ichor-athenaeum-god-aware-retrieval-build-spec-v1.md §Phase 0
+
+queries:
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 1. Same query, Hephaestus (engineer / debug phase)
+  #    Hephaestus builds + deploys + debugs. He needs the runtime seam:
+  #    NATS transport, MCP tool surface, the endpoint shape, and the
+  #    systemd service that hosts it.
+  # ─────────────────────────────────────────────────────────────────────
+  - id: hephaestus_conductor_v2_debug
+    query: "Conductor v2"
+    god: hephaestus
+    phase: debug
+    task_type: ""
+    must_include:
+      - "NATS"
+      - "MCP"
+      - "endpoint"
+      - "systemd"
+    must_not_top3:
+      - "INDEX.md"
+      - "unhydrated vector"
+    notes: >
+      Hephaestus needs the build/deploy/debug seam. The system must rank
+      Conductor v2 spec, the ichor_graph_query MCP endpoint, the NATS
+      transport, and the hermes-gateway systemd unit. Generic INDEX.md
+      is not a debug answer.
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 2. Same query, Thoth (research / synthesis phase)
+  #    Thoth studies systems and writes synthesis docs. The same
+  #    Conductor v2 query must surface the *design* layer: workflow
+  #    definition, cross-god routing, and orchestration concepts —
+  #    not the runtime seam.
+  # ─────────────────────────────────────────────────────────────────────
+  - id: thoth_conductor_v2_research
+    query: "Conductor v2"
+    god: thoth
+    phase: research
+    task_type: ""
+    must_include:
+      - "workflow"
+      - "cross-god"
+      - "routing"
+    must_not_top3:
+      - "raw test fixture"
+      - "unhydrated vector"
+    notes: >
+      Thoth does the design synthesis. The same query must surface the
+      Conductor v2 design: workflow shape, cross-god handoff, and
+      routing decisions. Raw test fixtures and unhydrated vector stubs
+      are noise for a research query.
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 3. Rheta (copywriting / pricing vertical)
+  #    Rheta is the marketing god. Pricing copy lives in plans/ and
+  #    pricing-distilled codexes. The query text mimics natural
+  #    marketing-research phrasing.
+  # ─────────────────────────────────────────────────────────────────────
+  - id: rheta_pantheon_pricing_retainer
+    query: "Pantheon pricing managed retainer dedicated infrastructure"
+    god: rheta
+    phase: copywriting
+    task_type: ""
+    must_include:
+      - "$5k"
+      - "managed"
+      - "dedicated infrastructure"
+    must_not_top3:
+      - "no subscriptions"
+      - "self-hosted"
+    notes: >
+      Rheta writes pricing copy. The answer must surface the $5k tier,
+      the "managed" offering, and the "dedicated infrastructure" lane.
+      "no subscriptions" and "self-hosted" would defeat the positioning.
