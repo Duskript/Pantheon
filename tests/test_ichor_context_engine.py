@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -179,3 +180,84 @@ def test_ichor_expand_caps_large_raw_turn_output() -> None:
     assert result["truncated"] is True
     assert result["omitted_chars"] > 0
     assert len(result["content"]) <= 1200
+
+
+def test_ichor_context_engine_persists_raw_turns_when_store_configured(tmp_path: Path) -> None:
+    module = importlib.import_module("plugins.context_engine.ichor")
+    from lib.ichor.raw_turns import RawTurnStore
+
+    store = RawTurnStore(tmp_path / "ichor.db")
+    engine = module.IchorContextEngine(fresh_tail_turns=2, raw_turn_store=store)
+    engine.on_session_start("session-persisted")
+    messages = _long_messages("Persist these turns exactly.")
+
+    engine.compress(messages, current_tokens=_estimate_tokens(messages))
+    status = engine.get_status()
+
+    assert status["raw_turn_store"]["configured"] is True
+    assert status["raw_turn_store"]["last_result"]["inserted"] == len(messages)
+    assert status["raw_turn_store"]["frontier"]["last_ingested_seq"] == len(messages) - 1
+    persisted = store.fetch_range("session-persisted", 1, 3)
+    assert persisted[0].content == "Original project goal: reduce context tokens."
+
+
+def test_ichor_context_engine_expands_from_persisted_store_after_memory_loss(tmp_path: Path) -> None:
+    module = importlib.import_module("plugins.context_engine.ichor")
+    from lib.ichor.raw_turns import RawTurnStore
+
+    store = RawTurnStore(tmp_path / "ichor.db")
+    engine = module.IchorContextEngine(fresh_tail_turns=2, raw_turn_store=store)
+    engine.on_session_start("session-store-expand")
+    messages = _long_messages("Persist then expand from store.")
+    engine.compress(messages, current_tokens=_estimate_tokens(messages))
+    engine._raw_turns_by_session.clear()
+
+    result = json.loads(engine.handle_tool_call(
+        "ichor_expand",
+        {"source_id": "raw_turns:session-store-expand:seq:1-3"},
+    ))
+
+    assert result["ok"] is True
+    assert result["source"] == "persistent_store"
+    assert "Original project goal" in result["content"]
+
+
+def test_ichor_context_engine_default_has_no_persistent_store() -> None:
+    module = importlib.import_module("plugins.context_engine.ichor")
+    engine = module.IchorContextEngine(fresh_tail_turns=2)
+    engine.on_session_start("session-default-no-store")
+    messages = _long_messages("No live DB mutation by default.")
+
+    engine.compress(messages, current_tokens=_estimate_tokens(messages))
+
+    assert engine.get_status()["raw_turn_store"] == {"configured": False}
+
+
+def test_ichor_context_engine_persistent_store_failure_is_prompt_quiet() -> None:
+    module = importlib.import_module("plugins.context_engine.ichor")
+
+    class BrokenStore:
+        def ingest_messages(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("read only")
+
+        def get_frontier(self, _session_id):
+            raise sqlite3.OperationalError("read only")
+
+    engine = module.IchorContextEngine(fresh_tail_turns=2, raw_turn_store=BrokenStore())
+    engine.on_session_start("session-broken-store")
+    messages = _long_messages("ok")
+
+    assembled = engine.compress(messages, current_tokens=_estimate_tokens(messages))
+    joined = "\n".join(str(m.get("content", "")) for m in assembled)
+    status = engine.get_status()["raw_turn_store"]
+
+    assert "read only" not in joined
+    assert status["configured"] is True
+    assert status["last_result"] is None
+    assert status["last_error"] == "OperationalError"
+    result = json.loads(engine.handle_tool_call(
+        "ichor_expand",
+        {"source_id": "raw_turns:session-broken-store:seq:1-3"},
+    ))
+    assert result["ok"] is True
+    assert result["source"] == "in_memory"

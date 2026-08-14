@@ -5,10 +5,10 @@ This engine implements the first bounded per-turn selector shape from
 ``context.engine: ichor`` is configured; the default remains the built-in
 compressor.
 
-v0 intentionally keeps raw-turn ingestion in process memory. That gives the
-engine exact recall/expand handles and tokens-per-turn measurement without
-mutating live profile state, re-enabling hermes-lcm, rotating sessions, or
-calling an LLM/API in the hot path.
+By default the prototype keeps raw-turn ingestion in process memory. When an
+explicit RawTurnStore is provided by tests or future default-off wiring, it also
+persists exact turns to Ichor SQLite. Either way it avoids live profile mutation,
+re-enabling hermes-lcm, rotating sessions, or calling an LLM/API in the hot path.
 """
 from __future__ import annotations
 
@@ -24,6 +24,11 @@ try:
 except Exception:  # pragma: no cover - import failure is handled at runtime
     build_context_pack = None
     _needs_memory_context = None
+
+try:
+    from lib.ichor.raw_turns import RawTurnStore
+except Exception:  # pragma: no cover - optional persistence stays default-off
+    RawTurnStore = None
 
 
 _DEFAULT_METRICS = {
@@ -73,6 +78,7 @@ class IchorContextEngine(ContextEngine):
         max_pack_items: int = 8,
         max_pack_ms: int = 120,
         max_expand_chars: int = 12_000,
+        raw_turn_store: Any = None,
         context_length: int = 128_000,
         threshold_percent: float = 0.50,
     ) -> None:
@@ -90,7 +96,10 @@ class IchorContextEngine(ContextEngine):
         self.last_total_tokens = 0
         self.session_id = ""
         self.platform = ""
+        self.raw_turn_store = raw_turn_store
         self._raw_turns_by_session: dict[str, list[dict[str, Any]]] = {}
+        self._raw_turn_store_result: dict[str, Any] | None = None
+        self._raw_turn_store_error = ""
         self._last_selected_source_links: list[dict[str, str]] = []
         self._last_pack_metrics: dict[str, int] = dict(_DEFAULT_METRICS)
         self._last_assembled_tokens = 0
@@ -210,6 +219,22 @@ class IchorContextEngine(ContextEngine):
 
     def get_status(self) -> dict[str, Any]:
         base = super().get_status()
+        raw_store_status: dict[str, Any]
+        if self.raw_turn_store is None:
+            raw_store_status = {"configured": False}
+        else:
+            frontier = None
+            if self.session_id and hasattr(self.raw_turn_store, "get_frontier"):
+                try:
+                    frontier = self.raw_turn_store.get_frontier(self.session_id)
+                except Exception as exc:
+                    self._raw_turn_store_error = exc.__class__.__name__
+            raw_store_status = {
+                "configured": True,
+                "last_result": self._raw_turn_store_result,
+                "last_error": self._raw_turn_store_error,
+                "frontier": frontier,
+            }
         base.update({
             "mode": "default_off_plugin",
             "session_id": self.session_id,
@@ -220,6 +245,7 @@ class IchorContextEngine(ContextEngine):
             "last_injected": self._last_injected,
             "last_pack_metrics": dict(self._last_pack_metrics),
             "last_source_links": list(self._last_selected_source_links),
+            "raw_turn_store": raw_store_status,
         })
         return base
 
@@ -228,6 +254,20 @@ class IchorContextEngine(ContextEngine):
             {"seq": idx, "message": _safe_message_copy(message)}
             for idx, message in enumerate(messages)
         ]
+        if self.raw_turn_store is None:
+            return
+        try:
+            active_tail_start_seq = max(0, len(messages) - self.fresh_tail_turns)
+            self._raw_turn_store_result = self.raw_turn_store.ingest_messages(
+                session_id,
+                [_safe_message_copy(message) for message in messages],
+                source="context_engine",
+                active_tail_start_seq=active_tail_start_seq,
+            )
+            self._raw_turn_store_error = ""
+        except Exception as exc:
+            self._raw_turn_store_result = None
+            self._raw_turn_store_error = exc.__class__.__name__
 
     def _context_message_for(self, query: str) -> dict[str, str] | None:
         self._last_injected = False
@@ -321,10 +361,25 @@ class IchorContextEngine(ContextEngine):
         end = int(end_text)
         rows = self._raw_turns_by_session.get(session_id, [])
         selected = [row for row in rows if start <= int(row.get("seq", -1)) <= end]
-        full_content = "\n".join(
-            f"[{row['seq']}] {row['message'].get('role')}: {row['message'].get('content', '')}"
-            for row in selected
-        )
+        source = "in_memory"
+        if selected:
+            full_content = "\n".join(
+                f"[{row['seq']}] {row['message'].get('role')}: {row['message'].get('content', '')}"
+                for row in selected
+            )
+        elif self.raw_turn_store is not None and hasattr(self.raw_turn_store, "fetch_range"):
+            try:
+                persisted = self.raw_turn_store.fetch_range(session_id, start, end)
+                selected = [{"seq": row.seq, "message": {"role": row.role, "content": row.content}} for row in persisted]
+                full_content = "\n".join(
+                    f"[{row.seq}] {row.role}: {row.content}"
+                    for row in persisted
+                )
+                source = "persistent_store"
+            except Exception as exc:
+                return {"ok": False, "error": exc.__class__.__name__, "source_id": source_id}
+        else:
+            full_content = ""
         truncated = len(full_content) > self.max_expand_chars
         content = full_content[: self.max_expand_chars]
         return {
@@ -332,6 +387,7 @@ class IchorContextEngine(ContextEngine):
             "source_id": source_id,
             "count": len(selected),
             "content": content,
+            "source": source,
             "truncated": truncated,
             "omitted_chars": max(0, len(full_content) - len(content)),
         }
