@@ -5,11 +5,13 @@ exercised on long transcripts, not merely threshold-probed on tiny replay rows.
 """
 from __future__ import annotations
 
+import builtins
 import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -125,3 +127,39 @@ def test_cli_writes_benchmark_artifacts_and_summary(tmp_path: Path) -> None:
     assert Path(payload["summary_path"]).exists()
     assert Path(payload["report_path"]).exists()
     assert len(payload["case_paths"]) == summary["rows_run"]
+    assert artifact_dir.stat().st_mode & 0o777 == 0o700
+
+
+def test_ichor_pack_import_failure_is_reported_as_failing_row(tmp_path: Path) -> None:
+    module = load_module()
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "lib.ichor.context_pack":
+            raise ImportError("synthetic context-pack import miss")
+        return real_import(name, globals, locals, fromlist, level)
+
+    with patch("builtins.__import__", side_effect=fake_import):
+        row, artifact = module.run_case(
+            module.BenchmarkCase(
+                case_id="hermes-lcm-risk-long-thread",
+                god="hermes",
+                phase="ops",
+                query="LCM risk recall and Ichor compressor replacement",
+                expect_injection=True,
+                min_sources=2,
+            ),
+            tmp_path,
+        )
+
+    assert artifact.exists()
+    candidate = row["ichor_context_pack"]
+    assert candidate["coverage_status"] == "error"
+    assert candidate["injected"] is False
+    assert candidate["llm_calls"] == 0
+    assert candidate["api_calls"] == 0
+    assert candidate["db_writes"] == 0
+    assert any("context_pack_import_failed" in warning for warning in candidate["warnings"])
+    assert row["candidate_quality_ok"] is False
+    assert row["candidate_safety_ok"] is True
+    assert row["row_ready"] is False

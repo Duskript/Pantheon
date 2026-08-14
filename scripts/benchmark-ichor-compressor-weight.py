@@ -96,6 +96,16 @@ def _default_artifact_dir() -> Path:
     return Path("/tmp") / f"ichor-compressor-weight-benchmark-{_utc_stamp()}"
 
 
+def _ensure_private_artifact_dir(artifact_dir: Path) -> None:
+    """Create artifact directory with owner-only permissions.
+
+    Case JSON artifacts include internal source paths/titles. Keep the benchmark
+    dry-run, but avoid making that metadata world-readable under shared /tmp.
+    """
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_dir.chmod(0o700)
+
+
 def _rss_kb() -> int | None:
     try:
         for line in Path("/proc/self/status").read_text(encoding="utf-8").splitlines():
@@ -234,20 +244,50 @@ def _run_default_compressor(case: BenchmarkCase) -> dict[str, Any]:
     }
 
 
+def _failed_ichor_pack(error: str, started: float) -> dict[str, Any]:
+    """Return a fail-closed candidate row when Ichor pack generation is unavailable."""
+    return {
+        "coverage_status": "error",
+        "returned": 0,
+        "omitted": 0,
+        "warnings": [error],
+        "injected": False,
+        "injectable_context_length": 0,
+        "source_link_count": 0,
+        "source_titles": [],
+        "source_paths": [],
+        "tokens_estimated": 0,
+        "db_reads": 0,
+        "db_writes": 0,
+        "rows_examined": 0,
+        "llm_calls": 0,
+        "api_calls": 0,
+        "wall_ms": int((time.perf_counter() - started) * 1000),
+        "rss_delta_kb": None,
+        "pack": {"error": error},
+    }
+
+
 def _run_ichor_context_pack(case: BenchmarkCase) -> dict[str, Any]:
     started = time.perf_counter()
-    from lib.ichor.context_pack import build_context_pack
+    try:
+        from lib.ichor.context_pack import build_context_pack
+    except Exception as exc:
+        return _failed_ichor_pack(f"context_pack_import_failed: {exc}", started)
 
-    pack = build_context_pack(
-        case.query,
-        god_name=case.god,
-        phase=case.phase,
-        max_items=8,
-        max_tokens=case.max_pack_tokens,
-        max_ms=350,
-        include_graph=True,
-        dry_run=True,
-    )
+    try:
+        pack = build_context_pack(
+            case.query,
+            god_name=case.god,
+            phase=case.phase,
+            max_items=8,
+            max_tokens=case.max_pack_tokens,
+            max_ms=350,
+            include_graph=True,
+            dry_run=True,
+        )
+    except Exception as exc:
+        return _failed_ichor_pack(f"context_pack_build_failed: {exc}", started)
     coverage = pack.get("coverage", {})
     metrics = pack.get("metrics", {})
     source_links = pack.get("source_links", []) or []
@@ -275,7 +315,7 @@ def _run_ichor_context_pack(case: BenchmarkCase) -> dict[str, Any]:
 
 
 def run_case(case: BenchmarkCase, artifact_dir: Path) -> tuple[dict[str, Any], Path]:
-    artifact_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_private_artifact_dir(artifact_dir)
     default = _run_default_compressor(case)
     candidate = _run_ichor_context_pack(case)
     no_mutation_flags = {
