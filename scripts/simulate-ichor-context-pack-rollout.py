@@ -12,13 +12,17 @@ Safety boundary:
 - no session rotation
 - no transcript rewrite
 - no runtime DB writes
+
+The simulation validates source titles for prompt hygiene. Source paths are
+recorded raw in artifacts for provenance/debugging and are intentionally not
+render-sanitized here; the builder remains responsible for generating safe
+injectable prompt text.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -137,7 +141,6 @@ def simulate_case(case: SimulationCase, artifact_dir: Path) -> tuple[dict[str, A
     from lib.ichor.context_pack import build_context_pack
 
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    started = time.perf_counter()
     before_messages = _base_messages(case)
     before_tokens = _estimate_messages_tokens(before_messages)
     pack = build_context_pack(
@@ -160,7 +163,6 @@ def simulate_case(case: SimulationCase, artifact_dir: Path) -> tuple[dict[str, A
         after_messages.insert(1, _context_message(injectable))
     after_tokens = _estimate_messages_tokens(after_messages)
     source_link_count = len(source_links)
-    wall_ms = int((time.perf_counter() - started) * 1000)
     source_quality_ok = source_link_count >= case.min_sources and _source_titles_clean(source_links)
     noop_clean = (
         not case.expected_injection
@@ -196,7 +198,7 @@ def simulate_case(case: SimulationCase, artifact_dir: Path) -> tuple[dict[str, A
         "db_writes": int(metrics.get("db_writes", 0) or 0),
         "llm_calls": int(metrics.get("llm_calls", 0) or 0),
         "api_calls": int(metrics.get("api_calls", 0) or 0),
-        "wall_ms": int(metrics.get("wall_ms", wall_ms) or wall_ms),
+        "wall_ms": int(metrics.get("wall_ms", 0) or 0),
         "would_mutate_runtime": False,
         "would_change_config": False,
         "would_restart_gateway": False,

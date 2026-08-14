@@ -13,9 +13,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "simulate-ichor-context-pack-rollout.py"
+HAS_ROLLOUT_FIXTURE = (
+    (Path.home() / ".hermes" / "ichor.db").exists()
+    and Path("/home/konan/athenaeum").exists()
+)
 
 
 def load_module():
@@ -82,6 +88,10 @@ def test_noop_case_does_not_inject_or_read_memory(tmp_path: Path) -> None:
     assert row["tokens_estimated"] == 0
 
 
+@pytest.mark.skipif(
+    not HAS_ROLLOUT_FIXTURE,
+    reason="rollout simulation matrix requires local Ichor DB and Athenaeum anchors",
+)
 def test_cli_writes_rollout_simulation_artifacts_and_summary(tmp_path: Path) -> None:
     artifact_dir = tmp_path / "rollout-sim"
     proc = subprocess.run(
