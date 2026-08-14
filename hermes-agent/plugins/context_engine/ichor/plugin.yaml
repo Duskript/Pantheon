@@ -1,0 +1,10 @@
+name: ichor
+description: Default-off Ichor precision context engine prototype for bounded per-turn context selection.
+version: 0.1.0
+category: context_engine
+status: experimental
+notes:
+  - Selected only when config.yaml sets context.engine: ichor.
+  - Does not re-enable hermes-lcm.
+  - Designed to assemble bounded source-backed context per turn.
+  - Keeps compaction as fallback, not normal flow.
