@@ -72,6 +72,7 @@ class IchorContextEngine(ContextEngine):
         max_pack_tokens: int = 900,
         max_pack_items: int = 8,
         max_pack_ms: int = 120,
+        max_expand_chars: int = 12_000,
         context_length: int = 128_000,
         threshold_percent: float = 0.50,
     ) -> None:
@@ -79,6 +80,7 @@ class IchorContextEngine(ContextEngine):
         self.max_pack_tokens = max(1, int(max_pack_tokens))
         self.max_pack_items = max(1, int(max_pack_items))
         self.max_pack_ms = max(1, int(max_pack_ms))
+        self.max_expand_chars = max(1_000, int(max_expand_chars))
         self.threshold_percent = threshold_percent
         self.context_length = int(context_length)
         self.threshold_tokens = int(self.context_length * self.threshold_percent)
@@ -96,7 +98,7 @@ class IchorContextEngine(ContextEngine):
         self._last_injected = False
 
     def is_available(self) -> bool:
-        return True
+        return build_context_pack is not None
 
     def update_model(
         self,
@@ -108,7 +110,8 @@ class IchorContextEngine(ContextEngine):
         api_mode: str = "",
     ) -> None:
         del model, base_url, api_key, provider, api_mode
-        self.context_length = int(context_length or self.context_length)
+        if context_length is not None:
+            self.context_length = int(context_length)
         self.threshold_tokens = int(self.context_length * self.threshold_percent)
 
     def update_from_response(self, usage: dict[str, Any]) -> None:
@@ -147,6 +150,10 @@ class IchorContextEngine(ContextEngine):
         focus_topic: str = None,
         force: bool = False,
     ) -> list[dict[str, Any]]:
+        # `force` is accepted for ContextCompressor compatibility. Ichor v0 is
+        # always a bounded selector: it drops pre-tail prompt cargo from the
+        # returned live message list while retaining exact raw turns for
+        # expansion handles. It does not mean lossy summarization.
         del force
         session_id = self.session_id or "ichor-session"
         self._ingest_raw_turns(session_id, messages)
@@ -262,6 +269,8 @@ class IchorContextEngine(ContextEngine):
         )
 
     def _needs_context(self, query: str) -> bool:
+        if build_context_pack is None:
+            return False
         lowered = (query or "").lower()
         explicit_markers = (
             "ichor",
@@ -275,7 +284,7 @@ class IchorContextEngine(ContextEngine):
         if any(marker in lowered for marker in explicit_markers):
             return True
         if _needs_memory_context is None:
-            return bool(query.strip())
+            return False
         return bool(_needs_memory_context(query, "hermes", "context-engine", ""))
 
     def _handles_message_for(
@@ -312,15 +321,19 @@ class IchorContextEngine(ContextEngine):
         end = int(end_text)
         rows = self._raw_turns_by_session.get(session_id, [])
         selected = [row for row in rows if start <= int(row.get("seq", -1)) <= end]
-        content = "\n".join(
+        full_content = "\n".join(
             f"[{row['seq']}] {row['message'].get('role')}: {row['message'].get('content', '')}"
             for row in selected
         )
+        truncated = len(full_content) > self.max_expand_chars
+        content = full_content[: self.max_expand_chars]
         return {
             "ok": bool(selected),
             "source_id": source_id,
             "count": len(selected),
             "content": content,
+            "truncated": truncated,
+            "omitted_chars": max(0, len(full_content) - len(content)),
         }
 
 

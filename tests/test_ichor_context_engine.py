@@ -107,6 +107,20 @@ def test_ichor_context_engine_assembles_bounded_relevant_context(monkeypatch) ->
     assert engine.get_status()["last_pack_metrics"]["api_calls"] == 0
 
 
+def test_ichor_context_engine_unavailable_when_pack_builder_missing(monkeypatch) -> None:
+    module = importlib.import_module("plugins.context_engine.ichor")
+    monkeypatch.setattr(module, "build_context_pack", None)
+    monkeypatch.setattr(module, "_needs_memory_context", None)
+    engine = module.IchorContextEngine(fresh_tail_turns=4, max_pack_tokens=220)
+    engine.on_session_start("session-missing-pack")
+
+    assert engine.is_available() is False
+    assembled = engine.compress(_long_messages("Build Ichor context engine."))
+    joined = "\n".join(str(m.get("content", "")) for m in assembled)
+    assert "status=\"unavailable\"" not in joined
+    assert engine.get_status()["last_pack_metrics"]["db_reads"] == 0
+
+
 def test_ichor_context_engine_noop_turn_injects_no_pack_and_reads_nothing(monkeypatch) -> None:
     module = importlib.import_module("plugins.context_engine.ichor")
     engine = module.IchorContextEngine(fresh_tail_turns=4, max_pack_tokens=220)
@@ -148,3 +162,20 @@ def test_ichor_context_engine_tools_expand_stored_raw_turns() -> None:
     ))
     assert result["ok"] is True
     assert "Original project goal" in result["content"]
+
+
+def test_ichor_expand_caps_large_raw_turn_output() -> None:
+    module = importlib.import_module("plugins.context_engine.ichor")
+    engine = module.IchorContextEngine(fresh_tail_turns=2, max_expand_chars=1200)
+    engine.on_session_start("session-cap")
+    messages = _long_messages("Compare PR #138 tokens per turn.")
+    engine.compress(messages, current_tokens=_estimate_tokens(messages))
+
+    result = json.loads(engine.handle_tool_call(
+        "ichor_expand",
+        {"source_id": "raw_turns:session-cap:seq:1-40"},
+    ))
+    assert result["ok"] is True
+    assert result["truncated"] is True
+    assert result["omitted_chars"] > 0
+    assert len(result["content"]) <= 1200

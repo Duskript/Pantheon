@@ -35,6 +35,8 @@ def test_turn_benchmark_shows_ichor_sends_fewer_tokens_per_turn(tmp_path: Path) 
     assert payload["mode"] == "ichor_context_engine_turn_benchmark"
     assert summary["rows_run"] >= 3
     assert summary["benchmark_ready"] is True
+    assert summary["baseline_label"] == "full transcript resend baseline until compressor threshold"
+    assert summary["token_estimate_method"] == "len_div_4_heuristic"
     assert summary["ichor_total_tokens"] < summary["default_total_tokens"]
     assert summary["ichor_avg_tokens_per_turn"] < summary["default_avg_tokens_per_turn"]
     assert summary["all_ichor_no_llm_api"] is True
@@ -57,6 +59,7 @@ def test_turn_benchmark_cli_writes_private_artifacts(tmp_path: Path) -> None:
 
     assert payload["mode"] == "ichor_context_engine_turn_benchmark"
     assert summary["benchmark_ready"] is True
+    assert summary["token_estimate_method"] == "len_div_4_heuristic"
     assert Path(payload["summary_path"]).exists()
     assert Path(payload["report_path"]).exists()
     assert artifact_dir.stat().st_mode & 0o777 == 0o700

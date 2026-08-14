@@ -166,7 +166,9 @@ def _simulate_default(case: TurnCase) -> dict[str, Any]:
         per_turn.append({"turn": turn, "tokens_sent": sent, "compressed": compressed_this_turn})
         active_messages.append({"role": "assistant", "content": _assistant_payload(case, turn)})
     return {
-        "engine": "default_compressor",
+        "engine": "full_transcript_baseline_until_threshold",
+        "label": "full transcript resend baseline until compressor threshold",
+        "token_estimate_method": "len_div_4_heuristic",
         "total_tokens": sum(row["tokens_sent"] for row in per_turn),
         "avg_tokens_per_turn": round(sum(row["tokens_sent"] for row in per_turn) / len(per_turn), 2),
         "compressions": sum(1 for row in per_turn if row["compressed"]),
@@ -215,6 +217,7 @@ def _simulate_ichor(case: TurnCase) -> dict[str, Any]:
         raw_messages.append({"role": "assistant", "content": _assistant_payload(case, turn)})
     return {
         "engine": "ichor_context_engine",
+        "token_estimate_method": "len_div_4_heuristic",
         "total_tokens": sum(row["tokens_sent"] for row in per_turn),
         "avg_tokens_per_turn": round(sum(row["tokens_sent"] for row in per_turn) / len(per_turn), 2),
         "injected_any": injected_any,
@@ -274,6 +277,8 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "rows_run": len(rows),
         "turns_run": turns,
+        "baseline_label": "full transcript resend baseline until compressor threshold",
+        "token_estimate_method": "len_div_4_heuristic",
         "default_total_tokens": default_total,
         "ichor_total_tokens": ichor_total,
         "tokens_saved": default_total - ichor_total,
@@ -294,8 +299,10 @@ def _write_report(path: Path, summary: dict[str, Any], rows: list[dict[str, Any]
         "# IchorContextEngine Tokens-Per-Turn Benchmark",
         "",
         f"- Benchmark ready: `{summary['benchmark_ready']}`",
-        f"- Default total tokens: `{summary['default_total_tokens']}`",
-        f"- Ichor total tokens: `{summary['ichor_total_tokens']}`",
+        f"- Baseline: `{summary['baseline_label']}`",
+        f"- Token estimate method: `{summary['token_estimate_method']}`",
+        f"- Default/baseline estimated tokens: `{summary['default_total_tokens']}`",
+        f"- Ichor estimated tokens: `{summary['ichor_total_tokens']}`",
         f"- Tokens saved ratio: `{summary['tokens_saved_ratio']}`",
         f"- Ichor avg tokens/turn: `{summary['ichor_avg_tokens_per_turn']}`",
         "",
