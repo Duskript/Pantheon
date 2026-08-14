@@ -323,6 +323,17 @@ def env_int(key: str, default: int = 0) -> int:
         return default
 
 
+def env_float(key: str, default: float = 0.0) -> float:
+    """Read an environment variable as a float, with fallback."""
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        return default
+
+
 def env_bool(key: str, default: bool = False) -> bool:
     """Read an environment variable as a boolean."""
     return is_truthy_value(os.getenv(key, ""), default=default)
@@ -438,3 +449,22 @@ def base_url_host_matches(base_url: str, domain: str) -> bool:
     if not domain:
         return False
     return hostname == domain or hostname.endswith("." + domain)
+
+
+# ── Fast YAML loading ────────────────────────────────────────────────────
+_fast_yaml_loader = None
+
+
+def _get_fast_yaml_loader():
+    """Return the fastest safe PyYAML loader available."""
+    global _fast_yaml_loader
+    if _fast_yaml_loader is None:
+        _fast_yaml_loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
+    return _fast_yaml_loader
+
+
+def fast_safe_load(stream: Any) -> Any:
+    """``yaml.safe_load`` using the libyaml C loader when available."""
+    # Safe: ``_get_fast_yaml_loader`` returns ``yaml.CSafeLoader`` or
+    # ``yaml.SafeLoader`` only, matching ``yaml.safe_load`` semantics.
+    return yaml.load(stream, Loader=_get_fast_yaml_loader())

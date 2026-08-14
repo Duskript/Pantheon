@@ -51,6 +51,18 @@ def _get_platform_default_hermes_home() -> Path:
     return Path.home() / ".hermes"
 
 
+def _hermes_home_from_env() -> Path:
+    """Resolve HERMES_HOME from the process environment only.
+
+    This deliberately ignores the context-local override used for task/profile
+    scoping so dashboard/process-scoped callers can depend on the launch home.
+    """
+    val = os.environ.get("HERMES_HOME", "").strip()
+    if val:
+        return Path(val)
+    return _get_platform_default_hermes_home()
+
+
 def get_hermes_home() -> Path:
     """Return the Hermes home directory (default: platform-native path).
 
@@ -107,6 +119,16 @@ def get_hermes_home() -> Path:
                 pass
 
     return _get_platform_default_hermes_home()
+
+
+def get_process_hermes_home() -> Path:
+    """Return the Hermes home for the running process, ignoring task overrides.
+
+    Unlike ``get_hermes_home``, this never follows the context-local override
+    set by ``set_hermes_home_override``. It resolves only the process
+    ``HERMES_HOME`` env var, falling back to the platform-native default.
+    """
+    return _hermes_home_from_env()
 
 
 def get_default_hermes_root() -> Path:
