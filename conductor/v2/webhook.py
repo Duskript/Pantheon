@@ -23,10 +23,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
 from .engine import PENDING_DIR, Event, utc_now
+from .auth import bearer_dependency, set_expected_api_key
 
 LOG = logging.getLogger("conductor.v2.webhook")
 
@@ -34,9 +35,33 @@ DEFAULT_PORT = int(os.environ.get("CONDUCTOR_WEBHOOK_PORT", "8088"))
 DEFAULT_HOST = os.environ.get("CONDUCTOR_WEBHOOK_HOST", "0.0.0.0")
 
 
-def make_app(pending_dir: Path = PENDING_DIR) -> FastAPI:
+def make_app(pending_dir: Path = PENDING_DIR, api_key: str = "") -> FastAPI:
     """Build the FastAPI app. Each app has its own pending_dir binding so
-    tests can use a tmp directory."""
+    tests can use a tmp directory.
+
+    The `api_key` arg binds the bearer token expected on every
+    protected endpoint. Passing "" disables auth (the dev/test
+    footgun — the live_stream logs a warning in the same situation).
+    The key is also bound to the module-level slot in auth.py so the
+    shared `bearer_dependency()` factory can find it.
+
+    Auth split per spec §6:
+      * ``GET  /health``           — UNAUTHENTICATED (load balancers
+        and the operator need to hit it without credentials).
+      * ``POST /webhook/{source}`` — AUTHENTICATED (any external
+        caller that can forge a webhook).
+      * ``POST /dispatch``         — AUTHENTICATED (internal callers
+        like Talon send their own token).
+    """
+    # Bind the expected key for the bearer_dependency() factory in
+    # auth.py. Mirror the api_server fix: bind None for the empty
+    # case so the resolver (CONDUCTOR_API_KEY env, then .env file
+    # fallback) takes over. Otherwise an empty `api_key=""` would
+    # leave a stale binding from a previous make_app() call in
+    # place and silently enforce the wrong key (or no key, when
+    # the prior binding was None).
+    set_expected_api_key(api_key if api_key else None)
+
     inbox = pending_dir / "_webhooks"
     inbox.mkdir(parents=True, exist_ok=True)
 
@@ -45,6 +70,9 @@ def make_app(pending_dir: Path = PENDING_DIR) -> FastAPI:
         version="2.0.0",
         description="Receive external webhooks, convert to event envelopes, write to pending/_webhooks/.",
     )
+    # Per-app dependency closure. Each route that needs auth uses
+    # `Depends(auth_dep)` to enforce it.
+    auth_dep = bearer_dependency()
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -55,7 +83,7 @@ def make_app(pending_dir: Path = PENDING_DIR) -> FastAPI:
             "timestamp": utc_now(),
         }
 
-    @app.post("/webhook/{source:path}")
+    @app.post("/webhook/{source:path}", dependencies=[Depends(auth_dep)])
     async def receive_webhook(source: str, request: Request) -> JSONResponse:
         """Generic webhook catch-all. The {source} path segment names the
         origin (github, stripe, jira, etc.) and becomes the Event.source."""
@@ -102,7 +130,7 @@ def make_app(pending_dir: Path = PENDING_DIR) -> FastAPI:
             "note": "external events default to approval_required (spec 8.1)",
         }, status_code=202)
 
-    @app.post("/dispatch")
+    @app.post("/dispatch", dependencies=[Depends(auth_dep)])
     async def dispatch_direct(req: Request) -> JSONResponse:
         """Internal-style dispatch endpoint. Accepts a pre-formed event
         envelope (used by Talon or other internal Pantheons) and writes
@@ -139,16 +167,21 @@ class WebhookServer:
     """
 
     def __init__(self, port: int = DEFAULT_PORT, host: str = DEFAULT_HOST,
-                 pending_dir: Path = PENDING_DIR):
+                 pending_dir: Path = PENDING_DIR, api_key: str = ""):
         self.port = port
         self.host = host
         self.pending_dir = pending_dir
+        # Bearer token expected on /webhook/{source} and /dispatch.
+        # Empty string = auth disabled (dev/test mode). Production
+        # passes the shared key from the ConductorService so all
+        # three HTTP surfaces enforce the same auth.
+        self.api_key = api_key
         self._server: Optional[Any] = None
         self._app: Optional[FastAPI] = None
 
     async def start(self) -> dict[str, Any]:
         import uvicorn
-        self._app = make_app(self.pending_dir)
+        self._app = make_app(self.pending_dir, api_key=self.api_key)
         config = uvicorn.Config(
             self._app, host=self.host, port=self.port,
             log_level="info", access_log=False, lifespan="on",

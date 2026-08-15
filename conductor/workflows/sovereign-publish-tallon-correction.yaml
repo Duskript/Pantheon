@@ -18,6 +18,7 @@ workflow:
     - id: notify-tallon
       type: nats_publish
       subject: "subspace.konan.outgoing.tallon"
+      operator_approval_required: true
       input_from: null
       message: "${context.retraction_body_path}"
       payload:

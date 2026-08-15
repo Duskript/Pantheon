@@ -20,6 +20,7 @@ workflow:
       type: nats_publish
       subject: "subspace.konan.outgoing.tallon"
       input_from: package
+      operator_approval_required: true
       message: "Deploy request: ${workflow_id} - ${message}"
       payload:
         workflow_id: "${workflow_id}"

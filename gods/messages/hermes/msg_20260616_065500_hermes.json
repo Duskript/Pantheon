@@ -1,0 +1,20 @@
+{
+  "message_id": "msg_20260616_065500_hermes",
+  "from": "hermes",
+  "to": "hermes",
+  "subject": "[conductor/step-4.final] Phase 4 SHIP \u2014 closure review complete",
+  "body": "Step 4.final SHIP \u2014 Phase 4 closure review complete.\n\n**Status:** Phase 4 complete. All 10 steps DONE. Plan YAML header status: complete. Substrate ready for phase-5-e2e-test-suite.\n\n**Deliverables (this step):**\n1. reviews/phase-4-quarantine-sovereign-final-review.md (NEW, 20.4K, 5 sections + summary)\n2. plans/conductor-v2/phase-4-quarantine-sovereign.yaml \u2014 Step 4.final DONE, header flipped, test counts updated 232\u2192287, cli_tools.yaml path corrected in file dependency map (D1 fix)\n3. shared/decisions/2026-06-16-step-4.final.md (NEW, 4.3K, closure decision log)\n\n**Verdict:** PROCEED to Phase 5 with 30-60 min of housekeeping (2 regression tests + 1 production workflow inventory) addressable in parallel with Phase 5's first real brief.\n\n**Surface items for Phase 5 first brief:**\n- B1a: _advance v1+v2 race regression test (~30 LOC)\n- B1b: _exec_parallel premature status regression test (~20 LOC)\n- B2: 1-line inventory of 5 production workflow files for E2E targeting\n- F1: already addressed (test count 232\u2192287)\n- D1/D2: already addressed (cli_tools.yaml path corrected in plan YAML)\n\n**Operational state verified:**\n- Full v2 suite 285/1/0 (87.11s, independently re-run)\n- 30/30 cli_tool tests pass (0.32s)\n- 18/18 merge tests pass\n- 16/16 parallel tests pass\n- 17/17 sovereign-outbound-guard tests pass\n- 5 production workflows load cleanly\n- engine.py 127K, 2,731 LOC, all 4.7+4.8+4.9 changes additive\n\n**Operator call (D3 only):** confirm whether to add 1-line note to shared/decisions/INDEX.md about dual-file decision log convention, or skip.\n\n**Next action:** Phase 5 plan YAML authoring. Not Phase 4 deliverable.",
+  "timestamp_utc": "2026-06-16T06:55:00Z",
+  "tags": [
+    "conductor",
+    "phase-4",
+    "review",
+    "ship"
+  ],
+  "session_id": "20260616_065500_hermes",
+  "attachments": [
+    "reviews/phase-4-quarantine-sovereign-final-review.md",
+    "shared/decisions/2026-06-16-step-4.final.md"
+  ],
+  "status": "delivered"
+}

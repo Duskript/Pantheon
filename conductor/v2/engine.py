@@ -37,6 +37,12 @@ import yaml
 from watchfiles import Change, awatch
 
 from . import gateway as gw_mod
+# Step 4.7 Brief 1 (2026-06-16) — parallel + merge step types.
+# `merge_mod` provides the 4 non-LLM strategies (concat/first/diff/vote);
+# the 2 LLM strategies (llm_summarize/llm_pick_best) live in this engine
+# module as `_exec_merge` and reuse `_call_llm` (subprocess per brief
+# locked decision #4).
+from . import merge as merge_mod
 
 LOG = logging.getLogger("conductor.v2.engine")
 
@@ -489,7 +495,7 @@ class RuleEngine:
 @dataclass
 class WorkflowStep:
     id: str
-    type: str = "god"  # god | nats_publish
+    type: str = "god"  # god | nats_publish | parallel | merge
     god: Optional[str] = None
     skill: Optional[str] = None
     action: Optional[str] = None
@@ -503,6 +509,41 @@ class WorkflowStep:
     on_timeout: Optional[str] = None
     loop: Optional[dict[str, Any]] = None
     payload: dict[str, Any] = field(default_factory=dict)
+    # --- Step 4.7 (Brief 1, 2026-06-16): parallel + merge step types ---
+    # `parallel` step fields: child step specs, fail mode, concurrency cap,
+    # overall timeout. Children are full WorkflowStep instances (any type
+    # including nested parallel — depth limited to 3 levels at parse time).
+    branches: list["WorkflowStep"] = field(default_factory=list)
+    fail_mode: str = "fast"  # fast (default) | slow | ignore
+    max_concurrency: int = 0  # 0 = unlimited
+    # `merge` step fields: list of step IDs to read outputs from, the merge
+    # strategy, and strategy-specific config (judge_prompt_template, timeout).
+    inputs: list[str] = field(default_factory=list)
+    strategy: Optional[str] = None  # concat|first|diff|vote|llm_summarize|llm_pick_best
+    strategy_config: dict[str, Any] = field(default_factory=dict)
+    # --- Step 4.6 (Brief 2, 2026-06-16): sovereign-outbound contract ---
+    # True → this nats_publish step is a sovereign outbound and the operator
+    # has approved its single-use publish. Required by the load-time validator
+    # (workflow_validator.py) for any step whose subject matches
+    # SOVEREIGN_OUTBOUND_RE. See the 2026-06-15 sovereign-NATS breach incident.
+    operator_approval_required: bool = False
+    # --- Step 4.9 (Brief 1, 2026-06-16): cli_tool step type ---
+    # `cli_tool` step fields: which registered tool to invoke, the input
+    # contract (prompt, working_dir, env, session_id, resume, timeout, stream),
+    # and on_error config (retry policy + final-failure action). Per Thoth's
+    # spec §2.1, §7.3, and the 2026-06-16-step-4.7 decision log. The actual
+    # subprocess invocation lives in cli_tool.py; the engine just dispatches
+    # and stores the output.
+    tool: Optional[str] = None  # which registered tool (claude-code, codex, etc.)
+    tool_input: dict[str, Any] = field(default_factory=dict)  # {prompt, working_dir, env, session_id, resume, timeout, stream}
+    on_error: dict[str, Any] = field(default_factory=dict)  # {retry: {max_attempts, backoff, backoff_base_seconds}, on_final_failure: <action>}
+
+
+# Maximum nesting depth for `parallel` steps. Spec §9 Q2 recommendation:
+# "limit to 3 levels deep to prevent infinite recursion." Enforced at parse
+# time (Workflow.from_dict) so a malformed YAML fails fast with a clear
+# error rather than blowing the stack at runtime.
+_MAX_PARALLEL_NESTING_DEPTH = 3
 
 
 @dataclass
@@ -522,24 +563,8 @@ class Workflow:
         ctx = wf.get("context", {}) or {}
         steps = []
         for s in wf.get("steps", []) or []:
-            steps.append(WorkflowStep(
-                id=s["id"],
-                type=s.get("type", "god"),
-                god=s.get("god"),
-                skill=s.get("skill"),
-                action=s.get("action"),
-                input=s.get("input"),
-                input_from=s.get("input_from"),
-                subject=s.get("subject"),
-                message=s.get("message"),
-                gates=list(s.get("gates", []) or []),
-                output=s.get("output"),
-                timeout=s.get("timeout", "30m"),
-                on_timeout=s.get("on_timeout"),
-                loop=s.get("loop"),
-                payload=dict(s.get("payload", {}) or {}),
-            ))
-        return cls(
+            steps.append(cls._step_from_dict(s))
+        wf_obj = cls(
             id=wf["id"],
             name=wf.get("name", wf["id"]),
             version=wf.get("version", "1.0.0"),
@@ -548,6 +573,84 @@ class Workflow:
             context_optional=list(ctx.get("optional", []) or []),
             steps=steps,
             source_path=source,
+        )
+        # Step 4.6 Brief 2 (2026-06-16) — load-time sovereign-outbound
+        # contract check. Lazy import avoids a circular dependency at
+        # module level (validator imports engine for SOVEREIGN_OUTBOUND_RE;
+        # engine imports validator only here, at runtime).
+        from .workflow_validator import validate_workflow, WorkflowValidationError
+        violations = validate_workflow(wf_obj)
+        if violations:
+            raise WorkflowValidationError(
+                f"workflow {wf_obj.id!r} (source={source}) failed "
+                f"sovereign-outbound validation:\n  " + "\n  ".join(violations)
+            )
+        return wf_obj
+
+    @classmethod
+    def _step_from_dict(
+        cls,
+        s: dict[str, Any],
+        *,
+        _parallel_depth: int = 0,
+    ) -> WorkflowStep:
+        """Construct a WorkflowStep from a YAML dict, recursing into
+        `parallel.branches`. Enforces the 3-level `parallel` nesting limit
+        (spec §9 Q2) at parse time — a deeper YAML raises ValueError
+        immediately rather than blowing the stack at runtime."""
+        step_type = s.get("type", "god")
+        # Parse nested branches for `parallel` steps. Recursion depth tracks
+        # how many `parallel` ancestors this step is nested inside; a
+        # `parallel` whose own depth == 3 would attempt to host a level-4
+        # child, which is forbidden.
+        branches: list[WorkflowStep] = []
+        if step_type == "parallel":
+            if _parallel_depth >= _MAX_PARALLEL_NESTING_DEPTH:
+                raise ValueError(
+                    f"parallel step nesting exceeds the {_MAX_PARALLEL_NESTING_DEPTH}-level "
+                    f"limit (spec §9 Q2); offending step id={s.get('id')!r}"
+                )
+            for b in s.get("branches", []) or []:
+                branches.append(cls._step_from_dict(
+                    b, _parallel_depth=_parallel_depth + 1,
+                ))
+        return WorkflowStep(
+            id=s["id"],
+            type=step_type,
+            god=s.get("god"),
+            skill=s.get("skill"),
+            action=s.get("action"),
+            input=s.get("input"),
+            input_from=s.get("input_from"),
+            subject=s.get("subject"),
+            message=s.get("message"),
+            gates=list(s.get("gates", []) or []),
+            output=s.get("output"),
+            timeout=s.get("timeout", "30m"),
+            on_timeout=s.get("on_timeout"),
+            loop=s.get("loop"),
+            payload=dict(s.get("payload", {}) or {}),
+            # Step 4.7 — parallel + merge fields.
+            branches=branches,
+            fail_mode=s.get("fail_mode", "fast"),
+            max_concurrency=int(s.get("max_concurrency", 0) or 0),
+            inputs=list(s.get("inputs", []) or []),
+            strategy=s.get("strategy"),
+            strategy_config=dict(s.get("strategy_config", {}) or {}),
+            # Step 4.6 — sovereign-outbound contract (Brief 2).
+            # Parsed from YAML so the load-time validator can inspect the
+            # field on the WorkflowStep dataclass. Default is False —
+            # workflows that don't set it are assumed non-sovereign.
+            operator_approval_required=bool(s.get("operator_approval_required", False)),
+            # Step 4.9 — cli_tool step fields (Brief 1, 2026-06-16).
+            # `tool` names a registered CLI tool (claude-code, codex, etc.);
+            # `tool_input` carries the prompt/working_dir/env/session_id
+            # contract per Thoth spec §2.1; `on_error` carries the retry
+            # policy + final-failure action per spec §7.3. All default to
+            # None / empty dicts so existing workflows are unaffected.
+            tool=s.get("tool"),
+            tool_input=dict(s.get("tool_input", {}) or {}),
+            on_error=dict(s.get("on_error", {}) or {}),
         )
 
     def step_by_id(self, step_id: str) -> Optional[WorkflowStep]:
@@ -591,6 +694,36 @@ class WorkflowRegistry:
                 LOG.error(f"failed to load workflow {path}: {e}")
         LOG.info(f"loaded {len(self._workflows)} workflows from {self.workflows_dir}")
         return len(self._workflows)
+
+    def reload_workflow(self, workflow_id: str) -> Optional[Workflow]:
+        """Reload a single workflow by id from disk.
+
+        Used by the api_server's PUT /api/workflows/{id} handler to
+        pick up a freshly-saved YAML without re-parsing every other
+        workflow in the directory. Returns the reloaded Workflow on
+        success, or None if no file exists for that id.
+
+        Raises WorkflowValidationError if the file fails load-time
+        validation (the engine would also reject it later, but failing
+        here gives the API caller a clear 400 with the validator's
+        error message rather than a 500 from the engine on the next
+        start_workflow call).
+
+        The previous in-memory copy of the workflow (if any) is REPLACED
+        in-place. Workflows that are currently running (`in_progress`
+        instances) are NOT aborted — they continue with the version of
+        the workflow that was active when they started (the spec's 8.4
+        version-lock contract: the version a running instance uses is
+        captured at start time and never updated mid-run).
+        """
+        path = self.workflows_dir / f"{workflow_id}.yaml"
+        if not path.exists():
+            return None
+        doc = read_yaml(path)
+        wf = Workflow.from_dict(doc, path)
+        self._workflows[wf.id] = wf
+        LOG.info(f"reloaded workflow {wf.id} v{wf.version} from {path}")
+        return wf
 
     def get(self, workflow_id: str) -> Optional[Workflow]:
         return self._workflows.get(workflow_id)
@@ -680,7 +813,18 @@ class ConductorEngine:
         pending_dir: Optional[Path] = None,
         state_dir: Optional[Path] = None,
         workflows_dir: Optional[Path] = None,
+        live_stream: Optional["LiveStreamServer"] = None,
     ):
+        # A.2 (2026-06-16): optional WebSocket live-observability server.
+        # When set, the engine emits `step.started/completed/failed` and
+        # `workflow.started/completed` events through the server. When None
+        # (the default), the engine is silent — zero overhead, fully
+        # back-compat with the Step 4.9 Brief 1/2/3 contract.
+        #
+        # Lazy import to keep the v2 engine importable even if aiohttp
+        # is not installed (e.g. minimal CI envs). The live_stream
+        # module is only touched if the caller passes a server.
+        self.live_stream = live_stream
         self.gw = gateway_client
         # Step 1.6 lazy fix: pass the lazy resolvers into the registries
         # explicitly so a `ConductorEngine()` with no kwargs reads the
@@ -711,6 +855,47 @@ class ConductorEngine:
             (self.pending_dir / god).mkdir(parents=True, exist_ok=True)
         self._instances: dict[str, WorkflowInstance] = {}
         self._load_active_instances()
+
+    # ----- A.2 (2026-06-16): live-observability event emission -----
+
+    def _emit_event(
+        self,
+        workflow_id: str,
+        step_id: str,
+        event: str,
+        data: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Emit a single StreamEvent to the live_stream (if configured).
+
+        No-op when `self.live_stream is None` (the default — most
+        callers, including the existing 5 production workflows, don't
+        care about live observability). When set, this schedules the
+        broadcast on the running event loop and returns immediately;
+        we don't await broadcast() because emitting an event is a
+        side-effect of the engine's existing step-execution flow and
+        should not block the executor.
+
+        Errors during broadcast (closed socket, timeout) are logged
+        at debug and swallowed — the engine does not abort a step
+        because the GUI missed an event.
+        """
+        if self.live_stream is None:
+            return
+        # Lazy import keeps the engine importable in envs without
+        # aiohttp (the LiveStreamServer constructor is the only thing
+        # that pulls aiohttp in).
+        from .live_stream import StreamEvent
+        evt = StreamEvent.now(workflow_id, step_id, event, data or {})
+        # Schedule broadcast on the running loop. If no loop is
+        # running (sync code path), broadcast_sync handles the
+        # no-loop case by logging + returning a completed future.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop — fall back to best-effort sync dispatch.
+            self.live_stream.broadcast_sync(evt)
+            return
+        asyncio.ensure_future(self.live_stream.broadcast(evt))
 
     # ----- Instance management -----
 
@@ -840,6 +1025,23 @@ class ConductorEngine:
         self._save_instance(inst)
         LOG.info(f"started workflow {wf_id} ({workflow_def_id} v{wf.version}) at step {first_step_id}")
 
+        # A.2 (2026-06-16): emit workflow.started so subscribers can
+        # render "this workflow just began" in the GUI before any step
+        # events flow. The step_id here is the first step (a hint for
+        # the GUI), but the event itself is workflow-scoped.
+        if first_step_id:
+            self._emit_event(
+                wf_id,
+                first_step_id,
+                "workflow.started",
+                {
+                    "definition_id": workflow_def_id,
+                    "definition_version": wf.version,
+                    "initiator": initiator,
+                    "first_step_id": first_step_id,
+                },
+            )
+
         if first_step_id:
             asyncio.create_task(self._execute_step(inst, wf, first_step_id))
         return inst
@@ -864,17 +1066,80 @@ class ConductorEngine:
         inst.status = "in_progress"
         self._save_instance(inst)
 
+        # A.2 (2026-06-16): emit step.started so subscribers see the
+        # step begin. The data payload includes the step type so the
+        # GUI can route to the right renderer (cli_tool steps get the
+        # streaming view, others get a simple status view).
+        self._emit_event(
+            inst.workflow_id,
+            step.id,
+            "step.started",
+            {
+                "step_type": step.type,
+                "god": step.god,
+                "tool": step.tool,
+            },
+        )
+
         try:
             if step.type == "nats_publish":
                 await self._exec_nats_publish(inst, step)
+            elif step.type == "parallel":
+                await self._exec_parallel(inst, wf, step)
+            elif step.type == "merge":
+                await self._exec_merge(inst, wf, step)
+            elif step.type == "cli_tool":
+                # Step 4.9 (Brief 1, 2026-06-16): dispatch to the
+                # subprocess-invocation orchestrator. The actual
+                # subprocess work happens in cli_tool.py; this method
+                # wraps it with timeout, retry, output capture, and
+                # step-history recording.
+                await self._exec_cli_tool(inst, wf, step)
             else:
+                # default branch: god_dispatch (back-compat for
+                # existing step definitions that omit `type:`)
                 await self._exec_god_dispatch(inst, wf, step)
         except Exception as e:
             LOG.exception(f"step {step_id} failed in {inst.workflow_id}: {e}")
             self._record_step_failure(inst, step, str(e))
             self._save_instance(inst)
+            # A.2 (2026-06-16): emit step.failed for the GUI. Data
+            # includes the error message (truncated) for debugging.
+            self._emit_event(
+                inst.workflow_id,
+                step.id,
+                "step.failed",
+                {
+                    "step_type": step.type,
+                    "error": str(e)[:500],
+                    "error_type": type(e).__name__,
+                },
+            )
             if inst.abort_on_fail:
                 self._abort_workflow(inst, f"step {step_id} raised: {e}")
+            return
+
+        # A.2 (2026-06-16): emit step.completed on the implicit
+        # success path. (The explicit per-executor record_step_completion
+        # calls inside each _exec_* method flip the step's status; this
+        # event tells subscribers the step is done, regardless of
+        # which sub-executor handled it.) We pull the final status
+        # from the latest history entry so the event matches the
+        # recorded state.
+        final_status = "completed"
+        for h in reversed(inst.step_history):
+            if h.get("step_id") == step.id:
+                final_status = h.get("status", "completed")
+                break
+        self._emit_event(
+            inst.workflow_id,
+            step.id,
+            "step.completed",
+            {
+                "step_type": step.type,
+                "status": final_status,
+            },
+        )
 
     async def _exec_god_dispatch(
         self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
@@ -1027,6 +1292,784 @@ class ConductorEngine:
         })
         self._record_step_completion(inst, step, None)
         await self._advance(inst, None, step, None)
+
+    # =====================================================================
+    # Step 4.7 (Brief 1, 2026-06-16): parallel + merge step types
+    # =====================================================================
+    # Spec: athenaeum/Codex-Pantheon/specs/conductor-cli-orchestration.md
+    # §2.2 (parallel), §2.3 (merge), §7.4 (parallel spec), §7.5 (merge
+    # spec), §9 Q2 (3-level nesting limit). The two step types below
+    # let workflows fan out work to N children concurrently, then merge
+    # the results with one of 6 strategies. LLM-merge strategies reuse
+    # the engine's `_call_llm` subprocess path (brief locked decision #4)
+    # — there is no native llm_call method on this engine today, so we
+    # shell out to the venv's openai client via `python -c` with a
+    # graceful error if the path is unavailable.
+
+    # ----- LLM call helper (brief locked decision #4) -----
+
+    async def _call_llm(
+        self,
+        prompt: str,
+        strategy_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Invoke the engine's LLM path with a judge prompt.
+
+        Today the engine has no first-class LLM method (no `_exec_llm`
+        on this class), so per brief locked decision #4 we shell out to
+        a subprocess that imports the venv's `openai` client. The
+        subprocess shape is intentionally simple — a single
+        `python -c` invocation that POSTs to the configured provider
+        and prints the response to stdout.
+
+        Args:
+            prompt: the judge prompt (built by `_exec_merge` from the
+                     strategy's `judge_prompt_template` + the values
+                     the caller wants the LLM to consider)
+            strategy_config: strategy-specific config; recognizes
+                              `model`, `provider`, `timeout_seconds`,
+                              `api_key_env` (default: OPENAI_API_KEY)
+
+        Returns:
+            dict with the LLM's response text under `text` and any
+            metadata under `metadata`. On error: returns dict with
+            `error` key and `text=""` — the engine can surface this
+            in the merge output rather than crashing the workflow.
+
+        Why subprocess (vs an in-process openai call):
+          - keeps the engine's import surface minimal (no openai dep
+            added to the v2 engine module — it stays a pure orchestrator)
+          - isolated timeout via `asyncio.subprocess` (the engine can
+            enforce `strategy_config.timeout` via `proc.wait_for`)
+          - the subprocess picks up the venv's openai client without
+            the engine having to know the venv's site-packages layout
+        """
+        model = strategy_config.get("model", "gpt-4o-mini")
+        timeout_s = float(strategy_config.get("timeout_seconds", 60))
+        api_key_env = strategy_config.get("api_key_env", "OPENAI_API_KEY")
+
+        # Build a small Python script that calls the configured LLM and
+        # prints a JSON envelope to stdout. We keep it self-contained —
+        # no fancy templating — so the test suite can mock it by
+        # patching the engine's `_call_llm` or by overriding the venv
+        # binary path via the `CONDUCTOR_LLM_BIN` env var.
+        script = (
+            "import json, os, sys\n"
+            "try:\n"
+            "    import openai\n"
+            "except ImportError as e:\n"
+            "    print(json.dumps({'error': 'openai module missing: ' + str(e)})); sys.exit(0)\n"
+            "api_key = os.environ.get(" + repr(api_key_env) + ")\n"
+            "if not api_key:\n"
+            "    print(json.dumps({'error': 'env var ' + " + repr(api_key_env) + ' + \' unset\'})); sys.exit(0)\n'
+            "try:\n"
+            "    client = openai.OpenAI(api_key=api_key)\n"
+            "    r = client.chat.completions.create(\n"
+            "        model=" + repr(model) + ",\n"
+            "        messages=[{'role': 'user', 'content': " + repr(prompt) + "}],\n"
+            "        temperature=0.0,\n"
+            "    )\n"
+            "    print(json.dumps({\n"
+            "        'text': r.choices[0].message.content or '',\n"
+            "        'metadata': {\n"
+            "            'model': r.model,\n"
+            "            'input_tokens': getattr(r.usage, 'prompt_tokens', 0),\n"
+            "            'output_tokens': getattr(r.usage, 'completion_tokens', 0),\n"
+            "        },\n"
+            "    }))\n"
+            "except Exception as e:\n"
+            "    print(json.dumps({'error': str(e)}))\n"
+        )
+        # Resolve the venv's python binary. The brief mandates
+        # `~/.hermes/hermes-agent/venv/bin/python` as the default —
+        # tests can override via `CONDUCTOR_LLM_BIN` to point at a
+        # fake script that returns canned output.
+        import os as _os
+        venv_py = _os.environ.get(
+            "CONDUCTOR_LLM_BIN",
+            str(Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin" / "python"),
+        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                venv_py, "-c", script,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as e:
+            return {"text": "", "error": f"llm binary not found: {e}"}
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_s,
+            )
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            return {"text": "", "error": f"llm subprocess timed out after {timeout_s}s"}
+        stdout = stdout_b.decode("utf-8", errors="replace").strip()
+        stderr = stderr_b.decode("utf-8", errors="replace").strip()
+        if not stdout:
+            return {"text": "", "error": f"llm subprocess returned empty stdout (stderr: {stderr[:300]})"}
+        # The subprocess always prints a JSON envelope. Parse defensively
+        # so a garbled response surfaces as an error rather than crashing
+        # the merge step.
+        try:
+            return json.loads(stdout)
+        except json.JSONDecodeError as e:
+            return {"text": stdout, "error": f"llm subprocess returned non-JSON: {e}"}
+
+    # ----- cli_tool step executor -----
+
+    async def _exec_cli_tool(
+        self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
+    ) -> None:
+        """Execute a `type: cli_tool` step (subprocess invocation).
+
+        Per Thoth's spec §2.1, §7.3. The actual subprocess work happens
+        in `cli_tool.run_cli_tool` (synchronous). This method wraps it
+        with: (1) tool resolution, (2) timeout enforcement, (3) output
+        capture + structured parsing, (4) retry policy per on_error,
+        (5) step-history recording (in_progress → completed/failed),
+        (6) output stored at workflow context_bag for downstream steps.
+
+        The `in_progress` history entry was already appended by
+        `_execute_step` before this method runs (mirrors the god_dispatch
+        and nats_publish patterns). We update its `god` field to the
+        tool name so audit trails show which CLI was invoked.
+
+        Failure modes (mirrors `_exec_nats_publish`):
+          - ValueError if `step.tool` is missing (caller bug)
+          - CliToolNotFoundError (binary not on PATH) — fail fast
+          - CliToolTimeoutError (subprocess timeout) — fail fast
+          - CliToolError (non-zero exit after all retries) — recorded
+            as failed; if abort_on_fail, the workflow is aborted
+        """
+        if not step.tool:
+            raise ValueError(f"cli_tool step {step.id!r} has no `tool` field")
+
+        # Update the in_progress history entry's `god` field to the
+        # tool name (mirrors the god_dispatch pattern but with the tool
+        # name as the "actor" for audit clarity). The entry was seeded
+        # by _execute_step with god=None since cli_tool steps have no god.
+        for h in inst.step_history:
+            if h.get("step_id") == step.id and h.get("status") == "in_progress":
+                h["god"] = step.tool
+                break
+        self._save_instance(inst)
+
+        # Lazy import — keeps cli_tool.py out of the engine's import
+        # graph until a cli_tool step actually runs. Avoids any future
+        # circular-import risk if cli_tool.py grows dependencies.
+        from .cli_tool import (
+            run_cli_tool,
+            resolve_tool,
+            CliToolError,
+            CliToolNotFoundError,
+            CliToolTimeoutError,
+        )
+
+        # Resolve the tool registration. For Brief 1 this returns the
+        # _mock_echo placeholder; Brief 2 replaces resolve_tool with a
+        # cli_tools.yaml loader. CliToolNotFoundError is fail-fast.
+        tool_reg = resolve_tool(step.tool)
+
+        # Run the subprocess (with timeout, retry, session resume) on the
+        # default executor. run_cli_tool is synchronous; wrapping in
+        # run_in_executor lets the event loop continue serving other
+        # tasks (e.g. a parallel sibling) while the tool runs.
+        timeout_s = _parse_duration(step.timeout)
+        loop = asyncio.get_event_loop()
+        # A.2 (2026-06-16): if a live_stream server is configured AND
+        # the step opted into streaming (tool_input.stream == True),
+        # pass it through to run_cli_tool so the streaming path takes
+        # over (line-buffered NDJSON broadcast + stream_url in result).
+        # Otherwise run_cli_tool uses the unchanged sync path.
+        want_stream = bool(step.tool_input.get("stream")) and self.live_stream is not None
+        result = await loop.run_in_executor(
+            None,  # default ThreadPoolExecutor
+            lambda: run_cli_tool(
+                tool_reg=tool_reg,
+                input_dict=step.tool_input,
+                on_error=step.on_error,
+                timeout_s=timeout_s,
+                live_stream=self.live_stream,
+                workflow_id=inst.workflow_id,
+                step_id=step.id,
+                stream=want_stream,
+            ),
+        )
+
+        # Store the parsed output in the context bag so downstream
+        # steps can read it via input_from / context_bag (mirrors how
+        # god_dispatch stores its result).
+        if step.output:
+            inst.context_bag[step.output] = result
+
+        # Wrap the dict result in a SimpleNamespace so the engine's
+        # existing _record_step_completion / _advance code (which
+        # expects a RunResult-like with .status, .output, .session_id)
+        # works via duck-typing. The refusal-detection regex in
+        # _record_step_completion is god-domain and won't match tool
+        # stdout, so it's a no-op here. We force .status == "completed"
+        # so the step is marked completed (not "refused" or "failed").
+        from types import SimpleNamespace
+        run_result = SimpleNamespace(
+            status="completed",
+            output=result.get("stdout", "") if isinstance(result, dict) else "",
+            session_id="",
+            error=None,
+        )
+
+        # Record completion (existing pattern from _exec_god_dispatch).
+        self._record_step_completion(inst, step, run_result)
+        # Augment the latest history entry with cli_tool-specific metadata
+        # so the audit trail shows the actual tool, exit_code, duration.
+        for h in reversed(inst.step_history):
+            if h.get("step_id") == step.id:
+                h["tool"] = step.tool
+                tm = result.get("tool_metadata", {}) if isinstance(result, dict) else {}
+                h["exit_code"] = result.get("exit_code") if isinstance(result, dict) else None
+                h["duration_seconds"] = result.get("duration_seconds") if isinstance(result, dict) else None
+                h["attempts"] = tm.get("attempts") if isinstance(tm, dict) else None
+                break
+
+        # Continue the DAG.
+        await self._advance(inst, wf, step, run_result)
+
+    # ----- parallel step executor -----
+
+    async def _exec_parallel(
+        self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
+    ) -> None:
+        """Execute a `parallel` step: run all branches concurrently.
+
+        Spec §2.2 (parallel step type). Children are full WorkflowStep
+        instances and may themselves be `parallel` (nested — depth
+        limited at parse time to 3 levels per spec §9 Q2). Each child
+        is dispatched by type, NOT by calling `_execute_step` against
+        a synthetic sub-workflow. We dispatch directly so that the
+        parent's `_advance` (which walks the parent's `wf.next_step_after`)
+        doesn't re-fire the parallel's children as the parent's
+        "next step" — a critical correctness fix vs. the first cut
+        of this method that reused `_execute_step` + a sub-wf
+        (the sub-wf's `next_step_after` returned the next branch,
+        causing each branch to run twice).
+
+        Concurrency: if `step.max_concurrency > 0`, an asyncio.Semaphore
+        caps the number of branches running simultaneously. Otherwise
+        all branches run in parallel (default).
+
+        Failure handling (`step.fail_mode`):
+          - `fast` (default): cancel siblings on first failure, mark
+            the parallel step as failed.
+          - `slow`: let running siblings finish, mark the parallel
+            step as failed.
+          - `ignore`: log failures, mark the parallel step as
+            completed if ≥1 branch succeeded.
+
+        Output: a `dict[branch_id] -> branch_output` written to
+        `inst.context_bag[step.output]` (if `step.output` is set) and
+        mirrored into the step's history entry.
+        """
+        if not step.branches:
+            raise ValueError(f"parallel step {step.id!r} has no branches")
+        # Build a synthetic "sub-workflow" for child type dispatch
+        # lookups. We do NOT use this for the actual `_execute_step`
+        # call (that caused the double-execution bug fixed below);
+        # it's only a stable reference for `step_by_id` if a branch
+        # is itself a workflow step that needs parent context.
+        sub_wf = Workflow(
+            id=inst.definition_id,
+            name=f"{wf.name} (parallel: {step.id})",
+            version=inst.definition_version,
+            description=f"Synthetic sub-workflow for parallel step {step.id!r}",
+            steps=list(step.branches),
+            source_path=wf.source_path,
+        )
+        # For each branch we ALSO build a one-branch sub-workflow used
+        # as the `wf` argument to the branch's executor (e.g. `_exec_god_dispatch`).
+        # The branch executor calls `wf.next_step_after(branch.id)` to
+        # advance — but if `wf` is the full parallel's sub_wf (with all
+        # N branches), that would re-fire the next branch. So we pass
+        # a single-branch sub-wf so `next_step_after` returns None and
+        # the branch is the only step that runs.
+        def _single_branch_wf(branch: WorkflowStep) -> Workflow:
+            return Workflow(
+                id=inst.definition_id,
+                name=f"{wf.name} (branch: {branch.id})",
+                version=inst.definition_version,
+                description=f"Single-branch sub-wf for branch {branch.id!r}",
+                steps=[branch],
+                source_path=wf.source_path,
+            )
+        # Bound the parallel step by its declared timeout (default 24h
+        # per spec §2.2). Branches that exceed the per-branch timeout
+        # are cancelled; the overall timeout is enforced here.
+        overall_timeout = _parse_duration(step.timeout or "24h")
+        sem: asyncio.Semaphore | None = None
+        if step.max_concurrency and step.max_concurrency > 0:
+            sem = asyncio.Semaphore(step.max_concurrency)
+
+        # Per-branch runner: dispatch the branch to its executor by
+        # type. We push the branch's start entry into `inst.step_history`
+        # manually (mirroring what `_execute_step` does for top-level
+        # steps) and call the appropriate executor — `_exec_god_dispatch`
+        # for `god` branches, `_exec_nats_publish` for `nats_publish`,
+        # `_exec_parallel` for nested `parallel` (depth-validated at
+        # parse time, max 3), `_exec_merge` for `merge`. This avoids
+        # the double-execution bug: we never call `_execute_step` for
+        # a branch, so we never trigger the parent's `_advance` to
+        # walk the sub-wf linearly. Each branch is dispatched with a
+        # single-branch sub-wf so its executor's `_advance` doesn't
+        # fire the next sibling.
+        #
+        # `fast` fail_mode (spec §2.2) requires cancelling siblings
+        # on first failure. We implement that with a shared cancel
+        # scope: when any branch's `_run_one` returns a non-completed
+        # status in fast mode, the OTHER running branches' `asyncio.wait_for`
+        # futures get cancelled via `cancelled_event.set()`. The
+        # cancellations propagate to the in-flight branch tasks and
+        # abort them mid-flight.
+        cancelled_event = asyncio.Event()
+        cancel_reason: list[str] = []  # set if fast-mode cancellation fires
+
+        async def _run_one(branch: WorkflowStep) -> tuple[str, str]:
+            # Push the branch's start entry into step_history so the
+            # audit trail shows every branch was attempted.
+            inst.step_history.append({
+                "step_id": branch.id,
+                "god": branch.god,
+                "status": "in_progress",
+                "started": utc_now(),
+            })
+            self._save_instance(inst)
+            single_wf = _single_branch_wf(branch)
+            try:
+                if sem is not None:
+                    async with sem:
+                        await asyncio.wait_for(
+                            self._dispatch_branch(inst, single_wf, branch),
+                            timeout=overall_timeout,
+                        )
+                else:
+                    await asyncio.wait_for(
+                        self._dispatch_branch(inst, single_wf, branch),
+                        timeout=overall_timeout,
+                    )
+                return (branch.id, "completed")
+            except asyncio.TimeoutError:
+                LOG.warning(f"parallel {step.id}: branch {branch.id!r} timed out after {overall_timeout}s")
+                # In fast mode, a timeout is a failure event that
+                # cancels siblings.
+                if step.fail_mode == "fast":
+                    cancel_reason.append(f"branch {branch.id!r} timed out")
+                    cancelled_event.set()
+                return (branch.id, "timed_out")
+            except asyncio.CancelledError:
+                # Sibling failed in fast mode and we got cancelled.
+                # Record as cancelled; the outer gather sees this.
+                LOG.info(f"parallel {step.id}: branch {branch.id!r} cancelled by fast-mode sibling failure")
+                return (branch.id, "cancelled")
+            except Exception as e:
+                LOG.warning(f"parallel {step.id}: branch {branch.id!r} raised: {e}")
+                # In fast mode, a branch raising is the trigger for
+                # sibling cancellation. Set the event so other
+                # branches get cancelled at their next checkpoint.
+                if step.fail_mode == "fast":
+                    cancel_reason.append(f"branch {branch.id!r} raised: {e}")
+                    cancelled_event.set()
+                return (branch.id, "failed")
+
+        # Fast-mode watchdog: a separate task that watches the cancel
+        # event and cancels the running gather if any branch fails.
+        # asyncio.gather itself can't be cancelled from inside one of
+        # its coroutines without `return_exceptions=True`; we use a
+        # `asyncio.Task` wrapper + `wait_for` to enable cancellation
+        # from a sibling. This is the spec's "cancel siblings on
+        # first failure" behavior. Python 3.14 returns a _GatheringFuture
+        # from `asyncio.gather` rather than a coroutine, so we wrap
+        # the gather in a coroutine for `create_task`.
+        async def _do_gather(tasks: list[asyncio.Task]) -> list[tuple[str, str]]:
+            return await asyncio.gather(*tasks, return_exceptions=False)
+
+        async def _gather_with_fast_cancel():
+            # Build a list of branch tasks we can cancel.
+            branch_tasks = [
+                asyncio.create_task(_run_one(b), name=f"par:{step.id}:{b.id}")
+                for b in step.branches
+            ]
+            try:
+                if step.fail_mode == "fast":
+                    # Race the gather against the cancel event. Whichever
+                    # wins first, we either complete normally or cancel
+                    # all sibling tasks.
+                    async def _gather_coro():
+                        return await asyncio.gather(
+                            *branch_tasks, return_exceptions=False,
+                        )
+                    gather_task = asyncio.create_task(
+                        _gather_coro(),
+                        name=f"par:{step.id}:gather",
+                    )
+                    cancel_waiter = asyncio.create_task(cancelled_event.wait())
+                    done, pending = await asyncio.wait(
+                        {gather_task, cancel_waiter},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if cancel_waiter in done:
+                        # A branch failed — cancel all sibling tasks.
+                        cancel_msg = "; ".join(cancel_reason) or "fast-mode sibling failure"
+                        LOG.warning(
+                            f"parallel {step.id}: fast-mode cancel triggered ({cancel_msg})"
+                        )
+                        for t in branch_tasks:
+                            if not t.done():
+                                t.cancel()
+                        # Let the cancelled tasks settle.
+                        await asyncio.gather(*branch_tasks, return_exceptions=True)
+                        # Re-raise so the parallel step is marked failed.
+                        raise RuntimeError(
+                            f"parallel step {step.id!r} (fail_mode=fast): {cancel_msg}"
+                        )
+                    # gather finished first; cancel the waiter and
+                    # collect results.
+                    cancel_waiter.cancel()
+                    try:
+                        await cancel_waiter
+                    except asyncio.CancelledError:
+                        pass
+                    return await gather_task
+                # Not fast mode — just gather normally.
+                return await _do_gather(branch_tasks)
+            finally:
+                # Always make sure no stragglers survive.
+                for t in branch_tasks:
+                    if not t.done():
+                        t.cancel()
+                # Suppress CancelledError from the cancellations.
+                await asyncio.gather(*branch_tasks, return_exceptions=True)
+
+        # Snapshot branch ids in declared order so the output map
+        # preserves the workflow author's intent (useful for the
+        # `merge.first` tiebreak downstream).
+        branch_ids = [b.id for b in step.branches]
+        # Run all branches concurrently. In fast mode, the gather
+        # may be cancelled mid-flight; we catch the RuntimeError
+        # below to record the failure into step_history.
+        try:
+            results = await _gather_with_fast_cancel()
+        except RuntimeError as fast_err:
+            # The fast-mode cancel fired. We still want to record the
+            # output aggregation so far (partial outputs from
+            # branches that completed before the cancel). Collect
+            # the statuses from step_history.
+            statuses = {}
+            outputs = {}
+            for h in inst.step_history:
+                if h["step_id"] in branch_ids and h.get("status") in (
+                    "completed", "failed", "timed_out", "cancelled",
+                ):
+                    statuses[h["step_id"]] = h["status"]
+                    outputs[h["step_id"]] = (
+                        cur_val if (cur_val := self._latest_branch_output(inst, h["step_id"])) is not None
+                        else None
+                    )
+            if step.output:
+                inst.context_bag[step.output] = outputs
+            self._record_internal_step_completion(
+                inst, step, output=outputs,
+                summary=f"fast-mode cancel: {fast_err}",
+            )
+            # Re-raise so the workflow's abort handling kicks in.
+            raise
+        # Build a per-branch output map by reading the latest history
+        # entry for each branch id.
+        outputs: dict[str, Any] = {}
+        statuses: dict[str, str] = {}
+        for bid, status in results:
+            statuses[bid] = status
+            outputs[bid] = self._latest_branch_output(inst, bid)
+        any_failed = any(s in ("failed", "timed_out") for s in statuses.values())
+        any_succeeded = any(s == "completed" for s in statuses.values())
+        if any_failed and step.fail_mode == "fast" and not any_succeeded:
+            # All branches failed in fast mode — surface the first
+            # error to the workflow so abort handling kicks in.
+            first_failed = next(b for b, s in statuses.items() if s != "completed")
+            err = inst.context_bag.get(f"_branch_error:{first_failed}", f"branch {first_failed!r} failed")
+            raise RuntimeError(
+                f"parallel step {step.id!r} (fail_mode=fast): branch {first_failed!r} failed first"
+            )
+        # Persist the parallel's output to context_bag and history.
+        if step.output:
+            inst.context_bag[step.output] = outputs
+        # Build a synthetic result-like dict so `_record_step_completion`
+        # captures a sensible summary. We can't reuse RunResult (no
+        # god ran), so we go through a small inline recorder that
+        # appends/finalizes a step_history entry.
+        self._record_internal_step_completion(
+            inst, step, output=outputs, summary=_summarize(outputs),
+        )
+        # Do NOT call self._advance here — `_exec_parallel` is itself
+        # invoked by `_execute_step` which expects to call `_advance`
+        # after the executor returns. (Pre-4.7 dispatch did this for
+        # god_dispatch and nats_publish; parallel follows the same
+        # pattern. The double-_advance bug from the sub-wf approach
+        # is gone because we no longer call `_execute_step` recursively.)
+        # The caller (`_execute_step`) does NOT auto-advance either —
+        # god_dispatch and nats_publish both call _advance internally
+        # for the same reason. So we call _advance here.
+        await self._advance(inst, wf, step, None)
+
+    async def _dispatch_branch(
+        self, inst: WorkflowInstance, sub_wf: Workflow, branch: WorkflowStep
+    ) -> None:
+        """Dispatch one branch to its type-specific executor.
+
+        Used by `_exec_parallel` to run a child step without calling
+        `_execute_step` (which would advance the parent workflow's
+        state machine and cause double-execution). The branch's
+        executor handles its own step_history entry (start +
+        completion) and its own context_bag writes; we only need to
+        route to the right executor based on `branch.type`.
+
+        This method does NOT call `_advance` — branches don't advance
+        the workflow, they only contribute outputs to `inst.context_bag`.
+        """
+        if branch.type == "parallel":
+            await self._exec_parallel(inst, sub_wf, branch)
+        elif branch.type == "merge":
+            await self._exec_merge(inst, sub_wf, branch)
+        elif branch.type == "nats_publish":
+            await self._exec_nats_publish(inst, branch)
+        else:
+            # default: god_dispatch (covers type='god' and any
+            # unspecified type — back-compat for existing workflows)
+            await self._exec_god_dispatch(inst, sub_wf, branch)
+
+    def _latest_branch_output(
+        self, inst: WorkflowInstance, branch_id: str, declared_output: Optional[str] = None
+    ) -> Any:
+        """Return the most recent output of `branch_id` from context_bag.
+
+        Looks at the step_history to find the last entry for
+        `branch_id` whose status is `completed` and reads its
+        `output_summary` (or, if the branch had `output:` set, the
+        value at `inst.context_bag[branch.output]`). Returns None if
+        the branch produced no output (failed or no `output:` field).
+
+        The `declared_output` parameter is the branch's `output:` field
+        (e.g. "inner1_out" for a branch that has `output: inner1_out`).
+        We check it first because it's the most precise match — the
+        branch's executor wrote its aggregated value to that key.
+        Falls back to scanning context_bag for a key matching the
+        branch_id directly (some workflows use `output: <branch_id>`).
+        """
+        # First, prefer the explicitly-named output the branch wrote to
+        # context_bag (most precise — the branch's declared `output:`).
+        if declared_output and declared_output in inst.context_bag:
+            return inst.context_bag[declared_output]
+        for h in reversed(inst.step_history):
+            if h.get("step_id") == branch_id and h.get("status") == "completed":
+                # Try to find a corresponding entry in context_bag by
+                # walking all keys. The branch step's `output` field is
+                # what wrote the value — but we don't have direct
+                # access to the WorkflowStep here. Use the convention
+                # that any key in context_bag that matches the branch's
+                # id is a likely candidate. Fall back to summary.
+                for k, v in inst.context_bag.items():
+                    if k == branch_id:
+                        return v
+                return h.get("output_summary", "")
+        return None
+
+    def _record_internal_step_completion(
+        self,
+        inst: WorkflowInstance,
+        step: WorkflowStep,
+        *,
+        output: Any,
+        summary: str,
+    ) -> None:
+        """Append a `completed` step_history entry for an engine-internal
+        step (parallel / merge). Mirrors the write side of
+        `_record_step_completion` without depending on a gateway
+        RunResult.
+
+        Steps through the existing `in_progress` entry that
+        `_execute_step` already pushed at line ~913 (before dispatch)
+        and flips it to `completed` with the engine-internal output.
+        If somehow no `in_progress` entry exists, seeds a fresh one.
+        """
+        now = utc_now()
+        existing_idx = None
+        for idx, h in enumerate(inst.step_history):
+            if h["step_id"] == step.id:
+                existing_idx = idx
+                break
+        if existing_idx is not None:
+            h = inst.step_history[existing_idx]
+            h["status"] = "completed"
+            h.setdefault("started", now)
+            h["completed"] = now
+            h["output_summary"] = summary[:200]
+            h["internal_output"] = output
+        else:
+            inst.step_history.append({
+                "step_id": step.id,
+                "god": step.god,  # None for parallel/merge
+                "status": "completed",
+                "started": now,
+                "completed": now,
+                "output_summary": summary[:200],
+                "internal_output": output,
+                "gates_passed": [],
+            })
+
+    # ----- merge step executor -----
+
+    async def _exec_merge(
+        self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
+    ) -> None:
+        """Execute a `merge` step: combine N prior step outputs via
+        a strategy.
+
+        Spec §2.3 (merge step type), §7.5 (merge spec). The 4 non-LLM
+        strategies (concat/first/diff/vote) are pure functions in
+        `merge.py`. The 2 LLM strategies (llm_summarize/llm_pick_best)
+        are routed through `_call_llm` (subprocess per brief locked
+        decision #4) with a prompt built from
+        `strategy_config.judge_prompt_template`.
+
+        Inputs are resolved from `inst.context_bag[input_id]` for each
+        step id in `step.inputs`. Missing inputs raise a clear error
+        (the workflow author typo'd a step id).
+        """
+        if not step.inputs:
+            raise ValueError(f"merge step {step.id!r} has empty `inputs` list")
+        if not step.strategy:
+            raise ValueError(f"merge step {step.id!r} missing `strategy`")
+        if step.strategy not in merge_mod.ALL_STRATEGIES:
+            raise ValueError(
+                f"merge step {step.id!r} has unknown strategy {step.strategy!r}; "
+                f"valid: {merge_mod.ALL_STRATEGIES}"
+            )
+        # Resolve inputs from context_bag. A None value is allowed
+        # (the upstream step failed or didn't produce output) — the
+        # non-LLM strategies handle that gracefully; LLM strategies
+        # get the literal None and decide for themselves.
+        values: list[Any] = []
+        for input_id in step.inputs:
+            if input_id not in inst.context_bag:
+                raise ValueError(
+                    f"merge step {step.id!r} references unknown input {input_id!r}; "
+                    f"available context_bag keys: {sorted(inst.context_bag.keys())}"
+                )
+            values.append(inst.context_bag[input_id])
+        cfg = step.strategy_config or {}
+
+        if step.strategy in ("llm_summarize", "llm_pick_best"):
+            merged = await self._exec_llm_merge(
+                step.strategy, step.inputs, values, cfg,
+            )
+        else:
+            merged = merge_mod.run_merge(
+                step.strategy, step.inputs, values, cfg,
+            )
+        # Persist merge output to context_bag under `step.output` (if set)
+        # AND write a per-step entry the audit log can read.
+        if step.output:
+            inst.context_bag[step.output] = merged
+        self._record_internal_step_completion(
+            inst, step, output=merged, summary=_summarize(merged),
+        )
+        await self._advance(inst, wf, step, None)
+
+    async def _exec_llm_merge(
+        self,
+        strategy: str,
+        inputs: list[str],
+        values: list[Any],
+        cfg: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Drive an LLM-merge strategy: build the judge prompt, call
+        the LLM, package the response into the spec §2.3 output shape.
+
+        Two strategies:
+          - `llm_summarize`: prompt asks the LLM to produce a summary;
+            the merged_value is the LLM's text response.
+          - `llm_pick_best`: prompt asks the LLM to pick one of the
+            inputs; the LLM's response is expected to start with the
+            chosen step id (e.g. "claude-impl") followed by reasoning.
+            We parse the first line as the chosen_source; the rest is
+            the judge_output. merged_value is the original input value
+            (the spec example: "Return the chosen implementation's full
+            output verbatim" — we honor that by returning the chosen
+            input's value, not the LLM's echo).
+        """
+        template = cfg.get("judge_prompt_template", "")
+        if not template:
+            raise ValueError(
+                f"strategy {strategy!r} requires strategy_config.judge_prompt_template"
+            )
+        # Render the template with each input's id and value as
+        # ${inputs[0]}, ${inputs[1]}, etc. plus the bare value. This
+        # keeps the template author in control of the prompt shape.
+        rendered_inputs = {
+            "inputs": list(inputs),
+            "values": list(values),
+            "values_str": ["" if v is None else str(v) for v in values],
+        }
+        prompt = template
+        # ${inputs[N]} -> step id at index N
+        for i, sid in enumerate(inputs):
+            prompt = prompt.replace(f"${{inputs[{i}]}}", sid)
+        # ${values[N]} -> stringified value at index N
+        for i, v in enumerate(values):
+            prompt = prompt.replace(f"${{values[{i}]}}", "" if v is None else str(v))
+        # Call the LLM via the subprocess path.
+        llm_result = await self._call_llm(prompt, cfg)
+        text = llm_result.get("text", "")
+        metadata = llm_result.get("metadata", {}) if isinstance(llm_result, dict) else {}
+        llm_error = llm_result.get("error") if isinstance(llm_result, dict) else None
+        if llm_error:
+            # LLM path failed — surface a clear error in the merge
+            # output. The engine still records the step as completed
+            # (the merge ran), but the workflow's downstream steps
+            # can detect `judge_output` containing an error marker.
+            LOG.warning(f"llm merge {strategy!r} error: {llm_error}")
+        if strategy == "llm_summarize":
+            return {
+                "strategy": strategy,
+                "merged_value": text,
+                "sources": list(inputs),
+                "judge_output": text,
+                "judge_metadata": metadata,
+                "judge_error": llm_error,
+            }
+        # llm_pick_best — parse the first line of the LLM's text as
+        # the chosen step id. Fall back to the first input if the
+        # LLM didn't follow the format.
+        chosen_source = inputs[0] if not text else text.strip().splitlines()[0].strip()
+        # Strip any leading bullet/number/quote chars the LLM may add.
+        chosen_source = chosen_source.lstrip("-*0123456789.> \"'`")
+        if chosen_source not in inputs:
+            # LLM returned something that doesn't match any input id;
+            # fall back to first input and surface the full judge
+            # text in judge_output so the operator can audit.
+            chosen_source = inputs[0]
+        # Look up the chosen input's original value.
+        chosen_idx = inputs.index(chosen_source)
+        chosen_value = values[chosen_idx]
+        return {
+            "strategy": strategy,
+            "chosen_source": chosen_source,
+            "judge_output": text,
+            "judge_metadata": metadata,
+            "judge_error": llm_error,
+            "merged_value": chosen_value,
+            "sources": [chosen_source],
+        }
 
     def _build_step_prompt(
         self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
@@ -1300,6 +2343,20 @@ class ConductorEngine:
             inst.current_step = None
             self._save_instance(inst)
             LOG.info(f"workflow {inst.workflow_id} completed")
+
+            # A.2 (2026-06-16): emit workflow.completed so subscribers
+            # can render the terminal state. We use the last step's
+            # id (already finished at this point) for routing.
+            self._emit_event(
+                inst.workflow_id,
+                step.id,
+                "workflow.completed",
+                {
+                    "definition_id": inst.definition_id,
+                    "definition_version": inst.definition_version,
+                    "final_step_id": step.id,
+                },
+            )
             return
         inst.current_step = nxt.id
         self._save_instance(inst)

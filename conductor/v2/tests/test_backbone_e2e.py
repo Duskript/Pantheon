@@ -832,3 +832,703 @@ class TestBackboneE2E(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ===========================================================================
+# Phase 5 Step 5.2 — Brief 1 of 3 — Phase 1 backbone regression
+# ===========================================================================
+#
+# What this class adds on top of the existing TestBackboneE2E (Step 1.5):
+#   - The existing test stops at step 1's ack. It proves the v2 path
+#     chains start → submit(1) → ack(1) → advance to step 2.
+#   - This class drives the FULL 2-step chain: start → submit(1) →
+#     ack(1) → submit(2) → ack(2) → completed. It proves the v2 path
+#     chains BOTH submit+ack calls, not just the first.
+#   - The Phase 1 backbone is "start_workflow MCP + ack_handoff MCP
+#     chains to next step" — the existing test covers submit(1)+ack(1);
+#     this class covers the full chain through completion.
+#
+# Why this is a separate class:
+#   - The existing test focuses on the v1+v2 state file collision
+#     (one fresh wf_<uuid8> per submit). The full-chain test
+#     focuses on completion (status=completed, current_step=None
+#     after the 2nd ack).
+#   - Both are backbone regressions for Phase 1 but they assert
+#     different invariants.
+# ===========================================================================
+
+
+class TestBackboneFull2StepChain(unittest.TestCase):
+    """Phase 1 backbone regression: full 2-step chain to completion.
+
+    Drives the MCP API path through BOTH steps:
+      start → submit(step1) → ack(step1) → submit(step2) → ack(step2) → completed
+
+    Asserts the v2 path's behavior on the 2nd submit+ack round:
+      - submit(2) returns a fresh wf_<uuid8> (per the v1+v2
+        state file collision quirk — each submit is a new start)
+      - ack(2) returns v2_advanced=True with v2_next_step=None
+        (the workflow is now complete, no next step)
+      - Final on-disk state: status=completed, current_step=None
+      - step_history has 2 entries (step1-thoth, step2-hephaestus)
+        both with status=completed
+    """
+
+    def setUp(self):
+        # Per-test tmp dir for state/pending.
+        self.tmp = cf.TmpConductor.create()
+        # Per-test uuid-suffixed workflow id.
+        self.workflow_id = f"e2e-full-{uuid.uuid4().hex[:8]}"
+        self.yaml_body = _build_test_workflow_yaml(self.workflow_id)
+
+        # Seed the workflow YAML into BOTH dirs (per the Step 1.6
+        # lazy fix; see TestBackboneE2E.setUp for the rationale).
+        eng.WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+        self.engine_wf_path = eng.WORKFLOWS_DIR / f"{self.workflow_id}.yaml"
+        self.engine_wf_path.write_text(self.yaml_body)
+        self.tmp.workflows_dir.mkdir(parents=True, exist_ok=True)
+        self.bridge_wf_path = self.tmp.workflows_dir / f"{self.workflow_id}.yaml"
+        self.bridge_wf_path.write_text(self.yaml_body)
+
+        # Build the Conductor (bridge).
+        self.conductor = bridge.Conductor(base_dir=self.tmp.root)
+
+    def tearDown(self):
+        os.environ["CONDUCTOR_BASE_DIR"] = (
+            str(Path("/home/konan/pantheon") / "conductor")
+        )
+        for p in (self.engine_wf_path, self.bridge_wf_path):
+            try:
+                if p.exists():
+                    p.unlink()
+            except OSError:
+                pass
+        for f in self.tmp.state_dir.glob("wf_*.json"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        for f in self.tmp.state_dir.glob("*.aborted.json"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        self.tmp.cleanup()
+
+    def test_backbone_full_2step_chain_runs_to_completion(self):
+        """Drive the full 2-step chain through the v2 bridge path.
+
+        Phase 1 backbone regression: prove that start + submit(1) +
+        ack(1) + submit(2) + ack(2) chains correctly to completion.
+        The 2nd ack advances the workflow to the terminal state
+        (no next step) and the on-disk state reflects completion.
+        """
+        # --- 1. Start the workflow ---
+        start_resp = self.conductor.start_workflow(
+            workflow_id=self.workflow_id,
+            context={"note": "step 5.2.1 full 2-step chain regression"},
+            original_request="Phase 5 Step 5.2 Brief 1 full 2-step chain test",
+            initiator="marvin",
+        )
+        wf_id = start_resp["workflow_id"]
+        self.assertTrue(wf_id.startswith("wf_"))
+        self.assertEqual(start_resp["status"], "running")
+        self.assertEqual(start_resp["current_step"], _STEP1_ID)
+
+        # --- 2. submit(1) + ack(1) — the existing test's path ---
+        handoff1_id = f"hof_{eng.utc_now()[:10].replace('-', '')}_{uuid.uuid4().hex[:8]}"
+        handoff1 = _make_handoff(
+            handoff_id=handoff1_id,
+            workflow_id=wf_id,
+            from_god="konan",
+            to_god=_STEP1_GOD,
+            step=_STEP1_ID,
+            summary="step 1: 5.2.1 full chain",
+            workflow_definition=self.workflow_id,
+        )
+        submit1 = self.conductor.submit_handoff(handoff1)
+        self.assertTrue(submit1.get("v2_dispatched"))
+        self.assertEqual(submit1.get("target_god"), _STEP1_GOD)
+        self.assertEqual(submit1.get("target_step"), _STEP1_ID)
+        v2_wf_id_1 = submit1["workflow_id"]
+        assert isinstance(v2_wf_id_1, str)
+
+        ack1_id = f"ack_{eng.utc_now()[:10].replace('-', '')}_{uuid.uuid4().hex[:8]}"
+        ack1 = _make_ack(ack1_id, handoff1_id, wf_id)
+        ack1_resp = self.conductor.ack_handoff(ack1)
+        self.assertTrue(ack1_resp.get("v2_advanced"))
+        self.assertEqual(ack1_resp.get("v2_next_step"), _STEP2_ID)
+
+        # --- 3. submit(2) — the new ground in this regression ---
+        # The v2 path mints a fresh wf_<uuid8> per submit. This is
+        # the v1+v2 state file collision quirk — see backbone docstring
+        # L100-109. The 2nd submit creates a new instance.
+        handoff2_id = f"hof_{eng.utc_now()[:10].replace('-', '')}_{uuid.uuid4().hex[:8]}"
+        handoff2 = _make_handoff(
+            handoff_id=handoff2_id,
+            workflow_id=wf_id,
+            from_god=_STEP1_GOD,  # step 1's god hands off to step 2's god
+            to_god=_STEP2_GOD,
+            step=_STEP2_ID,
+            summary="step 2: 5.2.1 full chain",
+            workflow_definition=self.workflow_id,
+        )
+        submit2 = self.conductor.submit_handoff(handoff2)
+        self.assertTrue(
+            submit2.get("v2_dispatched"),
+            f"step 2 submit should be v2_dispatched=True: {submit2}",
+        )
+        # v2 spec semantics: target_god = the CURRENT step's god.
+        # The v2 path mints a fresh wf_<uuid8> per submit, so the
+        # "current step" is back to step1-thoth on the new instance.
+        # The advance to step 2 happens on ack(2), not on submit(2).
+        # (See existing TestBackboneE2E docstring L100-109 for the
+        # v1+v2 state file collision quirk.)
+        self.assertEqual(
+            submit2.get("target_god"), _STEP1_GOD,
+            f"step 2 submit target_god should be the current step's god "
+            f"({_STEP1_GOD!r}, since submit mints a fresh instance); "
+            f"got {submit2.get('target_god')!r}",
+        )
+        self.assertEqual(
+            submit2.get("target_step"), _STEP1_ID,
+            f"step 2 submit target_step should be the current step id "
+            f"({_STEP1_ID!r}, since submit mints a fresh instance); "
+            f"got {submit2.get('target_step')!r}",
+        )
+        v2_wf_id_2 = submit2["workflow_id"]
+        assert isinstance(v2_wf_id_2, str)
+        # A fresh wf_<uuid8> per submit (v1+v2 state file collision).
+        self.assertNotEqual(
+            v2_wf_id_1, v2_wf_id_2,
+            f"submit(2) should mint a fresh wf_<uuid8> (v1+v2 state "
+            f"file collision quirk); got the same id as submit(1): {v2_wf_id_1!r}",
+        )
+
+        # The v2 advance on ack(1) writes a step-2 dispatch file to
+        # pending/hephaestus/. The v2 advance mints a fresh wf_<uuid8>
+        # for the step-2 dispatch (per the v1+v2 state file collision
+        # quirk — see existing TestBackboneE2E docstring L100-109).
+        # So the file's wf_id won't match v2_wf_id_2 from submit(2);
+        # we assert exactly 1 dispatch file exists in pending/<hephaestus>/.
+        step2_dispatch_candidates = list(
+            (self.tmp.pending_dir / _STEP2_GOD).glob(f"*_{_STEP2_ID}.json")
+        )
+        self.assertEqual(
+            len(step2_dispatch_candidates), 1,
+            f"v2 advance on ack(1) should write 1 step-2 dispatch to "
+            f"pending/{_STEP2_GOD}/; got {step2_dispatch_candidates}",
+        )
+
+        # --- 4. ack(2) — advance to completion ---
+        ack2_id = f"ack_{eng.utc_now()[:10].replace('-', '')}_{uuid.uuid4().hex[:8]}"
+        ack2 = _make_ack(ack2_id, handoff2_id, wf_id)
+        ack2_resp = self.conductor.ack_handoff(ack2)
+        # v2 advance fires.
+        self.assertTrue(
+            ack2_resp.get("v2_advanced"),
+            f"ack(2) should fire v2 advance: {ack2_resp}",
+        )
+        # v2_next_step is None (no next step — workflow is complete).
+        self.assertIsNone(
+            ack2_resp.get("v2_next_step"),
+            f"ack(2) should set v2_next_step=None (workflow complete); "
+            f"got {ack2_resp.get('v2_next_step')!r}",
+        )
+
+        # --- 5. Final state: status=completed, current_step=None ---
+        # The v2 advance on ack(2) operates on the wf_id (from the
+        # handoff we sent), not on v2_wf_id_2 (the fresh wf per submit).
+        # v2_wf_id_2 is a v2 path mint that the v2 advance does NOT
+        # touch — its state file is left at status=in_progress,
+        # current_step=step1-thoth from the submit(2) call. The "real"
+        # final state lives in the wf_id state file.
+        wf_id_state_file = self.tmp.state_dir / f"{wf_id}.json"
+        self.assertTrue(
+            wf_id_state_file.exists(),
+            f"state file {wf_id_state_file} not written by start_workflow",
+        )
+        state_final = json.loads(wf_id_state_file.read_text())
+        # The on-disk engine status is "completed" (no next step).
+        self.assertEqual(
+            state_final["status"], "completed",
+            f"on-disk status should be 'completed' after ack(2); "
+            f"got {state_final.get('status')!r}",
+        )
+        # current_step is None (cleared on completion per
+        # engine.py:_advance line 2183-2185).
+        self.assertIsNone(
+            state_final.get("current_step"),
+            f"current_step should be None on completion; "
+            f"got {state_final.get('current_step')!r}",
+        )
+        # definition_id/version still locked.
+        self.assertEqual(
+            state_final["definition_version"], "1.0.0",
+            f"definition_version should still be locked on completion; "
+            f"got {state_final.get('definition_version')!r}",
+        )
+        # step_history has 2 entries: step1-thoth (completed) and
+        # step2-hephaestus (completed). The v2 path records BOTH
+        # steps in the wf_id state file (not in v2_wf_id_2).
+        history = state_final.get("step_history", [])
+        self.assertEqual(
+            len(history), 2,
+            f"step_history should have 2 entries (step1 + step2); "
+            f"got {len(history)}: {history}",
+        )
+        self.assertEqual(history[0]["step_id"], _STEP1_ID)
+        self.assertEqual(history[0]["status"], "completed")
+        self.assertEqual(history[0].get("god"), _STEP1_GOD)
+        self.assertEqual(history[1]["step_id"], _STEP2_ID)
+        self.assertEqual(history[1]["status"], "completed")
+        self.assertEqual(history[1].get("god"), _STEP2_GOD)
+
+
+# ===========================================================================
+# Phase 5 Step 5.2 — Brief 2 of 3 — Phase 2/3/4 backbone regression
+# ===========================================================================
+#
+# What this class adds on top of Brief 1's full-2-step-chain test:
+#   - One backbone regression test per gap fixed in Phases 1-4
+#     (4 tests total, per the plan's Step 5.2 brief 2 deliverable):
+#       1. Phase 2: schedule.cron event → rule matches → workflow
+#          instance created (cron-scheduler backbone)
+#       2. Phase 3: NATS message on matched subject → rule matches
+#          → workflow dispatched (nats-bridge backbone)
+#       3. Phase 4a: quarantine_status helper returns the right
+#          shape on a fresh tmp layout (1 quarantine file → exit 1,
+#          count 1, items has 1 entry)
+#       4. Phase 4b: sovereign guard blocks a no-token publish
+#          (workflow aborted with breach_blocked step + manifest)
+#
+# Why these are "backbone" tests:
+#   - They exercise the full observable side effects: state files,
+#     dispatch files, manifest files, subprocess output
+#   - They use real rule YAMLs (not mocks) and real engine
+#     (not mock-at-the-boundary) so a regression in the engine
+#     surfaces as a test failure
+#   - They're fast and deterministic (no real NATS broker, no
+#     real cron boundary wait)
+# ===========================================================================
+
+
+from unittest.mock import MagicMock  # noqa: E402
+import asyncio  # noqa: E402
+
+
+def _new_engine_for_test(tmp, *, gateway):
+    """Build a ConductorEngine for backbone regression tests.
+
+    Same pattern as the existing test_nats_bridge helper. Real rules
+    + workflows dir from the tmp layout (so tests can seed their own
+    minimal rules/workflows).
+    """
+    return eng.ConductorEngine(
+        gateway_client=gateway,
+        rules=eng.RuleEngine(tmp.rules_dir),
+        workflows=eng.WorkflowRegistry(tmp.workflows_dir),
+        pending_dir=tmp.pending_dir,
+        state_dir=tmp.state_dir,
+    )
+
+
+class TestBackbonePhase2To4Regression(unittest.IsolatedAsyncioTestCase):
+    """Phase 2/3/4 backbone regression: 4 tests, one per phase.
+
+    Each test stands up a real ConductorEngine + real rule/workflow
+    YAMLs in a tmp layout, drives an event through the engine's
+    canonical entry point (handle_event for cron, _handle_msg for
+    NATS), and asserts the observable side effects (state file
+    created, dispatch file written, manifest generated).
+    """
+
+    def setUp(self):
+        # Per-test tmp layout. Tests seed rules/workflows here.
+        self.tmp = cf.TmpConductor.create()
+        # Mock gateway — we don't need real gateway calls for these
+        # tests; the focus is on rule → engine → state file.
+        self.gw = cf.MockGatewayClient()
+        self.engine = _new_engine_for_test(self.tmp, gateway=self.gw)
+
+    def tearDown(self):
+        # Restore production env (the conftest env-guard will also
+        # do this, but doing it eagerly here is safer).
+        os.environ["CONDUCTOR_BASE_DIR"] = (
+            str(Path("/home/konan/pantheon") / "conductor")
+        )
+        self.tmp.cleanup()
+
+    # ------------------------------------------------------------------
+    # Test 1: Phase 2 backbone — schedule.cron event fires a workflow
+    # ------------------------------------------------------------------
+
+    async def test_phase2_cron_event_dispatches_workflow(self):
+        """Phase 2 backbone regression: a schedule.cron event from
+        the CronScheduler fires a rule that dispatches a workflow.
+        The workflow instance is created and the state file lands
+        in state/wf_*.json.
+
+        Setup:
+          - 1 rule: schedule.cron "* * * * *" → dispatch_workflow=test-wf
+          - 1 workflow: test-wf (1-step, god=thoth)
+
+        Drive:
+          - engine.handle_event(Event(type=schedule.cron, ...))
+
+        Assert:
+          - The rule matched (returned a non-empty decision)
+          - A state file was created at state/wf_*.json with
+            definition_id=test-wf, current_step=step1
+        """
+        # Seed a minimal cron rule + workflow.
+        cron_rule = {
+            "rules": [{
+                "id": "test-cron-rule",
+                "when": {
+                    "event_type": "schedule.cron",
+                    "expression": "* * * * *",
+                },
+                "then": {"dispatch_workflow": "test-cron-wf"},
+            }]
+        }
+        cron_workflow = {
+            "workflow": {
+                "id": "test-cron-wf",
+                "name": "Phase 5.2.2 cron backbone",
+                "version": "1.0.0",
+                "context": {"required": [], "optional": []},
+                "steps": [{
+                    "id": "step1",
+                    "god": "thoth",
+                    "action": "research",
+                    "input": "u",
+                    "output": "out1",
+                    "timeout": "30m",
+                }],
+            }
+        }
+        (self.tmp.rules_dir / "cron-rule.yaml").write_text(
+            yaml.safe_dump(cron_rule)
+        )
+        (self.tmp.workflows_dir / "test-cron-wf.yaml").write_text(
+            yaml.safe_dump(cron_workflow)
+        )
+        # Reload the engine's registries.
+        self.engine.rules.reload()
+        self.engine.workflows.reload()
+
+        # Drive the canonical event. handle_event is the entry
+        # point the CronScheduler uses when its tick boundary fires.
+        from v2.engine import Event
+        event = Event(
+            type="schedule.cron",
+            payload={"rule_id": "test-cron-rule"},
+            source="test",
+        )
+        result = await self.engine.handle_event(event)
+        # The rule matched — result should NOT be an error.
+        self.assertNotIn(
+            "error", result,
+            f"handle_event returned error: {result}",
+        )
+
+        # A state file was created. The exact wf_id is unknown
+        # (engine mints a fresh uuid), so we glob for wf_*.json.
+        state_files = list(self.tmp.state_dir.glob("wf_*.json"))
+        self.assertEqual(
+            len(state_files), 1,
+            f"expected exactly 1 state file from cron dispatch; "
+            f"got {len(state_files)}: {state_files}",
+        )
+        state = json.loads(state_files[0].read_text())
+        self.assertEqual(
+            state["definition_id"], "test-cron-wf",
+            f"workflow definition should match rule's dispatch_workflow: "
+            f"got {state.get('definition_id')!r}",
+        )
+        self.assertEqual(
+            state["current_step"], "step1",
+            f"current_step should be the workflow's first step: "
+            f"got {state.get('current_step')!r}",
+        )
+
+    # ------------------------------------------------------------------
+    # Test 2: Phase 3 backbone — NATS message on matched subject
+    # ------------------------------------------------------------------
+
+    async def test_phase3_nats_message_dispatches_workflow(self):
+        """Phase 3 backbone regression: a NATS message on a
+        matched subject fires a rule that dispatches a workflow.
+        The workflow instance is created and the state file lands
+        in state/wf_*.json.
+
+        Setup:
+          - 1 rule: subject match on subspace.test.incoming.dispatch →
+            dispatch_workflow=test-nats-wf
+          - 1 workflow: test-nats-wf (1-step, god=thoth)
+
+        Drive:
+          - engine.handle_event(Event(type=nats.message, subject=...,
+            payload={...}))
+
+        Assert:
+          - The rule matched (returned a non-empty decision)
+          - A state file was created with definition_id=test-nats-wf
+        """
+        nats_rule = {
+            "rules": [{
+                "id": "test-nats-rule",
+                "when": {
+                    "event_type": "nats.message",
+                    # Rule matcher uses `subject` (not `subject_match`)
+                    # and supports fnmatch globs.
+                    "subject": "subspace.test.incoming.dispatch",
+                },
+                "then": {"dispatch_workflow": "test-nats-wf"},
+            }]
+        }
+        nats_workflow = {
+            "workflow": {
+                "id": "test-nats-wf",
+                "name": "Phase 5.2.2 nats backbone",
+                "version": "1.0.0",
+                "context": {"required": [], "optional": []},
+                "steps": [{
+                    "id": "step1",
+                    "god": "thoth",
+                    "action": "research",
+                    "input": "u",
+                    "output": "out1",
+                    "timeout": "30m",
+                }],
+            }
+        }
+        (self.tmp.rules_dir / "nats-rule.yaml").write_text(
+            yaml.safe_dump(nats_rule)
+        )
+        (self.tmp.workflows_dir / "test-nats-wf.yaml").write_text(
+            yaml.safe_dump(nats_workflow)
+        )
+        self.engine.rules.reload()
+        self.engine.workflows.reload()
+
+        from v2.engine import Event
+        # For NATS events, the subject is a top-level Event field
+        # (not inside payload). The rule matcher uses event.subject
+        # to match against the rule's `subject_match` glob.
+        event = Event(
+            type="nats.message",
+            source="tallon",
+            subject="subspace.test.incoming.dispatch",
+            payload={"data": {"task": "do the thing"}},
+            is_external=True,
+        )
+        result = await self.engine.handle_event(event)
+        self.assertNotIn("error", result, f"handle_event error: {result}")
+
+        state_files = list(self.tmp.state_dir.glob("wf_*.json"))
+        self.assertEqual(
+            len(state_files), 1,
+            f"expected exactly 1 state file from NATS dispatch; "
+            f"got {len(state_files)}: {state_files}",
+        )
+        state = json.loads(state_files[0].read_text())
+        self.assertEqual(
+            state["definition_id"], "test-nats-wf",
+            f"workflow definition should match rule's dispatch_workflow: "
+            f"got {state.get('definition_id')!r}",
+        )
+
+    # ------------------------------------------------------------------
+    # Test 3: Phase 4a backbone — quarantine_status helper shape
+    # ------------------------------------------------------------------
+
+    def test_phase4a_quarantine_status_returns_right_shape(self):
+        """Phase 4a backbone regression: the quarantine_status helper
+        returns the right shape on a fresh tmp layout with 1
+        quarantine file.
+
+        Run the helper as a subprocess (real CLI surface), assert:
+          - exit code 1 (1 file → exit 1, not 0)
+          - payload["count"] == 1
+          - payload["items"] has 1 entry with the right shape
+          - payload["oldest_age_seconds"] is a number >= 0
+        """
+        import subprocess as sp
+
+        # 1 quarantine file in the tmp layout.
+        qdir = self.tmp.quarantine_dir
+        wdir = self.tmp.webhooks_dir
+        qdir.mkdir(parents=True, exist_ok=True)
+        wdir.mkdir(parents=True, exist_ok=True)
+        # Write a quarantine file with a recognizable name.
+        qfile = qdir / "q_test_phase4a.json"
+        qfile.write_text(json.dumps({
+            "subject": "subspace.test.unmatched",
+            "ts": "2026-06-16T12:00:00Z",
+            "reason": "no rule matched",
+        }))
+
+        helper = (
+            Path("/home/konan/pantheon/conductor/scripts/quarantine_status.py")
+        )
+        proc = sp.run(
+            [
+                sys.executable, str(helper),
+                "--quarantine-dir", str(qdir),
+                "--webhooks-dir", str(wdir),
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(
+            proc.returncode, 1,
+            f"expected exit 1 (1 quarantine file); got {proc.returncode}\n"
+            f"stdout: {proc.stdout}\nstderr: {proc.stderr}",
+        )
+        payload = json.loads(proc.stdout)
+        self.assertEqual(
+            payload["count"], 1,
+            f"count should be 1 (1 quarantine file); got {payload}",
+        )
+        self.assertEqual(
+            len(payload["items"]), 1,
+            f"items should have 1 entry; got {payload['items']}",
+        )
+        # Items shape: the quarantine_status helper uses {filename,
+        # mtime, size_bytes} per file (not {path, age_seconds}).
+        # The exact field set may evolve; we just assert the
+        # documented fields are present and have sensible types.
+        item = payload["items"][0]
+        self.assertIn("filename", item)
+        self.assertIn("mtime", item)
+        self.assertIn("size_bytes", item)
+        self.assertIsInstance(item["size_bytes"], (int, float))
+        self.assertGreaterEqual(item["size_bytes"], 0)
+        # Oldest age is a number >= 0.
+        self.assertIsInstance(payload["oldest_age_seconds"], (int, float))
+        self.assertGreaterEqual(payload["oldest_age_seconds"], 0)
+
+    # ------------------------------------------------------------------
+    # Test 4: Phase 4b backbone — sovereign guard blocks no-token publish
+    # ------------------------------------------------------------------
+
+    async def test_phase4b_sovereign_guard_blocks_no_token_publish(self):
+        """Phase 4b backbone regression: a workflow with a sovereign
+        nats_publish step, no operator_approval_token in context_bag,
+        is ABORTED by the engine's sovereign guard. The step is
+        recorded as `breach_blocked` and a .aborted.json manifest is
+        written.
+
+        Setup:
+          - 1 workflow: 1 god step (clean completion) + 1 nats_publish
+            step with subject subspace.konan.outgoing.tallon (sovereign)
+            and operator_approval_required=true
+
+        Drive:
+          - engine.start_workflow() — async variant. The engine runs
+            the god step (mock), then attempts the nats_publish step,
+            which the guard blocks.
+
+        Assert:
+          - workflow.status == "aborted"
+          - step_history has a breach_blocked entry for the
+            nats_publish step
+          - .aborted.json manifest exists with the right shape
+        """
+        # Seed a 2-step workflow: 1 god step (clean) + 1 sovereign
+        # nats_publish step. Pre-queue a clean mock run for the
+        # god step so the engine advances to the nats_publish step.
+        workflow = {
+            "workflow": {
+                "id": "test-sov-wf",
+                "name": "Phase 5.2.2 sovereign backbone",
+                "version": "1.0.0",
+                "context": {"required": [], "optional": []},
+                "steps": [
+                    {
+                        "id": "step1-god",
+                        "god": "thoth",
+                        "action": "research",
+                        "input": "u",
+                        "output": "step1_out",
+                        "timeout": "30m",
+                    },
+                    {
+                        "id": "step2-sov",
+                        "type": "nats_publish",
+                        "subject": "subspace.konan.outgoing.tallon",
+                        "operator_approval_required": True,
+                        "input_from": "step1-god",
+                        "message": "test",
+                        "output": "step2_out",
+                    },
+                ],
+            }
+        }
+        (self.tmp.workflows_dir / "test-sov-wf.yaml").write_text(
+            yaml.safe_dump(workflow)
+        )
+        # Also seed eng.WORKFLOWS_DIR (the engine's module-level path)
+        # and reload.
+        eng.WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+        (eng.WORKFLOWS_DIR / "test-sov-wf.yaml").write_text(
+            yaml.safe_dump(workflow)
+        )
+        self.engine.workflows.reload()
+        # Pre-queue a clean run for the god step (no refusal — just
+        # a normal completion).
+        self.gw.queue_run(cf.MockRun("r1", output="clean step 1 output"))
+
+        # Start the workflow WITHOUT an operator_approval_token in
+        # context_bag. The sovereign guard will block step 2.
+        inst = self.engine.start_workflow(
+            "test-sov-wf",
+            context={"note": "phase 5.2.2 sovereign backbone"},
+            original_request="phase 5.2.2 sovereign backbone test",
+        )
+
+        # Wait for the workflow to reach terminal state.
+        for _ in range(250):
+            await asyncio.sleep(0.02)
+            cur = self.engine.get_instance(inst.workflow_id)
+            if cur and cur.status in ("completed", "failed", "aborted"):
+                break
+        cur = self.engine.get_instance(inst.workflow_id)
+        self.assertIsNotNone(cur, "workflow instance disappeared")
+        self.assertEqual(
+            cur.status, "aborted",
+            f"sovereign guard should abort the workflow; got {cur.status} "
+            f"(history: {[(h['step_id'], h.get('status')) for h in cur.step_history]})",
+        )
+        # step_history has a breach_blocked entry for step2-sov.
+        breach_entries = [
+            h for h in cur.step_history
+            if h.get("status") == "breach_blocked"
+        ]
+        self.assertEqual(
+            len(breach_entries), 1,
+            f"expected exactly 1 breach_blocked entry; got {len(breach_entries)}: "
+            f"{breach_entries}",
+        )
+        self.assertEqual(breach_entries[0]["step_id"], "step2-sov")
+        # The block_reason should mention the missing operator_approval_token.
+        self.assertIn(
+            "operator_approval_token", breach_entries[0].get("block_reason", ""),
+            f"block_reason should mention operator_approval_token; "
+            f"got: {breach_entries[0].get('block_reason')!r}",
+        )
+        # An abort manifest was written.
+        manifests = list(self.tmp.state_dir.glob("*.aborted.json"))
+        self.assertEqual(
+            len(manifests), 1,
+            f"expected 1 .aborted.json manifest; got {len(manifests)}: {manifests}",
+        )
+        manifest = json.loads(manifests[0].read_text())
+        self.assertEqual(manifest["status"], "aborted")
+        self.assertEqual(manifest["failed_step"], "step2-sov")
+        self.assertIn(
+            "sovereign outbound blocked", manifest["failure_reason"],
+            f"manifest failure_reason should mention 'sovereign outbound "
+            f"blocked'; got: {manifest['failure_reason']!r}",
+        )
