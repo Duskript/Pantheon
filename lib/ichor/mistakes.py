@@ -159,6 +159,28 @@ DETECTORS = ("human", "self", "tool", "peer")
 #: been written. `verified` = it has not recurred since. `wontfix` = accepted.
 STATES = ("open", "learned", "verified", "wontfix")
 
+#: HOW the failure happened, as opposed to CATEGORIES (what was wrong).
+#:
+#: `category` is a taxonomy of the symptom; a prevention pairs with the
+#: MECHANISM, and the two keys are not the same. `broken_code` and
+#: `false_success` are neither read nor write — they are design failures — and
+#: nothing in a category-only record says which guard applies.
+#:
+#: Recorded on the `resolved` event, not the `recorded` event: at record time you
+#: know the symptom, and the mechanism is a DIAGNOSIS made when writing the
+#: prevention. Requiring it at record time forces a guess at the moment of least
+#: information, and a guessed field is worse than an absent one because it reads
+#: as authoritative.
+#:
+#: Definitions are mechanism-based, not author-based. `design` is deliberately
+#: narrow because it is the one that would otherwise absorb everything:
+#:   read   - a value or state was asserted without (re-)reading the source that
+#:            owns it
+#:   write  - something was produced that was never observed
+#:   design - the code or plan was structured so the failure COULD occur (wrong
+#:            layer; a guard that cannot fire)
+MECHANISMS = ("read", "write", "design")
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -292,6 +314,7 @@ def resolve_mistake(
     state: str,
     prevention: str = "",
     prevention_skill: str = "",
+    mechanism: str = "",
     path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Append a state transition for `mistake_id` (append-only; nothing is rewritten)."""
@@ -302,6 +325,16 @@ def resolve_mistake(
             "state='learned' requires --prevention: claiming a lesson was learned "
             "without naming the prevention is the exact failure this ledger exists to catch"
         )
+    # A prevention has to pair with a mechanism, so the mechanism is required at
+    # exactly the moment the prevention is written — not earlier (a guess) and not
+    # never (then nothing pairs).
+    if mechanism and mechanism not in MECHANISMS:
+        raise ValueError(f"mechanism must be one of {MECHANISMS}, got {mechanism!r}")
+    if state == "learned" and not mechanism:
+        raise ValueError(
+            "state='learned' requires --mechanism: the prevention must pair with HOW "
+            f"the failure happened, one of {MECHANISMS}"
+        )
     entry = {
         "event": "resolved",
         "ts": _now(),
@@ -309,6 +342,7 @@ def resolve_mistake(
         "state": state,
         "prevention": prevention.strip(),
         "prevention_skill": prevention_skill.strip(),
+        "mechanism": mechanism,
     }
     return _append(entry, path)
 
@@ -365,6 +399,38 @@ def recurrence(path: Optional[Path] = None) -> Dict[str, int]:
     return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
 
 
+def mechanism_report(path: Optional[Path] = None) -> Dict[str, Any]:
+    """category x mechanism cross-tab, and which categories are DEGENERATE.
+
+    A field that always takes one value for a given category carries no
+    information FOR THAT CATEGORY — the same degeneracy check applied to
+    `provisional` (2,181 of 2,182) and `importance` (one round value at 48-60%).
+    Applying it on the day the field is created, not after a year of
+    accumulation, is the point.
+
+    Deliberately NOT encoding the observed `hallucination => write` /
+    `wrong_fact => read` mapping: that is an artifact of n=2 per category, and a
+    small-sample generalisation is the error this thread has caught repeatedly.
+    It is reported as an observation, never as a rule.
+    """
+    resolved = [e for e in load_events(path)
+                if e.get("event") == "resolved" and e.get("mechanism")]
+    by_id = {m.get("mistake_id"): m for m in load_mistakes(path)}
+    cross: Dict[str, Dict[str, int]] = {}
+    for e in resolved:
+        cat = (by_id.get(e.get("mistake_id")) or {}).get("category", "?")
+        cross.setdefault(cat, {})
+        cross[cat][e["mechanism"]] = cross[cat].get(e["mechanism"], 0) + 1
+    degenerate = sorted(c for c, v in cross.items() if len(v) == 1)
+    return {
+        "n_with_mechanism": len(resolved),
+        "cross_tab": cross,
+        "degenerate_categories": degenerate,
+        "note": ("a category that is always one mechanism means the field is not "
+                 "earning its place for that category"),
+    }
+
+
 def stats(path: Optional[Path] = None) -> Dict[str, Any]:
     ms = load_mistakes(path)
     by_state: Dict[str, int] = {}
@@ -376,6 +442,10 @@ def stats(path: Optional[Path] = None) -> Dict[str, Any]:
         "by_category": recurrence(path),
         "by_god": _count_by(ms, "god"),
         "by_detector": _count_by(ms, "detected_by"),
+        "by_mechanism": _count_by([e for e in load_events(path)
+                                   if e.get("event") == "resolved" and e.get("mechanism")],
+                                  "mechanism"),
+        "mechanism_report": mechanism_report(path),
         "ledger_path": str(path or LEDGER_PATH),
     }
 
@@ -466,6 +536,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_res.add_argument("--state", required=True, choices=list(STATES))
     p_res.add_argument("--prevention", help="required when --state learned")
     p_res.add_argument("--prevention-skill")
+    p_res.add_argument("--mechanism", choices=list(MECHANISMS),
+                       help="how it went wrong; required when --state learned")
     p_res.set_defaults(func=_cmd_resolve)
 
     p_ls = sub.add_parser("list", help="list mistakes")

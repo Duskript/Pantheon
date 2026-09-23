@@ -72,6 +72,7 @@ def test_state_transitions_are_appended_not_rewritten(ledger):
                            category="broken_code", detected_by="tool", path=ledger)
     M.resolve_mistake(rec["mistake_id"], "learned",
                       prevention="resolve credentials at the call site, not the caller",
+                      mechanism="design",   # wrong layer IS a design failure
                       path=ledger)
 
     lines = [json.loads(l) for l in ledger.read_text().splitlines() if l.strip()]
@@ -195,11 +196,24 @@ def test_a_sandboxed_home_does_not_fork_the_ledger(tmp_path, monkeypatch):
 
     HOW TO FALSIFY THIS — patch what `_account_home()` READS, not the module
     attribute. `_reload_with_home()` calls `importlib.reload(M)`, which
-    re-executes the module source and **discards any patch applied to the
-    module's own attributes**. So `M._account_home = lambda: ...` followed by a
-    reload silently falsifies nothing and leaves a green suite, which reads as
-    "this test is vacuous" when it is not. Thoth hit exactly that and nearly
-    reported the test as weak.
+    re-executes the module source **in the existing module namespace** — it does
+    NOT clear `__dict__`. Names the source re-defines are OVERWRITTEN; names it
+    does not define persist. Verified:
+
+        patch a name the source defines (_account_home)      -> overwritten: True
+        patch a name the source does not define (FAKE_PROBE) -> survives:    True
+        module __dict__ cleared by reload                    -> False
+
+    `_account_home`, `_canonical_ledger_path` and `LEDGER_PATH` are all
+    source-defined, so patching them is inert: the reload re-assigns them. So
+    `M._account_home = lambda: ...` followed by a reload silently falsifies
+    nothing and leaves a green suite, which reads as "this test is vacuous" when
+    it is not. Thoth hit exactly that and nearly reported the test as weak.
+
+    (An earlier version of this note said the reload "discards any patch applied
+    to the module's own attributes". That is false — it overwrites source-defined
+    names and leaves the rest alone. The practical advice was right; the reason
+    was over-generalised, and the reason is what a future reviewer reasons from.)
 
     Patch `pwd.getpwuid` instead (see the fake in this file), or edit the source
     the way the original falsification did — a source edit survives the reload
@@ -247,3 +261,74 @@ def test_sandboxed_home_is_empty_when_home_is_the_account_home(monkeypatch):
         assert mod.sandboxed_home() == ""
     finally:
         importlib.reload(M)
+
+
+# ── `mechanism`: HOW it failed, paired with the prevention ─────────────────
+
+def _rec(p):
+    return M.record_mistake(god="hermes", claim="a claim that was wrong",
+                            category="wrong_fact", detected_by="self", path=p)
+
+
+def test_mechanism_is_required_when_marking_learned(tmp_path):
+    """A prevention must pair with a mechanism, at the moment it is written."""
+    p = tmp_path / "l.jsonl"
+    mid = _rec(p)["mistake_id"]
+    with pytest.raises(ValueError) as e:
+        M.resolve_mistake(mid, "learned", prevention="re-read before asserting", path=p)
+    assert "requires --mechanism" in str(e.value)
+
+
+def test_mechanism_must_be_one_of_the_three(tmp_path):
+    p = tmp_path / "l.jsonl"
+    mid = _rec(p)["mistake_id"]
+    with pytest.raises(ValueError) as e:
+        M.resolve_mistake(mid, "learned", prevention="x", mechanism="vibes", path=p)
+    assert "must be one of" in str(e.value)
+
+
+def test_mechanism_is_optional_for_non_learned_states(tmp_path):
+    p = tmp_path / "l.jsonl"
+    mid = _rec(p)["mistake_id"]
+    M.resolve_mistake(mid, "wontfix", path=p)          # no mechanism needed
+    M.resolve_mistake(mid, "verified", mechanism="read", path=p)
+    assert len(M.load_events(p)) == 3
+
+
+def test_mechanism_lands_on_the_resolved_event_not_the_record(tmp_path):
+    """At record time you know the symptom; the mechanism is a diagnosis."""
+    p = tmp_path / "l.jsonl"
+    rec = _rec(p)
+    assert "mechanism" not in rec, "must not be required at record time"
+    mid = rec["mistake_id"]
+    M.resolve_mistake(mid, "learned", prevention="p", mechanism="design", path=p)
+    resolved = [e for e in M.load_events(p) if e.get("event") == "resolved"]
+    assert resolved[-1]["mechanism"] == "design"
+
+
+def test_report_cross_tabs_category_by_mechanism(tmp_path):
+    p = tmp_path / "l.jsonl"
+    a = M.record_mistake(god="g", claim="a claim that was wrong", category="wrong_fact",
+                         detected_by="self", path=p)["mistake_id"]
+    b = M.record_mistake(god="g", claim="another claim that was wrong", category="wrong_fact",
+                         detected_by="self", path=p)["mistake_id"]
+    c = M.record_mistake(god="g", claim="a third claim that was wrong", category="broken_code",
+                         detected_by="self", path=p)["mistake_id"]
+    M.resolve_mistake(a, "learned", prevention="p", mechanism="read", path=p)
+    M.resolve_mistake(b, "learned", prevention="p", mechanism="design", path=p)
+    M.resolve_mistake(c, "learned", prevention="p", mechanism="write", path=p)
+
+    rep = M.mechanism_report(p)
+    assert rep["cross_tab"]["wrong_fact"] == {"read": 1, "design": 1}
+    # broken_code is one mechanism only -> flagged, not silently accepted
+    assert rep["degenerate_categories"] == ["broken_code"]
+
+
+def test_report_does_not_crash_on_pre_field_events(tmp_path):
+    """Forward-only: resolved events written before the field existed are skipped."""
+    p = tmp_path / "l.jsonl"
+    mid = _rec(p)["mistake_id"]
+    M.resolve_mistake(mid, "wontfix", path=p)          # no mechanism
+    rep = M.mechanism_report(p)
+    assert rep["n_with_mechanism"] == 0
+    assert rep["cross_tab"] == {}
