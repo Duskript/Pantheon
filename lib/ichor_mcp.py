@@ -39,9 +39,13 @@ MCP_SERVER_SOURCE = describe_server_class()
 from lib.ichor.entities import entity_resolve
 from lib.ichor_gates import GatePipeline, LogicGate, PhaseDetectionGate, ReadCache, StateGate
 from lib.ichor_hybrid import MemoryTrait
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
 logger = logging.getLogger("ichor-mcp")
 
-_HOME = Path(os.path.expanduser("~"))
+_HOME = _account_home()
 _ICHOR_DB = _HOME / ".hermes" / "ichor.db"
 _AUDIT_TABLE = "ichor_mcp_audit"
 _FOLDS_TABLE = "episodic_folds"

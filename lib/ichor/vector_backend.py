@@ -31,10 +31,14 @@ import sqlite3
 import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
 
 logger = logging.getLogger("ichor.vector_backend")
 
-_DB_PATH = Path.home() / ".hermes" / "ichor.db"
+_DB_PATH = _account_home() / ".hermes" / "ichor.db"
 _EXPECTED_DIM = 384
 
 

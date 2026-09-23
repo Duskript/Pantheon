@@ -27,10 +27,14 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
 
 logger = logging.getLogger("lib.ichor.schema_v2")  # was "ichor_schema_v2" pre-2026-06-12
 
-DB_PATH = Path.home() / ".hermes" / "ichor.db"
+DB_PATH = _account_home() / ".hermes" / "ichor.db"
 
 SCHEMA_SQL = """
 -- HOT: Live per-session working state

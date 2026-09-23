@@ -31,6 +31,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
 
 logger = logging.getLogger("ichor_benchmarks")
 
@@ -39,7 +43,7 @@ logger = logging.getLogger("ichor_benchmarks")
 # Paths
 # ---------------------------------------------------------------------------
 
-_HOME = Path.home()
+_HOME = _account_home()
 _ICHOR_DB = _HOME / ".hermes" / "ichor.db"
 _WEIGHTS_HISTORY = _HOME / ".hermes" / "ichor_weights_history.json"
 

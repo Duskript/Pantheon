@@ -39,11 +39,15 @@ import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
 
 logger = logging.getLogger("lib.ichor.llm")  # was "ichor_tier_a_plus" pre-2026-06-12
 
 
-_HOME = Path.home()
+_HOME = _account_home()
 _ICHOR_DB = _HOME / ".hermes" / "ichor.db"
 _GODS_YAML = Path("/home/konan/pantheon/gods/gods.yaml")
 # Routing id for opencode-go; see the x-opencode-session note in _call_llm().

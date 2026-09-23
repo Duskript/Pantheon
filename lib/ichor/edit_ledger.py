@@ -46,10 +46,14 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
 
 log = logging.getLogger("ichor.edit_ledger")
 
-_HOME = Path.home()
+_HOME = _account_home()
 LEDGER_PATH = Path(
     os.environ.get("ICHOR_EDIT_LEDGER", str(_HOME / ".hermes" / "pantheon" / "edit-ledger.jsonl"))
 )

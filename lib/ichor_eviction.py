@@ -30,10 +30,14 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lib.ichor_temporal import normalize_timestamp, sql_utc  # noqa: E402
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
 
 logger = logging.getLogger("ichor_eviction")
 
-DEFAULT_DB = Path.home() / ".hermes" / "ichor.db"
+DEFAULT_DB = _account_home() / ".hermes" / "ichor.db"
 COLD_TABLE = "ichor_cold_storage"
 
 # `ichor_events.importance` is a 0-100 score (schema DEFAULT 50.0, decayed rows
