@@ -48,10 +48,15 @@ from lib.ichor.entities.entity_type_seeds import (
     seed_entity_types as _seed_entity_types,
 )
 
+# Resolve through the account home, not `$HOME`: a god's gateway session runs
+# with HOME set to its profile sandbox, so `Path.home()` silently points at a
+# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
+from lib.pantheon_path import account_home as _account_home  # noqa: E402
+
 logger = logging.getLogger("ichor.entities.schema")
 
 # Same path as the rest of the Ichor stack — we extend, not fork.
-DB_PATH = Path.home() / ".hermes" / "ichor.db"
+DB_PATH = _account_home() / ".hermes" / "ichor.db"
 
 # Tables owned by this module. Order matters for DROP (children first).
 # relationships and entity_facts reference entities; extraction_log
