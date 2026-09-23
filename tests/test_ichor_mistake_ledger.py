@@ -7,6 +7,7 @@ These tests pin that admission rule.
 """
 from __future__ import annotations
 
+import importlib
 import json
 
 import pytest
@@ -177,3 +178,58 @@ def test_self_and_tool_need_no_quote(tmp_path):
 
 def test_detector_enum_is_exactly_the_four(tmp_path):
     assert set(M.DETECTORS) == {"human", "self", "tool", "peer"}
+
+
+# ── the ledger must not fork on a sandboxed $HOME ──────────────────────────
+
+def _reload_with_home(monkeypatch, home):
+    """Re-import mistakes with $HOME patched, as a gateway session would see it."""
+    import importlib
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("ICHOR_MISTAKE_LEDGER", raising=False)
+    return importlib.reload(M)
+
+
+def test_a_sandboxed_home_does_not_fork_the_ledger(tmp_path, monkeypatch):
+    """A god's gateway session runs with HOME set to its profile sandbox.
+
+    The ledger forked in production because the path was Path.home()-derived:
+    a god wrote to ~/.hermes/profiles/<god>/home/.hermes/pantheon/... while
+    everyone else wrote to ~/.hermes/pantheon/... Recurrence is counted per
+    file, so a recurrence split across two ledgers is invisible precisely
+    because the halves were written from different environments.
+    """
+    sandbox = tmp_path / "profiles" / "thoth" / "home"
+    sandbox.mkdir(parents=True)
+    real = M._account_home()
+    try:
+        mod = _reload_with_home(monkeypatch, sandbox)
+        assert mod.sandboxed_home() == str(sandbox)
+        # the path must NOT follow HOME
+        assert str(sandbox) not in str(mod.LEDGER_PATH)
+        if real is not None and real.is_dir():
+            assert mod.LEDGER_PATH == real / ".hermes" / "pantheon" / "mistake-ledger.jsonl"
+    finally:
+        importlib.reload(M)
+
+
+def test_an_explicit_override_still_wins(tmp_path, monkeypatch):
+    target = tmp_path / "custom.jsonl"
+    monkeypatch.setenv("ICHOR_MISTAKE_LEDGER", str(target))
+    try:
+        mod = importlib.reload(M)
+        assert mod.LEDGER_PATH == target
+    finally:
+        importlib.reload(M)
+
+
+def test_sandboxed_home_is_empty_when_home_is_the_account_home(monkeypatch):
+    real = M._account_home()
+    if real is None:
+        return
+    monkeypatch.setenv("HOME", str(real))
+    try:
+        mod = importlib.reload(M)
+        assert mod.sandboxed_home() == ""
+    finally:
+        importlib.reload(M)

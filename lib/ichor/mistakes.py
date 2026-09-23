@@ -64,14 +64,74 @@ import hashlib
 import json
 import os
 import sys
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+log = logging.getLogger("ichor.mistakes")
+
 _HOME = Path.home()
-LEDGER_PATH = Path(
-    os.environ.get("ICHOR_MISTAKE_LEDGER", str(_HOME / ".hermes" / "pantheon" / "mistake-ledger.jsonl"))
-)
+
+
+def _account_home() -> Optional[Path]:
+    """The account's real home from passwd — NOT `$HOME`, which is spoofable.
+
+    A god's gateway session runs with `HOME` set to its profile sandbox
+    (`~/.hermes/profiles/<god>/home`). Any path derived from `Path.home()`
+    therefore resolves differently depending on who is asking, which is fine for
+    scratch state and fatal for a ledger.
+    """
+    try:
+        import pwd
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except (ImportError, KeyError, OSError):
+        return None
+
+
+def _canonical_ledger_path() -> Path:
+    """Resolve ONE ledger path for every caller, sandboxed or not.
+
+    The ledger forked in production: a god session wrote to
+    `~/.hermes/profiles/<god>/home/.hermes/pantheon/mistake-ledger.jsonl` while
+    everyone else wrote to `~/.hermes/pantheon/mistake-ledger.jsonl`. That
+    silently corrupts the ledger's ONLY discriminating signal — recurrence is
+    counted per file, so a recurrence split across two ledgers is invisible
+    precisely because the halves were written from different environments.
+
+    A silent fork is worse than a crash here: a crash loses one record, a fork
+    loses the *relationship between* records. So resolve to a fixed absolute
+    path and never let `$HOME` choose it.
+    """
+    override = os.environ.get("ICHOR_MISTAKE_LEDGER")
+    if override:
+        return Path(override)
+    real = _account_home()
+    if real is not None and real.is_dir():
+        return real / ".hermes" / "pantheon" / "mistake-ledger.jsonl"
+    return _HOME / ".hermes" / "pantheon" / "mistake-ledger.jsonl"
+
+
+def sandboxed_home() -> str:
+    """Return the sandboxed `$HOME` when it disagrees with the account home.
+
+    Empty string when they agree (the normal case). Callers warn rather than
+    refuse: a god session legitimately has a sandboxed HOME and must still be
+    able to record mistakes — it just has to write to the one canonical file.
+    """
+    real = _account_home()
+    env_home = os.environ.get("HOME", "")
+    if real is None or not env_home:
+        return ""
+    try:
+        if Path(env_home).resolve() != real.resolve():
+            return env_home
+    except OSError:
+        return env_home
+    return ""
+
+
+LEDGER_PATH = _canonical_ledger_path()
 
 #: A record must name one of these. Free-text categories defeat the purpose of
 #: counting recurrence, which is the only signal that a prevention is needed.
@@ -121,6 +181,13 @@ def _new_id(god: str, claim: str, ts: str) -> str:
 
 
 def _append(entry: Dict[str, Any], path: Optional[Path] = None) -> Dict[str, Any]:
+    _sb = sandboxed_home()
+    if _sb:
+        # Not an error — a god session is supposed to be sandboxed. But say so,
+        # because if this ever resolves to a different FILE the ledger has
+        # forked and recurrence silently stops working.
+        log.warning("mistake ledger: HOME is sandboxed (%s); writing to canonical %s",
+                    _sb, p)
     p = Path(path) if path is not None else LEDGER_PATH
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "a", encoding="utf-8") as fh:
