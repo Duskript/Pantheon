@@ -34,6 +34,7 @@ import os
 import re
 import sqlite3
 import urllib.request
+import uuid
 import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,6 +46,8 @@ logger = logging.getLogger("lib.ichor.llm")  # was "ichor_tier_a_plus" pre-2026-
 _HOME = Path.home()
 _ICHOR_DB = _HOME / ".hermes" / "ichor.db"
 _GODS_YAML = Path("/home/konan/pantheon/gods/gods.yaml")
+# Routing id for opencode-go; see the x-opencode-session note in _call_llm().
+_OPENCODE_SESSION_ID = f"ichor-llm-{uuid.uuid4().hex[:12]}"
 _ATHENAEUM_ROOT = _HOME / "athenaeum"
 
 RICH_FIELDS = (
@@ -136,6 +139,72 @@ def _is_tier_a_plus_enabled(god_name: str) -> bool:
     return raw in ("true", "1", "yes", "on")
 
 
+def _pool_credentials(auth: Dict[str, Any], provider: str) -> List[Dict[str, Any]]:
+    """Return the credential list for `provider` from an auth.json payload.
+
+    Provider names arrive in several spellings across the codebase
+    ("opencode-go", "opencode_go", "MiniMax") while the pool is keyed by the
+    canonical provider id, so try the plausible spellings and then fall back to
+    a case-insensitive match.
+    """
+    pool = auth.get("credential_pool")
+    if not isinstance(pool, dict):
+        return []
+    for cand in (provider, provider.lower(), provider.lower().replace("_", "-")):
+        entry = pool.get(cand)
+        if isinstance(entry, list):
+            return [c for c in entry if isinstance(c, dict)]
+    low = provider.lower()
+    for key, entry in pool.items():
+        if key.lower() == low and isinstance(entry, list):
+            return [c for c in entry if isinstance(c, dict)]
+    return []
+
+
+def resolve_provider_credentials(provider: str) -> tuple:
+    """Resolve (api_key, base_url) for `provider`, preferring the Hermes
+    credential pool over a single derived environment variable.
+
+    Why the pool first: `config.yaml` provider blocks intentionally carry an
+    empty `api_key` — the real tokens live in `~/.hermes/auth.json` and are
+    rotated by Hermes. A standalone process that reads only
+    `<PROVIDER>_API_KEY` disables itself the moment that variable is absent, or
+    the moment the provider name resolves to a spelling whose variable does not
+    exist. That is how the Ichor tick's L2 extraction went dark for 456 ticks,
+    including 26 unbroken days, while systemd reported the unit healthy.
+
+    Selection: lowest `priority` first, skipping credentials with an unreadable
+    token and those marked `exhausted`. A credential with **no recorded status
+    is accepted** — `last_status` is a cached guess, and requiring
+    `status == "ok"` skips healthy credentials. Verified on this host: the
+    priority-0 opencode-go key reports `last_status=None` and answers
+    HTTP 200 with 33 models.
+
+    Returns ``("", "")`` when nothing usable is found.
+    """
+    auth: Dict[str, Any] = {}
+    try:
+        auth = json.loads((_HOME / ".hermes" / "auth.json").read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        logger.debug("credential pool unreadable: %s", e)
+
+    def _priority(cred: Dict[str, Any]) -> int:
+        p = cred.get("priority")
+        return p if isinstance(p, int) else 999
+
+    for cred in sorted(_pool_credentials(auth, provider), key=_priority):
+        token = cred.get("access_token") or cred.get("api_key") or ""
+        if len(str(token)) <= 10:
+            continue
+        if str(cred.get("last_status") or "").lower() == "exhausted":
+            continue
+        return str(token), str(cred.get("base_url") or "")
+
+    # Fallback: the derived environment variable.
+    env_name = str(provider).upper().replace("-", "_").replace(" ", "_") + "_API_KEY"
+    return os.environ.get(env_name, ""), ""
+
+
 def _resolve_llm_provider(god_name: str) -> Optional[Dict[str, Any]]:
     """Find the LLM provider for this god. Returns None if unavailable.
 
@@ -143,7 +212,9 @@ def _resolve_llm_provider(god_name: str) -> Optional[Dict[str, Any]]:
       1. god's own `llm_provider` field in gods.yaml
       2. god's own `provider` field
       3. Hermes profile's `model.default` in ~/.hermes/profiles/<god>/config.yaml
-      4. The active profile (this Marvin session)
+      4. The main profile's `model.provider` in ~/.hermes/config.yaml — the
+         gateway's own config, and the only sane answer for pseudo-gods like
+         "subconscious" that have no entry in gods.yaml and no profile dir.
     """
     gods = _read_gods_yaml()
     god_cfg = gods.get(god_name, {})
@@ -153,7 +224,7 @@ def _resolve_llm_provider(god_name: str) -> Optional[Dict[str, Any]]:
     if provider_name:
         return _load_provider_config(str(provider_name))
 
-    # Fall back to the active profile
+    # Fall back to the god's own profile config
     active = _HOME / ".hermes" / "profiles" / god_name / "config.yaml"
     if active.exists():
         try:
@@ -167,6 +238,30 @@ def _resolve_llm_provider(god_name: str) -> Optional[Dict[str, Any]]:
                         return _load_provider_config(str(p))
         except Exception as e:
             logger.debug("could not read %s: %s", active, e)
+
+    # Final fallback: the MAIN profile's configured provider (~/.hermes/config.yaml).
+    # Steps 1-3 only cover entities that exist in gods.yaml or have a profile
+    # directory. Pseudo-gods ("subconscious") and gods without a profile used to
+    # resolve to None here, and every caller silently treated that as "no LLM
+    # available" — which is how the subconscious cluster summarizer became a
+    # no-op that returned "" on every tick. The gateway itself runs on this
+    # config, so it is the correct last resort.
+    main_cfg = _HOME / ".hermes" / "config.yaml"
+    if main_cfg.exists():
+        try:
+            import yaml
+            data = yaml.safe_load(main_cfg.read_text())
+            if isinstance(data, dict):
+                model = data.get("model", {})
+                if isinstance(model, dict):
+                    p = model.get("provider") or model.get("default")
+                    if p:
+                        resolved = _load_provider_config(str(p))
+                        if resolved:
+                            return resolved
+                        logger.debug("main config names provider %r but it is not configured", p)
+        except Exception as e:
+            logger.debug("could not read %s: %s", main_cfg, e)
     return None
 
 
@@ -205,15 +300,28 @@ def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
     and the model finished in <10s. Bumped 2026-06-12 after the L2
     full-corpus loop timed out on 3/3 retries at the 30s default.
     """
-    api_base = provider_cfg.get("api", "").rstrip("/")
+    provider_name = str(provider_cfg.get("name", "PROVIDER"))
+
+    # Credential resolution order: explicit config -> the Hermes credential pool
+    # -> (inside resolve_provider_credentials) the derived env var.
+    #
+    # The pool MUST be consulted here. config.yaml provider blocks carry an
+    # empty `api_key` by design — the real tokens live in ~/.hermes/auth.json and
+    # are rotated by Hermes — so resolving from <PROVIDER>_API_KEY alone leaves
+    # this call with no credential the moment that variable is absent. That is
+    # the mechanism behind 456 silently-skipped L2 extraction ticks (26 unbroken
+    # days) and the HTTP 401 seen when the variable was stripped.
+    api_key = str(provider_cfg.get("api_key") or "")
+    pool_base_url = ""
+    if not api_key:
+        api_key, pool_base_url = resolve_provider_credentials(provider_name)
+
+    api_base = (provider_cfg.get("api") or pool_base_url or "").rstrip("/")
     if not api_base:
         raise ValueError("provider has no api base URL")
     model_name = model or provider_cfg.get("default_model", "")
     if not model_name:
         raise ValueError("no model specified for provider")
-    provider_name = str(provider_cfg.get("name", "PROVIDER"))
-    provider_env_name = f"{provider_name.upper().replace('-', '_')}_API_KEY"
-    api_key = provider_cfg.get("api_key", "") or os.environ.get(provider_env_name, "")
 
     url = f"{api_base}/chat/completions"
     body = json.dumps({
@@ -243,6 +351,14 @@ def _call_llm(prompt: str, provider_cfg: Dict[str, Any],
     # the L2 full-corpus loop — the opencode-go endpoint returned 403
     # until we added this header.
     req.add_header("User-Agent", "pantheon-ichor/1.0 (lib.ichor.llm)")
+    # opencode-go (Console Go) routes on a session id and returns
+    # HTTP 400 {"type": "MissingSessionID"} without this header — which made
+    # every caller of this helper fail against that provider, not just
+    # individual pipelines. Discovered 2026-09-18 while running the Fix D
+    # priority summary backfill; any non-empty value is accepted, so a stable
+    # per-process id is enough and keeps a run's calls on one routing shard.
+    if "opencode.ai" in api_base:
+        req.add_header("x-opencode-session", _OPENCODE_SESSION_ID)
     if api_key:
         req.add_header("Authorization", f"Bearer {api_key}")
 

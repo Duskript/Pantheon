@@ -163,6 +163,27 @@ def _write_tick_state(state: Dict[str, Any]) -> None:
 # Step implementations
 # ---------------------------------------------------------------------------
 
+def _degraded_steps(steps: Dict[str, Any]) -> Dict[str, str]:
+    """Return {core_step: reason} for every core step that could not do its job.
+
+    Lives at module level so the rule is directly testable rather than buried
+    inline in ``main()``. A step is degraded when it reported a
+    ``degraded_reason``, a ``skipped`` reason, or an ``error`` — or when it did
+    not run at all. Only ``_CORE_STEPS`` count; the declared no-ops
+    (``improve``/``brief``/``export``/``verify``) can never fail the tick.
+    """
+    out: Dict[str, str] = {}
+    for name in _CORE_STEPS:
+        step = steps.get(name) if isinstance(steps, dict) else None
+        if not isinstance(step, dict):
+            out[name] = "step did not run"
+            continue
+        reason = step.get("degraded_reason") or step.get("skipped") or step.get("error")
+        if reason:
+            out[name] = str(reason)[:120]
+    return out
+
+
 def _step_gather(dry_run: bool = True) -> Dict[str, Any]:
     """Step 1: gather new events, gate logs, session summaries.
 
@@ -222,6 +243,31 @@ def _step_gather(dry_run: bool = True) -> Dict[str, Any]:
         "last_event_id": last_event_id,
         "last_tick": state.get("last_tick"),
         "sessions_since_last": sessions_since_last,
+    }
+
+
+# Steps whose failure means the tick did not do its job. `improve`, `brief`,
+# `export` and `verify` are excluded because they are declared no-ops or
+# read-only (see their docstrings); a core step that cannot run must not leave
+# the tick reporting success.
+_CORE_STEPS = ("gather", "extract", "finalize", "analyze")
+
+
+def _degraded_extract(reason: str, cursor: int) -> Dict[str, Any]:
+    """A skipped extraction is a DEGRADED tick, not a quiet success.
+
+    Every `skipped` return from ``_step_extract`` funnels through here so the
+    result carries a machine-readable status that the summary and the process
+    exit code can act on. These previously returned ``{"skipped": ...}`` and the
+    tick still exited 0 — which is how L2 extraction stayed dark for 456 ticks
+    (26 unbroken days) with systemd reporting the unit healthy.
+    """
+    logger.warning("l2_extract: DEGRADED — %s (cursor=%d)", reason, cursor)
+    return {
+        "skipped": reason,
+        "status": "degraded",
+        "degraded_reason": reason,
+        "cursor": cursor,
     }
 
 
@@ -293,7 +339,7 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
             finally:
                 conn.close()
         except sqlite3.Error as e:
-            return {"skipped": f"db_unavailable: {e}", "cursor": cursor}
+            return _degraded_extract(f"db_unavailable: {e}", cursor)
         residual = row[0] if row else 0
         return {
             "dry_run": True,
@@ -304,26 +350,40 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
     
     # Live path: resolve provider + key before spending any time.
     try:
-        from lib.ichor.llm import _resolve_llm_provider, _load_provider_config
+        from lib.ichor.llm import (
+            _resolve_llm_provider,
+            _load_provider_config,
+            resolve_provider_credentials,
+        )
         from lib.ichor.entities import extract_incremental
         from lib.ichor.entities.schema import get_conn as _get_l2_conn
     except Exception as e:
-        return {"skipped": f"l2_module_import_failed: {e}", "cursor": cursor}
+        return _degraded_extract(f"l2_module_import_failed: {e}", cursor)
     
     # First prefer Marvin's god/profile provider, then fall back to the
-    # provider named opencode-go. The previous code called
-    # _resolve_llm_provider("opencode-go"), which treats opencode-go as a
-    # god/profile name and therefore never found the provider config.
+    # provider named opencode-go.
     provider_cfg = _resolve_llm_provider("marvin") or _load_provider_config("opencode-go")
     if not isinstance(provider_cfg, dict):
-        return {"skipped": "llm_provider_not_configured", "cursor": cursor}
-    
-    import os as _os
+        return _degraded_extract("llm_provider_not_configured", cursor)
+
     provider_name = provider_cfg.get("name") or "opencode-go"
-    provider_env_name = f"{str(provider_name).upper().replace('-', '_')}_API_KEY"
-    api_key = provider_cfg.get("api_key") or _os.environ.get(provider_env_name, "")
+
+    # Resolve the credential from the Hermes CREDENTIAL POOL first.
+    # config.yaml provider blocks intentionally carry an empty `api_key` (the
+    # real tokens live in ~/.hermes/auth.json and are rotated by Hermes), so
+    # reading a single derived env var silently disables extraction whenever
+    # that variable is absent — or whenever the provider name resolves to a
+    # spelling whose variable does not exist. That is how this step went dark
+    # for 456 ticks, including 26 unbroken days, while the unit read healthy.
+    api_key, _pool_base_url = resolve_provider_credentials(str(provider_name))
     if not api_key:
-        return {"skipped": f"no_api_key_for_{provider_name}", "cursor": cursor}
+        return _degraded_extract(f"no_credential_for_{provider_name}", cursor)
+    # The credential is attached by `_call_llm` in lib.ichor.llm, which resolves
+    # from the same pool. This pre-flight check exists so the tick fails loudly
+    # BEFORE spending its time budget when no credential exists at all — it is
+    # not the site that supplies the key. (An earlier revision injected
+    # `base_url` into provider_cfg here, which was a no-op: `_call_llm` reads
+    # `api`, not `base_url`.)
     
     # Loop: one LLM call per batch, persist cursor after each.
     batches_run = 0
@@ -389,6 +449,12 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
     }
     if last_error:
         out["last_error"] = last_error
+        # A failure mid-loop is a DEGRADED step, not a quiet zero. This
+        # previously returned batches=0 with no status at all, so a tick whose
+        # extraction failed outright (HTTP 401) still printed a clean summary
+        # and exited 0.
+        out["status"] = "degraded"
+        out["degraded_reason"] = str(last_error)[:120]
     return out
 
 
@@ -569,9 +635,24 @@ def _step_improve(dry_run: bool = True) -> Dict[str, Any]:
         current_recall = report.get("recall@5", 0.0)
         new_weights = tuner.cycle(previous_recall, current_recall)
         tuner.apply()
+        # Report the ACTUAL per-key drift from the cycle just recorded.
+        # This previously returned the literal `True`, which the summary
+        # formatter coerced via `1 if drift else 0` into
+        # "drift=1 weights adjusted" — a success line that counted a
+        # boolean, not movement. Returning the real drift map means a
+        # stalled loop reports `drift=0`, which is the honest signal.
+        drift_applied: Dict[str, float] = {}
+        try:
+            _hist = json.loads(history_path.read_text())
+            _last_cycle = (_hist.get("cycles") or [{}])[-1]
+            drift_applied = {
+                k: v for k, v in (_last_cycle.get("drift") or {}).items() if v
+            }
+        except (json.JSONDecodeError, OSError, IndexError, AttributeError):
+            drift_applied = {}
         return {
             "weights_after": new_weights,
-            "drift_applied": True,
+            "drift_applied": drift_applied,
             "recall_at_5": current_recall,
         }
     except Exception as e:
@@ -618,8 +699,16 @@ def _step_brief(dry_run: bool = True) -> Dict[str, Any]:
     from lib.ichor_brief import build_brief
     brief_md = build_brief(god_name="marvin", limit=20, min_score=0.2, output_format="markdown")
     (out_dir / "brief_marvin.md").write_text(brief_md)
-    result["brief_generated"] = True
+    # A file existing is not a brief. build_brief emits a fixed sentinel when
+    # there is nothing to say, and this step previously set brief_generated=True
+    # regardless — so the flag meant "a file was written", never "a brief was
+    # produced". 100 date-stamped directories of a 171-byte stub were reported
+    # as success.
+    result["brief_has_content"] = "No ichor events yet" not in brief_md
+    result["brief_generated"] = bool(result["brief_has_content"])
     result["brief_path"] = str(out_dir / "brief_marvin.md")
+    if not result["brief_has_content"]:
+        result["brief_note"] = "empty stub — no events to report for marvin"
 
     # Digest — shared context (replaces inject-shared-context)
     from lib.ichor_subconscious import tick as subconscious_tick
@@ -627,6 +716,30 @@ def _step_brief(dry_run: bool = True) -> Dict[str, Any]:
     (out_dir / "digest.json").write_text(json.dumps(digest, indent=2, default=str))
     result["digest_generated"] = True
     result["digest_path"] = str(out_dir / "digest.json")
+
+    # `events_delivered` is the key the summary reads — and NOTHING in the repo
+    # wrote it, so the brief line reported gods_reported=0 on every run
+    # regardless of reality (verified: the only occurrence in the tree was the
+    # read). Populate it from the digest, which does carry per-god truth.
+    _res = digest.get("results") if isinstance(digest, dict) else {}
+    _res = _res if isinstance(_res, dict) else {}
+    result["events_delivered"] = {
+        god: info for god, info in _res.items()
+        if isinstance(info, dict) and info.get("delivered")
+    }
+    result["gods_ticked"] = digest.get("gods_ticked") if isinstance(digest, dict) else None
+    result["events_found_total"] = sum(
+        int((info or {}).get("events_found", 0) or 0)
+        for info in _res.values() if isinstance(info, dict)
+    )
+    if not result["events_delivered"] and result["gods_ticked"]:
+        # Nothing to deliver is a legitimate outcome, but say so rather than
+        # letting a zero do the talking.
+        result["status"] = "inert"
+        result["inert_reason"] = (
+            f"0/{result['gods_ticked']} gods delivered "
+            f"(events_found={result['events_found_total']})"
+        )
 
     return result
 
@@ -644,18 +757,17 @@ def _step_export(dry_run: bool = True) -> Dict[str, Any]:
             "dry_run": True,
         }
 
-    # Live mode: invoke the export
-    try:
-        # The export is gated by Clawforge's master + per-system + sentinel
-        # gates. In dry-run we don't touch it; in live mode the system
-        # service handles it (systemd timer, not the tick).
-        return {
-            "patterns_exported": 0,
-            "note": "Clawforge export is on a separate timer (clawforge-pattern-export-forge.timer)",
-        }
-    except Exception as e:
-        logger.warning("export step failed: %s", e)
-        return {"patterns_exported": 0, "error": str(e)}
+    # Live mode: this step is a DECLARED NO-OP.
+    # It previously wrapped a constant return in a try/except, which made it
+    # read as code that could fail rather than code that never does anything.
+    # `submitted=0` reads as "ran and submitted nothing"; `inert` is the honest
+    # claim. The real export runs on clawforge-pattern-export-forge.timer.
+    return {
+        "submitted": 0,
+        "patterns_exported": 0,
+        "status": "inert",
+        "inert_reason": "no-op by design; export runs on clawforge-pattern-export-forge.timer",
+    }
 
 
 def _step_verify(dry_run: bool = True) -> Dict[str, Any]:
@@ -681,6 +793,48 @@ def _step_verify(dry_run: bool = True) -> Dict[str, Any]:
         "benchmark": last_known,
         "note": "dry-run" if dry_run else "live",
     }
+
+
+# ---------------------------------------------------------------------------
+# Step summary rendering
+#
+# These live at module level (rather than inline in main()) so they can be
+# tested directly. Both encode a 2026-09-22 defect fix: the summary line for a
+# step must reflect what the step actually returned, never a truthy literal and
+# never the literal string "no data" for data that is present.
+# ---------------------------------------------------------------------------
+
+def _fmt_verify(s: Dict[str, Any]) -> str:
+    """Render the `verify` step summary.
+
+    `_step_verify` returns {"benchmark": {"recall_at_5": float, ...}}.
+    The formatter previously read `benchmark_results` then `recall` — neither
+    of which the step returns — so it printed "no data" on every run, including
+    runs that had data. The verification step could not report a value at all.
+    """
+    bench = s.get("benchmark") or {}
+    recall = bench.get("recall_at_5") if isinstance(bench, dict) else bench
+    return f"recall={recall}" if recall else "no data"
+
+
+def _fmt_improve(s: Dict[str, Any], dry: bool) -> str:
+    """Render the `improve` step summary.
+
+    `_step_improve` used to return the literal `True` for `drift_applied`,
+    which the count below coerced to `drift=1 weights adjusted` — a success
+    line that counted a boolean, not movement. `_step_improve` now returns the
+    real per-key drift map, so a stalled loop reports `drift=0`.
+    """
+    if dry:
+        w = s.get("weights_after", {}) or {}
+        summary = ", ".join(f"{k}={v:.2f}" for k, v in list(w.items())[:6])
+        return f"weights: {summary}"
+    drift = s.get("drift_applied", {})
+    if isinstance(drift, (dict, list, tuple, set)):
+        drift_count = len(drift)
+    else:
+        drift_count = 1 if drift else 0
+    return f"drift={drift_count} weights adjusted"
 
 
 # ---------------------------------------------------------------------------
@@ -858,19 +1012,7 @@ def main() -> int:
             details.append(f"outcomes={s.get('outcomes_processed',0)}")
             details.append(f"contradictions={s.get('contradictions_flagged',0)}")
         elif step_name == "improve":
-            if dry:
-                w = s.get("weights_after", {})
-                summary = ", ".join(f"{k}={v:.2f}" for k, v in list(w.items())[:6])
-                details.append(f"weights: {summary}")
-            else:
-                drift = s.get("drift_applied", {})
-                if isinstance(drift, dict):
-                    drift_count = len(drift)
-                elif isinstance(drift, (list, tuple, set)):
-                    drift_count = len(drift)
-                else:
-                    drift_count = 1 if drift else 0
-                details.append(f"drift={drift_count} weights adjusted")
+            details.append(_fmt_improve(s, dry))
         elif step_name == "brief":
             delivered = s.get("events_delivered", {})
             if isinstance(delivered, dict):
@@ -880,14 +1022,42 @@ def main() -> int:
         elif step_name == "export":
             details.append(f"submitted={s.get('submitted',0)}")
         elif step_name == "verify":
-            benchmark = s.get("benchmark_results", s.get("recall", ""))
-            details.append(f"recall={benchmark}" if benchmark else "no data")
+            details.append(_fmt_verify(s))
 
         if error and not details:
             details.append(f"ERROR: {error[:60]}")
 
+        _st = s.get("status")
+        if _st == "degraded" and not any("DEGRADED" in d for d in details):
+            details.insert(0, "DEGRADED")
+        elif _st == "inert" and not any("INERT" in d for d in details):
+            details.insert(0, "INERT")
+
         detail_str = " | ".join(details) if details else ""
         print(f"  {step_name:10s} {dur:6.3f}s  {detail_str}")
+
+    # --- Honesty gate ------------------------------------------------------
+    # systemd only sees the exit code. Before this, the tick returned 0 even
+    # when a CORE step could not do its job, which is how L2 extraction stayed
+    # dark for 456 ticks (26 unbroken days) while the unit reported healthy.
+    # A core step that was skipped or errored now fails the tick, so a
+    # watchdog / OnFailure= / any assertion can see it.
+    degraded = _degraded_steps(steps)
+
+    if result.get("aborted_early"):
+        # A partial tick is a degraded tick: later steps did not run at all.
+        # It must not exit 0 — with the 30 s default cap, a production tick that
+        # lost ICHOR_TICK_MAX_SECONDS would otherwise silently drop half its
+        # work and report success. (The unit sets 300 s; the in-code default is
+        # 30 s, so this is reachable.)
+        degraded.setdefault("tick", "hit the time cap; later steps did not run")
+
+    if degraded:
+        print()
+        print("❌ DEGRADED — core step(s) could not do their job:")
+        for _n, _r in degraded.items():
+            print(f"     {_n}: {_r}")
+        print("   Exiting non-zero so systemd and any watchdog can see this.")
 
     if result.get("aborted_early"):
         print()
@@ -895,7 +1065,7 @@ def main() -> int:
 
     print()
     print(f"--- end tick (v{result['version']}) ---")
-    return 0
+    return 1 if degraded else 0
 
 
 if __name__ == "__main__":
