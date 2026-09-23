@@ -46,9 +46,42 @@ from pathlib import Path
 from typing import Any
 
 # ----- Config (overridable via env) -----------------------------------------
-NATS_HOST = os.environ.get("CLAWFORGE_NATS_HOST", "100.100.46.52")
-NATS_PORT = int(os.environ.get("CLAWFORGE_NATS_PORT", "4222"))
-NATS_URL = f"nats://{NATS_HOST}:{NATS_PORT}"
+CLAWFORGE_CONFIG = Path(
+    os.environ.get("CLAWFORGE_CONFIG", str(Path.home() / ".hermes" / "clawforge.yaml"))
+)
+
+
+def _resolve_federation_endpoint() -> tuple[str, int]:
+    """Resolve the FEDERATION NATS endpoint as (host, port).
+
+    This smoke test exercises the cross-instance leg on purpose, so the peer must
+    be named explicitly — `CLAWFORGE_NATS_HOST` / `CLAWFORGE_NATS_PORT` in the
+    environment, or the `federation:` block in ~/.hermes/clawforge.yaml.
+
+    There is deliberately NO hardcoded fallback host. The old default was a
+    peer's tailnet address, which made a peer instance the silent destination of
+    a run that never asked to talk to anyone. Called after `fail()` is defined.
+    """
+    host = os.environ.get("CLAWFORGE_NATS_HOST")
+    port_raw = os.environ.get("CLAWFORGE_NATS_PORT")
+    if not host:
+        cfg: dict = {}
+        try:
+            import yaml  # type: ignore
+            cfg = yaml.safe_load(CLAWFORGE_CONFIG.read_text()) or {}
+        except Exception as exc:  # missing/unreadable config is handled below
+            warn("could not read " + str(CLAWFORGE_CONFIG) + ": " + str(exc))
+        fed = cfg.get("federation") or {}
+        host = fed.get("host") or ""
+        port_raw = port_raw or fed.get("port")
+    if not host:
+        fail(
+            "no federation peer configured. Set `federation: {host: <host>, "
+            "port: 4222}` in " + str(CLAWFORGE_CONFIG) + " or export "
+            "CLAWFORGE_NATS_HOST. This test targets the cross-instance leg, and "
+            "there is no default peer to fall back to."
+        )
+    return str(host), int(port_raw or 4222)
 
 TOKENS_PATH = Path(
     os.environ.get(
@@ -103,6 +136,12 @@ def pass_(msg: str) -> None:
 def fail(msg: str) -> None:
     print(f"{C.RED}[smoke][FAIL]{C.RESET} {msg}", file=sys.stderr, flush=True)
     sys.exit(1)
+
+
+# Resolved once, here, because the resolver reports failure through fail().
+# No hardcoded peer: this test names the peer explicitly or refuses to run.
+NATS_HOST, NATS_PORT = _resolve_federation_endpoint()
+NATS_URL = f"nats://{NATS_HOST}:{NATS_PORT}"
 
 
 def now_iso() -> str:

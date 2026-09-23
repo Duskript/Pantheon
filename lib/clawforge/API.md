@@ -4,6 +4,21 @@
 **Status:** LOCKED — exporters must call only the functions in this file.
 **Plan ref:** `PASS3_PLAN.md` Phase 3.0 (pre-flight API audit)
 
+> **Status update 2026-09-23 — the deferrals below are closed.**
+> `pattern_exporter.py` and `learning_exporter.py` shipped their Pass 3.1 data
+> sources (`clawforge.memory_api.get_recent_outcomes` /
+> `get_recent_learnings`), so all three exporters are live. The "DEFERRED" rows
+> and builder decisions 1 and 3 below describe the 2026-06-11 audit, not the
+> current tree — keep them as the record of what the audit found.
+>
+> What changed since: all three exporters now share the three export legs
+> (local artifact / local relay / federation), target resolution and token
+> loading via **`lib/clawforge/legs.py`**. Each exporter owns only its payload.
+> `pattern_sharing.enabled` and its per-system opt-ins gate the **federation
+> leg only** — never local production. The federation host has no default.
+> See `legs.py`'s module docstring for the gating rules and the defect that
+> motivated the extraction.
+
 ---
 
 ## What the spec assumed vs. what exists

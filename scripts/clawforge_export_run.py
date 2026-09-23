@@ -5,11 +5,12 @@ The sentinel file is `~/.hermes/clawforge/exports/<name>.enabled`.
 If the file is missing, the wrapper logs "skipped" and exits 0
 (so the timer fires cleanly without doing anything).
 
-This pattern lets us ship Phase 4 timers immediately and have them
-just work when the deferred exporters (Pass 3.1) land. Today:
-  - forge adjustment exporter: real, ships to forge.adjustment.submitted
-  - memory pattern exporter:   placeholder, no source data yet
-  - dojo learning exporter:    placeholder, no source data yet
+This pattern lets the Phase 4 timers fire without doing anything until the
+operator arms them. All three exporters are real and share the three-leg
+implementation in `lib/clawforge/legs.py`:
+  - forge adjustment exporter: ships to forge.adjustment.submitted
+  - memory pattern exporter:   ships to memory.pattern.submitted
+  - dojo learning exporter:    ships to dojo.learning.submitted
 
 CLI:
     clawforge_export_run.py forge   [extra args]
@@ -130,55 +131,61 @@ def _log_run(name: str) -> None:
     print("[" + _now() + "] " + name + " export: RUNNING", flush=True)
 
 
+def _report_legs(result: dict) -> int:
+    """Print the three-leg outcome and return the process exit code.
+
+    The LOCAL leg is the one local self-improvement depends on. If it did not
+    publish, this export did not do its job — exit non-zero rather than report
+    success for a run that produced nothing.
+    """
+    print("  artifact:     " + str(result.get("artifact") or "-"), flush=True)
+    print("  local relay:  " + ("published to " + str(result.get("local_url"))
+                                 if result.get("published_local") else "FAILED"), flush=True)
+    print("  federation:   " + ("published" if result.get("published_remote")
+                                 else "skipped (off) or failed"), flush=True)
+    for note in result.get("notes", []):
+        print("  note: " + str(note), flush=True)
+    if not result.get("published_local"):
+        print("  ERROR: local relay publish did not succeed", flush=True)
+        return 1
+    return 0
+
+
+#: exporter name -> (module, count label, count key in the run() summary)
+_EXPORTERS = {
+    "forge": ("clawforge.adjustment_exporter", "adjustments", "adjustments"),
+    "memory": ("clawforge.pattern_exporter", "patterns", "pattern_count"),
+    "dojo": ("clawforge.learning_exporter", "learnings", "total_learnings"),
+}
+
+
 async def _run_actual(name: str) -> int:
     """Run the actual exporter module. Returns 0 on success, 1 on error.
-    Imports are lazy so the wrapper exits cleanly when a deferred
-    exporter doesn't exist yet.
+
+    All three exporters share the three-leg implementation in
+    `clawforge.legs` and return the same summary dict, so the reporting and the
+    success test are identical for every lane — only the count differs.
     """
+    import importlib
+
     sys.path.insert(0, "/home/konan/pantheon")
     sys.path.insert(0, "/home/konan/pantheon/lib")
-    if name == "forge":
-        try:
-            from clawforge.adjustment_exporter import run
-        except ImportError as e:
-            print("  ERROR importing adjustment_exporter: " + str(e), flush=True)
-            return 1
-        result = await run(days=7)
-        print("  adjustments:  " + str(result.get("adjustments", 0)), flush=True)
-        print("  artifact:     " + str(result.get("artifact") or "-"), flush=True)
-        print("  local relay:  " + ("published to " + str(result.get("local_url"))
-                                     if result.get("published_local") else "FAILED"), flush=True)
-        print("  federation:   " + ("published" if result.get("published_remote")
-                                     else "skipped (off) or failed"), flush=True)
-        for note in result.get("notes", []):
-            print("  note: " + str(note), flush=True)
-        # The LOCAL leg is the one local self-improvement depends on. If it did
-        # not publish, this export did not do its job — exit non-zero rather than
-        # reporting success for a run that produced nothing.
-        if not result.get("published_local"):
-            print("  ERROR: local relay publish did not succeed", flush=True)
-            return 1
-        return 0
-    if name == "memory":
-        try:
-            from clawforge.pattern_exporter import run
-        except ImportError:
-            print("  pattern_exporter not implemented yet (deferred to Pass 3.1)", flush=True)
-            return 0
-        entry = await run(days=7)
-        print("  published " + str(len(entry.get("patterns", []))) + " pattern(s)", flush=True)
-        return 0
-    if name == "dojo":
-        try:
-            from clawforge.learning_exporter import run
-        except ImportError:
-            print("  learning_exporter not implemented yet (deferred to Pass 3.1)", flush=True)
-            return 0
-        entry = await run(days=7)
-        print("  published " + str(len(entry.get("learnings", []))) + " learning(s)", flush=True)
-        return 0
-    print("  unknown exporter name: " + name, flush=True)
-    return 1
+
+    spec = _EXPORTERS.get(name)
+    if spec is None:
+        print("  unknown exporter name: " + name, flush=True)
+        return 1
+    mod_name, count_label, count_key = spec
+
+    try:
+        module = importlib.import_module(mod_name)
+    except ImportError as exc:
+        print("  ERROR importing " + mod_name + ": " + str(exc), flush=True)
+        return 1
+
+    result = await module.run(days=7)
+    print("  " + count_label + ": " + str(result.get(count_key, 0)), flush=True)
+    return _report_legs(result)
 
 
 def main() -> int:
