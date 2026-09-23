@@ -193,6 +193,20 @@ def _reload_with_home(monkeypatch, home):
 def test_a_sandboxed_home_does_not_fork_the_ledger(tmp_path, monkeypatch):
     """A god's gateway session runs with HOME set to its profile sandbox.
 
+    HOW TO FALSIFY THIS — patch what `_account_home()` READS, not the module
+    attribute. `_reload_with_home()` calls `importlib.reload(M)`, which
+    re-executes the module source and **discards any patch applied to the
+    module's own attributes**. So `M._account_home = lambda: ...` followed by a
+    reload silently falsifies nothing and leaves a green suite, which reads as
+    "this test is vacuous" when it is not. Thoth hit exactly that and nearly
+    reported the test as weak.
+
+    Patch `pwd.getpwuid` instead (see the fake in this file), or edit the source
+    the way the original falsification did — a source edit survives the reload
+    because the reload re-runs it. Verified: making `pw_dir` follow `$HOME`
+    fails THIS test, with `sandboxed_home()` returning '' because both sides
+    then agree on the spoofed home.
+
     The ledger forked in production because the path was Path.home()-derived:
     a god wrote to ~/.hermes/profiles/<god>/home/.hermes/pantheon/... while
     everyone else wrote to ~/.hermes/pantheon/... Recurrence is counted per
