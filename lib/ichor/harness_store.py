@@ -44,7 +44,41 @@ from lib.ichor import edit_ledger
 
 log = logging.getLogger("ichor.harness_store")
 
-_HOME = Path.home()
+def _account_home() -> Path:
+    """The account's real home, from passwd — NOT `$HOME`.
+
+    A god's gateway session runs with `HOME` set to its profile sandbox, so
+    `Path.home()` resolves differently depending on who asks. For a store that
+    versions harness artifacts that is Phase 3 blocking: a `HarnessStore()`
+    constructed inside a gateway session points at
+    `profiles/<god>/home/pantheon-harness-store` — a DIFFERENT repo — and edits
+    get versioned into it silently, with no cross-write.
+
+    Worse, `aliases_of()` then walks the SANDBOX's profile tree, legitimately
+    finds nothing, and returns a confident empty list — the same "changes 0
+    profile(s)" class-4 failure this module was already fixed for once, arriving
+    again by a different route (a wrong root rather than a hardcoded glob).
+    """
+    try:
+        import pwd
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except (ImportError, KeyError, OSError):
+        return Path.home()
+
+
+def sandboxed_home() -> str:
+    """The sandboxed `$HOME` when it disagrees with the account home, else ""."""
+    real = _account_home()
+    env_home = os.environ.get("HOME", "")
+    if not env_home:
+        return ""
+    try:
+        return env_home if Path(env_home).resolve() != real.resolve() else ""
+    except OSError:
+        return env_home
+
+
+_HOME = _account_home()
 
 #: The store lives OUTSIDE ~/.hermes and outside the pantheon repo.
 STORE_DIR = Path(os.environ.get("ICHOR_HARNESS_STORE", str(_HOME / "pantheon-harness-store")))
@@ -113,6 +147,16 @@ class HarnessStore:
         self.repo = Path(repo_dir) if repo_dir else STORE_DIR
         self.live_root = Path(live_root) if live_root else LIVE_ROOT
         self.ledger_path = Path(ledger_path) if ledger_path else edit_ledger.LEDGER_PATH
+        # Warn at CONSTRUCTION, not at write time. A wrong root silently changes
+        # the blast-radius answer (aliases_of walks the wrong tree and returns a
+        # plausible empty list) before anything is written, so a warning that
+        # fires on write is a warning that fires after the misleading answer.
+        self.sandboxed_home = sandboxed_home()
+        if self.sandboxed_home:
+            log.warning(
+                "harness store: HOME is sandboxed (%s); using canonical store %s / live_root %s",
+                self.sandboxed_home, self.repo, self.live_root,
+            )
         self._ensure_repo()
 
     # ── git plumbing ───────────────────────────────────────────────────────

@@ -18,9 +18,38 @@ import re
 from pathlib import Path
 from typing import Optional
 
-_REAL_HOME = os.path.expanduser("~")
-# Guard against Hermes profile home stub (e.g. ~/.hermes/profiles/thoth/home/)
-# Resolve up to the real home directory by climbing up from the stub.
+def account_home() -> Path:
+    """The account's real home, from passwd — NOT `$HOME`.
+
+    `$HOME` is the PROFILE SANDBOX inside a god's gateway session
+    (`~/.hermes/profiles/<god>/home`). So every path derived from `$HOME` —
+    `Path.home()`, `os.path.expanduser("~")` — silently resolves to a different
+    tree depending on WHO ASKS. That forked the mistake ledger in production, and
+    it forks the harness store, the Ichor DB path, and every `_REAL_HOME` below.
+
+    `~konan` and `pwd.getpwuid(os.getuid())` both go through the account database
+    and are immune; the uid form is user-agnostic, so it is the one used here.
+
+    Verified: with `HOME` set to a sandbox, `expanduser("~")` follows it and
+    `pwd.getpwuid(os.getuid()).pw_dir` does not.
+    """
+    try:
+        import pwd
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except (ImportError, KeyError, OSError):
+        return Path(os.path.expanduser("~"))
+
+
+# The name is kept because callers import it, but it was a LIE for 7 of its 12
+# sites: `os.path.expanduser("~")` follows `$HOME` exactly like `Path.home()`.
+# Keep this a STR, not a Path: callers do string operations on it
+# (e.g. `"..." in _REAL_HOME`), and changing the type broke collection.
+_REAL_HOME = str(account_home())
+# Guard against Hermes profile home stub (e.g. ~/.hermes/profiles/thoth/home/).
+# `account_home()` above already resolves this exactly, so on the normal path this
+# is dead. It is kept as the FALLBACK guard: if the `pwd` lookup ever fails,
+# `account_home()` degrades to `expanduser("~")`, which follows `$HOME` — and then
+# this climb is the only thing standing between a god session and a forked tree.
 if ".hermes/profiles" in _REAL_HOME:
     parts = _REAL_HOME.split(os.sep)
     # Find the index of '.hermes' and go one level above it
