@@ -57,11 +57,18 @@ _WEIGHTS_HISTORY = _HOME / ".hermes" / "ichor_weights_history.json"
 # then measures deviation FROM the latest shipped baseline, not from
 # a frozen 3-backend ancestor.
 BASELINE_WEIGHTS: Dict[str, float] = {
-    "fts5":      0.40,   # Phase 4: 0.30 → 0.40 (workhorse)
-    "vector":    0.20,   # Phase 4: 0.35 → 0.20 (hydrated-only effective)
-    "graph":     0.15,   # unchanged
-    "events":    0.15,   # Phase 4: 0.10 → 0.15 (decisions boost on top)
-    "reference": 0.10,   # unchanged P5c
+    # 2026-09-19 — first TUNED baseline (not a hand rebalance). Set by
+    # `scripts/ichor_weight_tune.py --objective linked` against the 70-query
+    # labeled golden set after the lane fixes: the graph lane had been pointing
+    # at a 0-byte legacy db and was starved at 0.15, while the keyword lanes were
+    # being handed raw prose. Full-set confirmation: entity-linked hit@5
+    # 0.045 → 0.517, MRR 0.015 → 0.579. `reference` is held at its pre-tuning
+    # value because that lane returns no candidates (frozen, not tuned).
+    "fts5":      0.09,
+    "vector":    0.05,
+    "graph":     0.73,
+    "events":    0.03,
+    "reference": 0.10,
 }
 # Alias matching the spec's literal example: `baseline = {'fts5': 0.45, ...}`
 _BASELINE_WEIGHTS = BASELINE_WEIGHTS

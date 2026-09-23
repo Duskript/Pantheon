@@ -31,6 +31,11 @@ EBBINGHAUS_C: float = 0.50  # curve constant — higher = slower decay
 
 # Don't touch events younger than this (hours).
 MIN_AGE_HOURS: float = 1.0
+# Bound the decay sweep to L3 (long-term memory, 30d+). L1/L2 rows are still
+# in their working window and their score should reflect access boosts, not
+# age. Without this bound the sweep is a whole-table UPDATE (1.82M rows before
+# the 2026-09-21 prune) that rewrote every FTS document too.
+L3_MIN_AGE_DAYS: float = 30.0
 
 # Floor: importance never drops below this (prevents total annihilation).
 IMPORTANCE_FLOOR: float = 0.001
@@ -55,7 +60,7 @@ def run_decay(
     dry_run: bool = True,
     reference_now: datetime | None = None,
 ) -> Dict[str, Any]:
-    """Apply Ebbinghaus decay to all ichor_events.
+    """Apply Ebbinghaus decay to L3 ichor_events (older than 30 days).
 
     Args:
         db_path: Path to ichor.db.
@@ -104,6 +109,10 @@ def run_decay(
             continue
 
         days_old = hours_old / 24.0
+        if days_old < L3_MIN_AGE_DAYS:
+            # inside the L1/L2 window -> not L3, leave the score alone
+            skipped += 1
+            continue
         old_imp = float(row["importance"] or 0)
         multiplier = ebbinghaus_multiplier(days_old)
         new_imp = round(old_imp * multiplier * DECAY_FACTOR, 4)
