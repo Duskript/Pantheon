@@ -215,6 +215,22 @@ def test_a_sandboxed_home_does_not_fork_the_ledger(tmp_path, monkeypatch):
     names and leaves the rest alone. The practical advice was right; the reason
     was over-generalised, and the reason is what a future reviewer reasons from.)
 
+    WHICH FALSIFICATION METHOD IS CORRECT depends on WHERE THE GUARD LIVES:
+
+      | guard lives in                      | falsify by                        | why |
+      |-------------------------------------|-----------------------------------|-----|
+      | a source-defined module attribute   | patching the SOURCE OF TRUTH it   | a module-attribute patch is |
+      |                                     | reads (e.g. `pwd.getpwuid`), or   | inert: the reload re-assigns |
+      |                                     | editing the source                | it |
+      | inline code (no separable seam)     | editing the source                | module patching cannot reach |
+      |                                     |                                   | it at all |
+
+    Both methods are correct for their case; the earlier disagreement between two
+    probes of the "same" thing was the symptom of this table not being written
+    down. `resolve_mistake`'s mechanism requirement is inline, so it has no seam —
+    falsify it by editing the source, or verify the BEHAVIOUR directly rather than
+    claiming a falsification you did not perform.
+
     Patch `pwd.getpwuid` instead (see the fake in this file), or edit the source
     the way the original falsification did — a source edit survives the reload
     because the reload re-runs it. Verified: making `pw_dir` follow `$HOME`
