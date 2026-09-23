@@ -102,6 +102,27 @@ text. 353 rows remain un-finalised, which is the number worth watching.
 `stats` correctly reports `{learned: 5, open: 3}`. **Only the fold is authoritative** — the raw field
 is a historical artifact, not current state. Anything reading the raw rows reports a stale state.
 
+**`importance` is degenerate in two lanes, and NOT in a third.** The differentiated version, which is
+the defensible claim:
+
+| table | n | distinct values | top value | share | degenerate? |
+|---|---|---|---|---|---|
+| `cold_events` | 77,675 | **32** | exactly `60.0` | 59.5% | **yes** |
+| `warm_entities` | 192,980 | **72** | exactly `50.0` | 48.3% | **yes** |
+| `ichor_cold_storage` | 2,619 | 53 | `39.505248627…` | 42.7% | partly |
+| `ichor_events` | 86,230 | **288** | `62.0` | 14.2% | **no** |
+
+So `importance` is degenerate in the **entity and cold-event lanes** — a single round number carries
+48–60% of rows — but **not** in `ichor_events`, which has 288 distinct values. The top values being
+exact round numbers (`50.0`, `60.0`) is what makes them read as **seeded defaults rather than measured
+scores**, which is the actionable part: a metric keyed on `importance` in those two lanes is keyed on
+a constant, and in `ichor_events` it is not.
+
+**Correction to a figure used earlier in this work:** `importance` was not 88% degenerate. 88% is the
+**logic-gate block rate** from `ichor-forge-improvement-report-2026-06-17.md:27` — a different finding
+about a different subsystem, which was fused with the importance observation and reported as one
+statistic. Nothing measured 88% importance. The table above supersedes that.
+
 ## 3. Measured baseline (corrected)
 
 ```

@@ -195,12 +195,58 @@ CREATE TABLE IF NOT EXISTS extraction_log (
     source_text TEXT,                                           -- the text that triggered extraction
     source_session_id TEXT,                                     -- session where it was found
     confidence REAL DEFAULT 1.0,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now')),
+    -- Phase 2 (metric contract): the yield's DENOMINATOR. Without it,
+    -- "yield per batch" is a rate with no denominator and cannot be
+    -- normalised across the adaptive batch sizes (10 vs 20). `writer`
+    -- disambiguates rows from different producers: 2,182 DB rows vs 183
+    -- journal batches is a 12x ratio, so this table is multi-writer.
+    events_in_batch INTEGER,
+    writer TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_extraction_log_entity ON extraction_log(entity_id);
 CREATE INDEX IF NOT EXISTS idx_extraction_log_relationship ON extraction_log(relationship_id);
 CREATE INDEX IF NOT EXISTS idx_extraction_log_method ON extraction_log(method);
 CREATE INDEX IF NOT EXISTS idx_extraction_log_session ON extraction_log(source_session_id);
+
+-- ---------------------------------------------------------------------------
+-- Entity aliases (Phase 2D — Entity Resolution). Every alias variant of an
+-- entity maps to the canonical (surviving) entity, so retrieval by any
+-- alias returns the same node. Populated by lib/ichor/entities/entity_resolve.py
+-- on merge; UNIQUE(alias) keeps alias → canonical a clean 1:1 lookup.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS entity_aliases (
+    id INTEGER PRIMARY KEY,
+    canonical_entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    alias TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_aliases_alias ON entity_aliases(alias);
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_canonical ON entity_aliases(canonical_entity_id);
+"""
+
+
+# ---------------------------------------------------------------------------
+# Phase 3B cascade trigger — expire relations when an entity is superseded.
+#
+# The `entities` table signals supersede via `merged_into` (set when an
+# entity is merged into a canonical survivor).  When that happens, any
+# still-open relationship touching the loser is expired at the SQL layer —
+# zero application code, zero latency, single source of truth for
+# valid_to.  Idempotent: `WHERE valid_to IS NULL` + a WHEN guard make a
+# re-supersede a no-op.  SPEC trigger name used verbatim.
+# ---------------------------------------------------------------------------
+_ENTITY_TRIGGERS_SQL = """
+DROP TRIGGER IF EXISTS expire_relations_on_entity_supersede;
+CREATE TRIGGER expire_relations_on_entity_supersede
+AFTER UPDATE OF merged_into ON entities
+FOR EACH ROW
+WHEN NEW.merged_into IS NOT NULL
+     AND (OLD.merged_into IS NULL OR OLD.merged_into <> NEW.merged_into)
+BEGIN
+    UPDATE relationships SET valid_to = CURRENT_TIMESTAMP
+    WHERE (source_id = NEW.id OR target_id = NEW.id) AND valid_to IS NULL;
+END;
 """
 
 
@@ -258,6 +304,10 @@ def migrate(db_path: Path | str | None = None) -> dict:
         # the `provisional` column added there.
         phase1_indexes_applied = _apply_phase1_indexes(conn)
 
+        # Phase 3B — expire_relations_on_entity_supersede cascade trigger.
+        # Idempotent: DROP TRIGGER IF EXISTS + CREATE TRIGGER.
+        triggers_applied = _apply_entity_triggers(conn)
+
         # B1 (Pass 3.1) — seed canonical relationship types
         # (learned_from, superseded_by, derived_from, replaces).
         # Idempotent: existing types are left untouched. Called after
@@ -287,6 +337,7 @@ def migrate(db_path: Path | str | None = None) -> dict:
             "already_present": already,
             "tables_total": len(SCHEMA_TABLES),
             "migrations_applied": migrations_applied,
+            "triggers_applied": triggers_applied,
             "seed_result": seed_result,
             "entity_seed_result": entity_seed_result,
         }
@@ -339,6 +390,20 @@ _MIGRATIONS: list[dict] = [
         "table": "relationships",
         "column": "provisional",
         "ddl": "ALTER TABLE relationships ADD COLUMN provisional INTEGER NOT NULL DEFAULT 0",
+    },
+    # Phase 2 (metric contract): extraction_log recorded how much came OUT of a
+    # batch and never how much went IN, so yield could not be normalised across
+    # the adaptive batch sizes (10 vs 20). The denominator existed only in
+    # journald, which rotates.
+    {
+        "table": "extraction_log",
+        "column": "events_in_batch",
+        "ddl": "ALTER TABLE extraction_log ADD COLUMN events_in_batch INTEGER",
+    },
+    {
+        "table": "extraction_log",
+        "column": "writer",
+        "ddl": "ALTER TABLE extraction_log ADD COLUMN writer TEXT",
     },
 ]
 
@@ -401,6 +466,18 @@ def _apply_phase1_indexes(conn: sqlite3.Connection) -> list[str]:
         conn.execute(ix["ddl"])
         applied.append(name)
     return applied
+
+
+def _apply_entity_triggers(conn: sqlite3.Connection) -> list[str]:
+    """Install the Phase 3B cascade trigger (idempotent).
+
+    `expire_relations_on_entity_supersede` fires when an entity's
+    `merged_into` is set and expires its still-open relationships at the
+    SQL layer. DROP TRIGGER IF EXISTS + CREATE TRIGGER makes repeated
+    migrate() calls safe. Returns the names of triggers (re)installed.
+    """
+    conn.executescript(_ENTITY_TRIGGERS_SQL)
+    return ["expire_relations_on_entity_supersede"]
 
 
 def validate(db_path: Path | str | None = None) -> dict:

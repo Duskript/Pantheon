@@ -214,6 +214,10 @@ def _call_extract_incremental(
             batch_size=batch_size,
             provider_cfg=provider_cfg,
             session_id=f"l2-full-corpus",
+            # Name the producer. extraction_log is multi-writer (2,182 DB rows
+            # vs 183 journal batches), so a row's origin has to be recorded or
+            # any metric over this table mixes producers.
+            writer="run_l2_full_corpus",
         )
     finally:
         con.close()

@@ -40,6 +40,10 @@ from typing import Any, Callable, Optional
 
 from lib.ichor.entities.extraction import supersede_if_duplicate
 
+# Hard cap on an entity summary produced by one extraction pass. Keeps the
+# render path bounded and stops a chatty model from writing paragraphs.
+MAX_SUMMARY_CHARS = 240
+
 # Prompt template. Asks the LLM for a JSON object with three arrays:
 # entities, relationships, and relationship_types (any new types the
 # LLM discovers that aren't in the canonical registry).
@@ -82,7 +86,7 @@ Guidance on the LIFECYCLE family (superseded_by, replaces):
 Output ONLY valid JSON of this shape (no prose before/after):
 {{
   "entities": [
-    {{"name": "Anthropic", "type": "organization", "aliases": ["anthropics", "Anthropic PBC"], "confidence": 0.95}}
+    {{"name": "Anthropic", "type": "organization", "aliases": ["anthropics", "Anthropic PBC"], "confidence": 0.95, "summary": "AI safety company whose API backs the connector layer."}}
   ],
   "relationships": [
     {{"source": "Alice", "type": "works_at", "target": "Anthropic", "confidence": 0.9, "valid_from": "2025-01-01"}}
@@ -94,6 +98,13 @@ Output ONLY valid JSON of this shape (no prose before/after):
 
 If a turn has no entities, omit it. Don't invent relationships that
 aren't supported by the text. Confidence 0.0–1.0; use <0.6 for weak signals.
+
+Every entity MUST carry a "summary": ONE sentence, max 200 characters,
+stating what the entity IS and why it matters, grounded ONLY in the turns
+above. Prefer concrete specifics (role, relation to Konan/Pantheon, what it
+does) over filler such as "a person referenced in ...". Never speculate and
+never add outside knowledge. If the turns give nothing beyond the bare name,
+return an empty string for that summary — empty beats invented.
 
 Conversation turns:
 {turns_json}
@@ -196,6 +207,16 @@ def parse_extraction(raw: str) -> dict[str, Any]:
         if not isinstance(aliases, list):
             aliases = []
         aliases = [a for a in aliases if isinstance(a, str)]
+        # L2 summaries: the model is asked for one grounded sentence per
+        # entity. Missing/None/non-string collapses to "" (never the string
+        # "None"); an over-long answer is truncated at MAX_SUMMARY_CHARS so a
+        # chatty model cannot write a paragraph into the render path.
+        summary = e.get("summary")
+        if not isinstance(summary, str):
+            summary = ""
+        summary = summary.strip()
+        if len(summary) > MAX_SUMMARY_CHARS:
+            summary = summary[: MAX_SUMMARY_CHARS - 3].rstrip() + "..."
         try:
             confidence = float(e.get("confidence", 0.7))
         except (TypeError, ValueError):
@@ -206,6 +227,7 @@ def parse_extraction(raw: str) -> dict[str, Any]:
             "type": ent_type.strip(),
             "aliases": aliases,
             "confidence": confidence,
+            "summary": summary,
         })
 
     # Filter + validate each relationship
@@ -308,26 +330,57 @@ def _get_or_create_entity(
     aliases: list[str],
     confidence: float,
     provisional: bool,
+    summary: str = "",
 ) -> int:
     """Return the entity id for (name, type_id). Create if missing.
+
     If a different-type entity with the same name exists, prefer the
-    existing one (don't fail)."""
+    existing one (don't fail).
+
+    `summary` is the grounded one-sentence description from the extraction
+    pass. New rows store it directly; an existing row only receives it when
+    its current summary is empty — see `_fill_summary_if_empty` for why an
+    existing summary must never be overwritten by a later extraction.
+    """
     row = conn.execute(
-        "SELECT id, aliases FROM entities WHERE name = ? AND type_id = ?",
+        "SELECT id, aliases, summary FROM entities WHERE name = ? AND type_id = ?",
         (name, type_id),
     ).fetchone()
     if row:
-        return int(row["id"])
+        eid = int(row["id"])
+        _fill_summary_if_empty(conn, eid, summary)
+        return eid
     # Also check for name-only match (different type) — keep both for now
     # (they represent different facets of the same name)
     aliases_json = json.dumps(sorted(set(aliases)), separators=(",", ":"))
     cur = conn.execute(
         """INSERT INTO entities
            (type_id, name, aliases, summary, confidence, status, provisional, created_at, updated_at)
-           VALUES (?, ?, ?, '', ?, 'active', ?, datetime('now'), datetime('now'))""",
-        (type_id, name, aliases_json, confidence, 1 if provisional else 0),
+           VALUES (?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))""",
+        (type_id, name, aliases_json, (summary or "").strip(), confidence, 1 if provisional else 0),
     )
     return int(cur.lastrowid) if cur.lastrowid is not None else 0
+
+
+def _fill_summary_if_empty(conn: sqlite3.Connection, entity_id: int, summary: str) -> bool:
+    """Fill an entity's summary, but only while it is still empty.
+
+    The guard is the whole point: an entity that already carries a summary
+    was summarised by a real semantic pass (or an earlier grounded
+    extraction), and re-extraction from a *different* set of turns must not
+    clobber it — the same rule the Fix D backfill enforces. Returns True
+    when a row was actually updated.
+    """
+    text = (summary or "").strip()
+    if not text:
+        return False
+    cur = conn.execute(
+        """UPDATE entities
+              SET summary = ?, updated_at = datetime('now')
+            WHERE id = ? AND (summary IS NULL OR TRIM(summary) = '')""",
+        (text, entity_id),
+    )
+    return bool(cur.rowcount)
 
 
 def _get_or_create_relationship(
@@ -374,6 +427,8 @@ def _store_extraction(
     source_text: str,
     provisional: bool,
     session_id: str | None = None,
+    events_in_batch: int | None = None,
+    writer: str = "l2_llm",
 ) -> dict[str, int]:
     """Store a parsed extraction into entities + relationships + extraction_log.
 
@@ -385,6 +440,7 @@ def _store_extraction(
         "entity_types_created": 0,
         "rel_types_created": 0,
         "entities_created": 0,
+        "entity_summaries_written": 0,
         "relationships_created": 0,
         "extraction_logs_inserted": 0,
     }
@@ -420,15 +476,30 @@ def _store_extraction(
         name = e["name"]
         type_id = e.get("type") or "concept"
         before = conn.execute(
-            "SELECT 1 FROM entities WHERE name = ? AND type_id = ?",
+            "SELECT summary FROM entities WHERE name = ? AND type_id = ?",
             (name, type_id),
         ).fetchone()
         eid = _get_or_create_entity(
-            conn, name, type_id, e.get("aliases") or [], float(e.get("confidence", 0.7)), provisional
+            conn,
+            name,
+            type_id,
+            e.get("aliases") or [],
+            float(e.get("confidence", 0.7)),
+            provisional,
+            # Storage never trusts its caller: a whitespace-only summary from
+            # a non-parser caller must land as "" (hollow), not as blank text
+            # that would later read as "already summarised".
+            summary=(e.get("summary") or "").strip(),
         )
         entity_id_cache[(name, type_id)] = eid
+        supplied = bool((e.get("summary") or "").strip())
         if not before:
             counts["entities_created"] += 1
+            if supplied:
+                counts["entity_summaries_written"] += 1
+        elif supplied and not (before["summary"] or "").strip():
+            # Existing hollow row that this pass just filled.
+            counts["entity_summaries_written"] += 1
 
     # 4) Create relationships (using entity name → id resolution)
     for r in parsed.get("relationships", []):
@@ -469,9 +540,10 @@ def _store_extraction(
     evidence = f"L2 pass: {n_ent} entities, {n_rel} relationships (provisional={provisional})"
     conn.execute(
         """INSERT INTO extraction_log
-           (entity_id, relationship_id, fact_id, method, source_text, source_session_id, confidence, created_at)
-           VALUES (NULL, NULL, NULL, ?, ?, ?, 1.0, datetime('now'))""",
-        ("llm", evidence, session_id),
+           (entity_id, relationship_id, fact_id, method, source_text, source_session_id,
+            confidence, created_at, events_in_batch, writer)
+           VALUES (NULL, NULL, NULL, ?, ?, ?, 1.0, datetime('now'), ?, ?)""",
+        ("llm", evidence, session_id, events_in_batch, writer),
     )
     counts["extraction_logs_inserted"] = 1
 
@@ -538,6 +610,7 @@ def extract_incremental(
     model: str | None = None,
     call_fn: Optional[Callable[..., str]] = None,
     session_id: str | None = None,
+    writer: str = "l2_llm.extract_incremental",
 ) -> dict[str, Any]:
     """One incremental pass. Pulls up to `batch_size` events after
     `last_event_id`, runs LLM, stores as provisional. Returns counts
@@ -551,7 +624,8 @@ def extract_incremental(
             "last_event_id_after": last_event_id,
             "provisional": True,
             "stored": {"entity_types_created": 0, "rel_types_created": 0,
-                       "entities_created": 0, "relationships_created": 0,
+                       "entities_created": 0, "entity_summaries_written": 0,
+                       "relationships_created": 0,
                        "extraction_logs_inserted": 0},
             "skipped": "no events past last_event_id",
         }
@@ -564,6 +638,8 @@ def extract_incremental(
         source_text=source_text,
         provisional=True,
         session_id=session_id,
+        events_in_batch=len(rows),          # the denominator
+        writer=writer,
     )
     conn.commit()
     return {
@@ -585,6 +661,7 @@ def finalize(
     call_fn: Optional[Callable[..., str]] = None,
     session_id: str | None = None,
     max_residual: int = 10000,
+    writer: str = "l2_llm.finalize",
 ) -> dict[str, Any]:
     """Session-end finalize. Process the residual events (those past
     `last_event_id`) as non-provisional, then flip all provisional=1
@@ -606,6 +683,8 @@ def finalize(
             source_text=source_text,
             provisional=False,  # final = non-provisional
             session_id=session_id,
+            events_in_batch=len(residual),   # the denominator
+            writer=writer,
         )
         residual_count = len(residual)
 
@@ -641,4 +720,17 @@ def l2_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     out["llm_entity_types"] = conn.execute(
         "SELECT COUNT(DISTINCT type_id) FROM entities WHERE id IN (SELECT entity_id FROM extraction_log WHERE method = 'llm' AND entity_id IS NOT NULL)"
     ).fetchone()[0]
+    # Summary coverage: the metric that makes hollow nodes visible. A node
+    # with no summary still renders (read-time descriptor) but carries no
+    # real knowledge, so coverage is the leading recall-quality indicator.
+    out["entities_active"] = conn.execute(
+        "SELECT COUNT(*) FROM entities WHERE status = 'active'"
+    ).fetchone()[0]
+    out["entities_hollow"] = conn.execute(
+        "SELECT COUNT(*) FROM entities WHERE status = 'active' AND (summary IS NULL OR TRIM(summary) = '')"
+    ).fetchone()[0]
+    total = out["entities_active"] or 0
+    out["entity_summary_coverage_pct"] = round(
+        100.0 * (total - out["entities_hollow"]) / total, 2
+    ) if total else 0.0
     return out
