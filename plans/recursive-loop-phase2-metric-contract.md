@@ -1,184 +1,204 @@
 # Pantheon Phase 2 — Metric Contract
 
-**Status:** DRAFT for Thoth's review. Not implemented. No evaluator built on it yet.
+**Status:** DRAFT v2 for Thoth's review. Not implemented. No evaluator built on it.
 **Author:** Hermes · **Date:** 2026-09-23 · **Plan ref:** `report-part2.md` Phase 2
 **Ruling applied:** outcome signal swapped off the mistake ledger; trust separation scheduled inside
 Phase 2 as the T2/T3 gate.
 
----
+## Revision history
 
-## 0. The headline finding: neither proposed signal can power a test today
+**v2** corrects three errors in v1, all found by Thoth against the live tree:
 
-Thoth proposed **L2 drainer extraction yield** and **Dojo per-tool success rates**. I measured both
-against the live tree before writing anything. Both fail — for different reasons.
+1. **Rate was wrong by ~20×.** v1 said "24.7 batches/day". That divided by the *window* (7 days)
+   instead of the *observed span* (8.63 h) — **a rate without its denominator, in the document about a
+   missing denominator.** Measured: **21.2 batches/hour → 509/day.**
+2. **Timer figure was wrong by 10×.** v1 said "the ~720/day the timer implies". `OnCalendar=*:0/20`
+   is **72 ticks/day**.
+3. **The capacity constraint is deleted.** It was an artifact of (1) and (2). Runs are not being
+   skipped: 2.78 runs/hour against 3 ticks/hour = **92.7% of ticks run**, 7.6 batches/run. Throughput
+   is healthy at ~9,928 events/day ≈ **3.5× intake**.
 
-| candidate signal | volume | denominator | verdict |
-|---|---|---|---|
-| L2 drainer extraction yield | **173 batches / 7d ≈ 24.7/day** | ❌ **not persisted** | usable **after** a 1-line instrumentation fix |
-| Dojo per-tool success rate | ❌ **0 live observations** | n/a | **dead** — series frozen 2026-07-20 |
-| mistake ledger (original proposal) | 5 events | n/a | **cannot power McNemar** — quantified in §5 |
-| retrieval `recall_log` | 30 rows | ❌ no outcome label | needs a labelled replay set first |
-
-**Dojo, specifically.** `profiles/marvin/skills/hermes-dojo/data/metrics.json` is 1,780 B and
-contains **three entries, all timestamped 2026-07-20 04:11–04:13**, with identical values
-(`sessions_analyzed: 32`, `total_tool_calls: 747`, `overall_success_rate: 90.0`). Every Dojo DB on
-the host is either 0 bytes or has all-zero tables:
-
-```
-0 B        /home/konan/.hermes/hermes_dojo.db
-0 B        /home/konan/.hermes/dojo/hermes_dojo.db
-0 B        /home/konan/pantheon/hermes-dojo/hermes_dojo.db
-36,864 B   /home/konan/.hermes/hermes-dojo/hermes_dojo.db  -> candidates: 0, sessions: 0, messages: 0
-```
-
-So the Dojo rate is not thin, it is **absent** — a stale snapshot from two months ago. This is the
-*third* class of failure we have hit on this thread: not "green but wrong" (clawforge) and not
-"silent no-op" (forge marker), but **"the instrument was never wired."** No evaluator can be built on
-it, and reviving the writer is a separate task, not a Phase 2 deliverable.
+Consequence: **the plan is ~20× cheaper than v1 claimed.** n=200 paired is **0.39 days**, not 8.1.
 
 ---
+
+## 0. Taxonomy: four failure classes, and the worst one is new
+
+v1 mis-classified the Dojo as "never wired". It was wired — it ran three times in 166 seconds on
+2026-07-20 and stopped. That is a distinct class:
+
+| # | class | example | signature | guard |
+|---|---|---|---|---|
+| 1 | **green-but-wrong** | clawforge `SKIPPED` + exit 0 | exit code clean, work absent | assert the *effect*, not the exit |
+| 2 | **silent no-op** | forge marker already present | nothing written, nothing logged | log the no-op explicitly |
+| 3 | **never wired** | — | no number at all | absence is visible |
+| 4 | **stale-but-plausible** | Dojo `metrics.json` | **a number that is not obviously wrong; only the timestamp gives it away** | **freshness assertion** |
+
+**Class 4 is the worst because the report looks alive.** Classes 1–3 all present something
+*detectably* wrong or absent; class 4 presents a confident number that stopped being true 65 days ago
+and keeps being printed. The guard is not more instrumentation — it is a **freshness assertion on
+every metric the evaluator reports**: a declared `max_age`, and **hard failure, not a warning**, when
+it is exceeded. This is also how the 103-day-stale Ichor Forge report surfaced this morning.
 
 ## 1. What this contract measures
 
 **Outcome:** L2 knowledge-graph extraction **yield per event** — `(entities + relationships)` emitted
 per input event, over a batch.
 
-**Why this and not something else:** it is the only candidate with real volume, a parseable
-per-observation value, and a *direct* causal link to a harness change (the extraction prompt, the
-batch size, the provider/model, the retry policy, the pre-filter). A change to any of those should
-move yield, and nothing else in the system should.
+**Why:** it is the only candidate with real volume, a parseable per-observation value, and a direct
+causal link to a harness change (extraction prompt, batch size, provider/model, retry policy,
+pre-filter).
 
-**What it explicitly is NOT:** a measure of quality. See §6 — yield is a **proxy** and is trivially
-gameable.
+**What it is NOT:** a measure of quality. Yield is a **proxy** and is trivially gameable — see §6.
 
-## 2. ⚠️ Prerequisite: the denominator is not persisted (blocking)
+## 2. Prerequisite: persist the denominator — **one column, not a pipeline**
 
-The yield is written to `extraction_log.source_text` as prose:
-
-```
-'L2 pass: 49 entities, 18 relationships (provisional=True)'   -- source_text
-   entity_id: None   relationship_id: None   fact_id: None    -- all NULL
-```
-
-**Batch size is not a column, and is not recorded anywhere durable.** So `yield` has no denominator
-in the DB — a rate without its denominator, which is the metric-integrity defect this codebase
-already has a skill for. The denominator *exists* but only in journald, which rotates:
+**v1 overstated the fix size.** Yield-per-*batch* is already recoverable: the prose in
+`extraction_log.source_text` is parseable (`'L2 pass: 5 entities, 4 relationships (provisional=True)'`)
+and v1 parsed it (n=2,172). What is genuinely missing is **events consumed per batch** — the
+denominator:
 
 ```
-08:29:14 | batch 10 | batch_size 20 | events 20 | new_id 386534 | + 28 entities +  8 rels | total 200 events processed | 0.4 ev/s | 546.0s
+PRAGMA table_info(extraction_log)
+  id, entity_id, relationship_id, fact_id, method, source_text,
+  source_session_id, confidence, created_at
+  has batch_size / events: False
+  of 2,172 'L2 pass' rows, entity_id NOT NULL: 0        <- the FK columns are dead
 ```
 
-**Required before any evaluation runs:** persist per-batch `{batch_id, batch_size, events_in_batch,
-entities, relationships, provider, model, prompt_hash, duration_s, status}` as structured columns (or
-a dedicated `l2_yield_obs` table). This is skill step 2 — *log the evaluation, not just the
-outcome* — and it is the same fix already applied to the forge's gate denominators.
+**The prerequisite is therefore one column** (`events_in_batch`, plus a `writer` id so the
+multi-writer ambiguity below is resolvable), not a new metric pipeline. That is a small change and it
+should be the first work item — not a blocker to be scheduled around.
 
-**Note the two sources already disagree**, which is itself a reason to persist one of them properly:
+**Multi-writer ambiguity, confirmed:** 2,172 DB rows vs 183 journal batches is a **12× ratio**, so
+`extraction_log` is unambiguously written by more than the drainer. The two sources also disagree on
+magnitude — DB mean yield/batch **45.5** (n=2,172) vs journal **26.6** (n=183). **Any metric built on
+the unqualified `extraction_log` is measuring at least two different things.** Hence the `writer`
+column.
+
+## 3. Measured baseline (corrected)
 
 ```
-DB  extraction_log 'L2 pass' rows : mean yield/batch 45.5, sd 42.1, n 2,172
-journal per-batch records         : mean yield/batch 26.6, sd 16.4, n 173
+complete per-batch records  : 183      all dated 2026-09-23
+observed span               : 8.63 h   (00:04:39 -> 08:42:33)
+rate                        : 21.2 batches/hour -> 509 batches/day
+peak (06-08h)               : 30.0 batches/hour
+runs                        : 24  = 2.78/hour vs 3 ticks/hour -> 92.7% of ticks ran
+batches per run             : 7.6
+events processed            : 3,570 / 8.63 h -> 9,928 events/day = 3.5x the 2,856/day arrivals
+YIELD PER EVENT             : mean 1.371  sd 0.817  median 1.300  CV 0.60
+batch sizes present         : [10, 20]   (adaptive halving is live)
+zero-yield batches          : 0
 ```
 
-The DB includes non-drainer writers and backfills; the journal covers only the drainer. **Any metric
-built on the unqualified `extraction_log` is measuring at least two different things.**
+**Cross-check:** an independent derivation this morning put the drainer at 3.7× intake; this run
+measures 3.5×. Consistent, from separate data.
 
-## 3. Unit of observation and pairing
+## 4. Unit of observation and pairing
 
 - **Unit:** one extraction batch over a fixed corpus slice.
-- **Design:** **paired** — the same slice extracted under baseline and candidate, so the comparison
-  is within-slice and the slice's difficulty cancels. Unpaired comparison across different slices
-  would confound the candidate with corpus drift, which is large here (CV 0.60).
-- **Fixed slice:** the replay set is drawn from the **already-extracted** corpus (≈77.6K
-  `cold_events`) so slices are stable and re-runnable, and the OOD vault is drawn from the remainder
-  and is never seen by the proposer.
-- **Stratification:** by `batch_size` (10 vs 20 — adaptive halving is live and visible in the data:
-  `distinct batch_sizes: [10, 20]`), by source lane, and by event class. Stratifying on batch size is
-  mandatory: it is currently the largest single known driver of yield.
+- **Design: paired** — the same slice extracted under baseline and candidate, so slice difficulty
+  cancels. Unpaired comparison across different slices confounds the candidate with corpus drift,
+  which is large here (CV 0.60).
+- **Buy pairing before buying n.** At CV 0.60 the metric is noisy; a same-event-set replay is the
+  variance fix and it halves the MDE at fixed n (§5). Increasing n is the expensive lever.
+- **Fixed slice:** drawn from the already-extracted corpus (≈77.6K `cold_events`) so slices are
+  stable and re-runnable. The OOD vault is drawn from the never-extracted remainder.
+- **Stratification:** by `batch_size` (10 vs 20 — the largest known driver of yield), by source lane,
+  and by event class.
 
-## 4. Measured baseline (7 days, real data)
+## 5. Power: MDE at 2σ, re-priced at the corrected rate
 
-```
-complete per-batch records parsed : 173
-observed rate                     : 24.7 batches/day
-batch sizes present               : [10, 20]
-YIELD PER EVENT                   : mean 1.371   sd 0.817   median 1.300   CV 0.60
-zero-yield batches                : 0
-```
+`MDE = 2·sd/√n` (unpaired) and `2·(0.5·sd)/√n` (paired, sd_diff ≈ half of sd):
 
-**24.7 batches/day, not the ~720/day the timer implies** (10 batches × 3 runs/hour). Batches take
-161–546 s, so runs overrun the 20-minute interval and the `flock` skips them. Capacity is a real
-constraint on how fast this instrument can reach power — recorded here because it sets the calendar
-in §5, and it is a separate finding worth its own issue.
-
-## 5. Power: MDE at 2σ, from the measured sd
-
-`MDE = 2·sd/√n` (unpaired, worst case) and `2·(0.5·sd)/√n` (paired, sd_diff ≈ half of sd):
-
-| n batches | unpaired MDE | as % of mean | days @ 24.7/day | paired MDE (0.5·sd) | as % |
+| n | unpaired MDE | % mean | paired MDE | % mean | **days (paired)** |
 |---|---|---|---|---|---|
-| 50 | 0.231 | 16.9% | 2.0 | 0.116 | 8.4% |
-| 100 | 0.163 | 11.9% | 4.0 | 0.082 | 5.9% |
-| 200 | 0.116 | 8.4% | 8.1 | 0.058 | **4.2%** |
-| 400 | 0.082 | 6.0% | 16.2 | 0.041 | 3.0% |
-| 1000 | 0.052 | 3.8% | 40.5 | 0.026 | 1.9% |
+| 50 | 0.231 | 16.9% | 0.116 | 8.4% | **0.10** |
+| 100 | 0.163 | 11.9% | 0.082 | 6.0% | **0.20** |
+| **200** | 0.116 | 8.4% | 0.058 | **4.2%** | **0.39** |
+| 400 | 0.082 | 6.0% | 0.041 | 3.0% | **0.79** |
+| 1000 | 0.052 | 3.8% | 0.026 | 1.9% | **1.96** |
 
-**Acceptance criterion:** a candidate must move yield/event by **≥4.2%** (n=200 paired, ≈8 days) to
-clear 2σ. Effects below that are **not detectable** and must be reported as *inconclusive*, never as
-"no effect" — absence of evidence at this n is not evidence of absence.
+**Acceptance:** a candidate must move yield/event by **≥4.2%** (n=200 paired, **0.39 days**) to clear
+2σ. Below that, report **inconclusive — never "no effect."**
 
-**This is Thoth's point, quantified.** At the mistake ledger's n=5, the same test detects only a
-**27%** change — i.e. nothing that would ever really happen. That is why the signal had to move.
+**The threshold is set from the decision, not from the data.** The question is not "what can we
+detect" but "what yield change would change what we *do*?" If nothing below 5% would ever change an
+action, 4.2% is sufficient and this is closed. If a 2% change matters, the answer is **still not
+"more n"** — it is better pairing, which costs 1.96 days even at n=1000.
 
-## 6. Goodhart guards — what must NOT be optimized
+**This is Thoth's original point, quantified:** at the mistake ledger's **n=5** the same test detects
+only a **27%** change — nothing that would ever really happen.
 
-1. **Yield alone is gameable.** An extractor that emits more, junkier entities scores higher.
-   Yield is therefore **never a sole acceptance criterion**: a candidate must clear the yield
-   threshold **and** hold a **precision floor** measured on the OOD vault (§7). A yield win that
-   breaks precision is a **reject**.
-2. **Tool-gate block rate is out of scope** (plan constraint #6). It is a policy outcome, not
-   capability, and optimising it is a trap.
-3. **No metric may be reported without its denominator.** Every reported rate carries `n` and the
-   batch sizes it spans, or it prints `n/a — no denominator` (skill steps 4–5).
-4. **Pre-registration.** The threshold, n, strata, and decision rule are frozen **before** a
-   candidate is run. Moving a threshold after seeing the result voids the result.
+## 6. Goodhart guards
+
+1. **Yield is gameable** (split entities, emit more per event). It is never a sole criterion.
+2. **Precision co-criterion — as a decision rule, not a preference:**
+
+   - **If the vault can carry ≥200 labelled items → precision is PRIMARY, yield secondary.** Precision
+     is the objective that cannot be gamed.
+   - **If it cannot → yield-primary is defensible only with both:**
+     (a) the golden set **frozen and content-hashed before the first experiment** — without the hash,
+     a yield win can be manufactured by relabelling, and "precision non-inferiority" becomes
+     undetectably gameable;
+     (b) a **pre-registered non-inferiority margin**, declared before the run, not chosen after.
+
+   A procedural constraint (label volume) must not silently become the objective.
+3. **Tool-gate block rate is out of scope** (plan constraint #6) — a policy outcome, not capability.
+4. **No metric without its denominator.** Every reported rate carries `n` and its strata, or prints
+   `n/a — no denominator`.
+5. **Freshness assertion (§0 class 4).** Every reported metric declares `max_age` and **fails hard**
+   past it. A metric that cannot state when it was last written is not reported.
+6. **Pre-registration.** Threshold, n, strata, golden-set hash, and decision rule are frozen before a
+   candidate runs. Moving any of them after seeing the result voids the result.
 
 ## 7. OOD vault and judge
 
-- **OOD vault:** write-only from the harness side; **exactly one reader — the eval cron.** The
-  proposer must have **no read path** to it (plan constraint #8). Contents drawn from the
-  never-extracted remainder so no candidate can be tuned against it.
+- **Vault:** write-only from the harness side; **exactly one reader — the eval cron.** The proposer has
+  **no read path** to it (plan constraint #8). Drawn from the never-extracted remainder.
 - **Judge:** pinned by content hash — model, version, prompt, temperature 0, `max_tokens`. Any change
-  to the judge is itself a ledgered harness edit under Phase 1's rules, so judge drift is versioned
-  rather than silent. Judge-drift audit: <2pp across two cycles on a fixed golden set.
-- **The judge must not run the live edited harness** (plan constraint #8) — circular and
-  self-fulfilling.
+  to the judge is itself a ledgered harness edit under Phase 1's rules, so drift is versioned rather
+  than silent. Judge-drift audit: <2pp across two cycles on a fixed golden set.
+- The judge must **not** run the live edited harness (constraint #8) — circular and self-fulfilling.
 
-## 8. Falsifiers — what would invalidate this instrument
+## 8. Explicitly EXCLUDED: Dojo metrics
 
-- **Precision floor fails while yield rises** → the metric is being gamed; suspend.
-- **Judge drift ≥2pp** between cycles on the golden set → metric is not comparable across time.
-- **Denominator absent for any observation** → that observation is excluded, and the exclusion is
-  **recorded**, not silent. (Same lesson as the forge marker no-op and the store's backup skip.)
-- **Corpus drift exceeds the MDE** → the replay set must be re-drawn; a "win" that is corpus drift is
-  not a win.
+**Not "pending" — excluded.** A pending metric is an invitation for the evaluator to start reporting
+the stale number, which is precisely what happened for 65 days. Exclusion is deliberate.
 
-## 9. Trust separation (the T2/T3 gate — scheduled here, per ruling)
+**Evidence, with the exact path:** `~/.hermes/profiles/marvin/skills/hermes-dojo/data/metrics.json`
+— 1,780 B, a list of **3 entries, all identical** (`sessions_analyzed: 32`, `total_tool_calls: 747`,
+`overall_success_rate: 90.0`), timestamps **1784542266.5 / 1784542410.3 / 1784542432.0** — three
+writes inside ~166 seconds on 2026-07-20, then 65 days of silence. Every Dojo DB is 0 bytes or
+all-zero tables.
 
-Trust separation is a **Phase 2 deliverable and the gate on T2/T3 auto-apply**. It is not yet
-implemented. Required: the agent must have **no write path** to the ledger, the version store, or
-guardrail config; symlinks resolved before keying (done in `61293d4`); and no per-profile sandbox
-gaps. **T2/T3 auto-apply stays off until this lands.**
+**Two defects, neither an evaluator deliverable:**
+1. The writer stopped after 166 seconds. Reviving it is a writer fix, filed separately.
+2. **It lives inside one god's profile** (`profiles/marvin/skills/...`), so the Dojo's report is **not
+   fleet-visible at all.** Separate defect.
 
-## 10. Open questions for Thoth
+## 9. Falsifiers
 
-1. **Is yield/event the right proxy at all**, or should the primary be precision on a fixed golden
-   set with yield as the secondary? I chose yield-primary because it has volume and precision does
-   not yet — but that inverts the usual ordering and I want your read.
-2. **Is 4.2% a meaningful effect size** for extraction, or is it below the level that matters
-   operationally? If real effects are ~2%, this instrument needs n≈1000 (≈40 days) and the design
-   should change rather than the threshold.
-3. **Should the Dojo writer be revived as a Phase 2 dependency** or dropped and revisited later? I
-   lean: drop from Phase 2, file it, because reviving a writer is not an evaluator deliverable.
-4. **Is the capacity problem (24.7 batches/day vs 720 designed) in scope?** It sets the calendar for
-   every experiment and it looks like an independent defect.
+- Precision floor fails while yield rises → metric is being gamed; suspend.
+- Judge drift ≥2pp on the golden set between cycles → not comparable across time.
+- Any observation missing its denominator → excluded, and the exclusion is **recorded**, not silent.
+- Any reported metric exceeding its `max_age` → hard failure, no number emitted.
+- Corpus drift exceeding the MDE → re-draw the replay set; a "win" that is corpus drift is not a win.
+
+## 10. Trust separation (the T2/T3 gate — scheduled here)
+
+A **Phase 2 deliverable and the gate on T2/T3 auto-apply.** Not implemented. Required: the agent has
+**no write path** to the ledger, the version store, or guardrail config; symlinks resolved before
+keying (done, `61293d4`); no per-profile sandbox gaps. **T2/T3 auto-apply stays off until this lands.**
+
+## 11. Resolved / open
+
+**Resolved by Thoth's review:** Q2 (capacity) was a measurement error in v1 §4 — deleted, not filed.
+Q4 — Dojo excluded, not pending (§8). Q1 — replaced by the decision rule in §6.2. Q3 — threshold set
+from operational significance; buy pairing, not n (§5).
+
+**Still open:**
+1. Can the OOD vault carry **≥200 labelled items**? This determines which arm of §6.2 applies, and it
+   is the one open question that changes the design rather than the numbers.
+2. Is the golden set hashable **before** the first experiment, or does labelling have to happen
+   incrementally (which would weaken §6.2(b))?
