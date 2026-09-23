@@ -180,9 +180,6 @@ tallon-handoff.md
 .auditorium-*/
 
 # L2 corpus pipeline scripts (daily-loop, not hand-written code)
-scripts/run_l2_full_corpus.py
-scripts/resume_l2_full_corpus.py
-scripts/run_l2_corpus_wrapper.py
 scripts/populate_reference_knowledge.py
 scripts/diag_nats_listen.py
 scripts/l2_provider.json
