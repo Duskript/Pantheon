@@ -387,3 +387,37 @@ def test_revert_through_a_symlink_path_preserves_the_symlink(env):
     assert global_path.read_bytes() == original, "the SHARED file must be restored"
     assert rev["byte_identical"] is True
     assert rev["live_sha256"] == rev["restored_sha256"]
+
+
+# ── backup artifacts are excluded, and the exclusion is recorded ───────────
+
+def test_backup_artifacts_are_skipped_and_the_skip_is_recorded(env):
+    """The store IS the version history, so tracking a backup copy adds an
+    artifact that can drift from the original with nothing reading it.
+
+    Skipped — but recorded, because an unexplained absence from the store is
+    indistinguishable from a failed import. Same lesson as the forge appender's
+    silent marker no-op.
+    """
+    from lib.ichor.harness_store import is_backup_artifact
+
+    assert is_backup_artifact("hermes/profiles/_bootstrap-backups/SOUL.md")
+    assert is_backup_artifact("hermes/backups/SOUL.md")
+    assert not is_backup_artifact("hermes/profiles/thoth/SOUL.md")
+    assert not is_backup_artifact("hermes/SOUL.md")
+
+    bdir = env["live"] / "profiles" / "_bootstrap-backups"
+    bdir.mkdir(parents=True, exist_ok=True)
+    backup = bdir / "SOUL.md"
+    backup.write_bytes(b"# stale copy\n")
+    real = env["live"] / "SOUL.md"
+    real.write_bytes(b"# live\n")
+
+    env["store"].snapshot_paths([backup, real], "import with a backup artifact")
+
+    assert env["store"].last_skips == [
+        {"rel": "hermes/profiles/_bootstrap-backups/SOUL.md", "reason": "backup directory"}
+    ]
+    tracked = env["store"]._git("ls-files").stdout.split()
+    assert "hermes/SOUL.md" in tracked
+    assert "hermes/profiles/_bootstrap-backups/SOUL.md" not in tracked

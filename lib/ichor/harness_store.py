@@ -56,6 +56,21 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def is_backup_artifact(rel: str) -> bool:
+    """True when a store-relative path lives in a backup directory.
+
+    The store IS the version history, so tracking a backup copy adds a second
+    artifact that can silently drift from the one it copies while nothing reads
+    it. It can only ever produce a confusing diff — e.g.
+    `profiles/_bootstrap-backups/SOUL.md` tracking `SOUL.md`.
+    """
+    for seg in rel.split("/"):
+        s = seg.lower()
+        if s in ("backup", "backups") or s.endswith("-backups") or s.endswith("_backups"):
+            return True
+    return False
+
+
 def _atomic_write(path: Path, data: bytes) -> None:
     """Atomically write `data` to `path`, writing THROUGH a symlink.
 
@@ -178,11 +193,19 @@ class HarnessStore:
 
     def snapshot_paths(self, paths: List[Path], message: str) -> str:
         """Copy live bytes into the store and commit. Returns the commit sha."""
+        self.last_skips = []
         for p in paths:
             p = Path(p)
             if not p.is_file():
                 continue
             rel = self.rel_for(p)
+            if is_backup_artifact(rel):
+                # Recorded, never silent: an unexplained absence from the store
+                # is indistinguishable from a failed import. The lesson from the
+                # forge appender's marker no-op applies here too.
+                self.last_skips.append({"rel": rel, "reason": "backup directory"})
+                log.info("harness store: skipped backup artifact %s", rel)
+                continue
             _atomic_write(self.store_path(rel), p.read_bytes())
         self._git("add", "-A")
         r = self._git("commit", "-q", "-m", message, check=False)
