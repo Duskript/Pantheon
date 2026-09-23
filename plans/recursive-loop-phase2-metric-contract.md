@@ -236,6 +236,34 @@ all-zero tables.
 2. **It lives inside one god's profile** (`profiles/marvin/skills/...`), so the Dojo's report is **not
    fleet-visible at all.** Separate defect.
 
+## 8b. Reporting and approval surface — LIVE
+
+**Approval + notification surface:** `#notifications` thread
+**`1552415266846154882`** ("recursive learning and improvements"), created by Konan
+2026-09-23 as the place where each upgrade and change gets approved.
+
+This is the *approval* surface. It is separate from the *reporting* surface, and both are
+separate from the diff — the point is that a proposal can be approved or rejected **without
+opening the diff**, which is only true if every entry carries its `expected_improvement`.
+
+**Delivery target for scheduled jobs:**
+```
+discord:1522263537186246717:1552415266846154882     # channel : thread
+```
+For cron-driven delivery set `attach_to_session=true` so the job owns its thread rather than
+posting loose messages into the channel.
+
+**Format rule:** every entry states *what improves, by how much, and why* — mechanism, metric,
+predicted delta, blast radius, reversibility. An entry without a filled `expected_improvement`
+is **rejected at intake**, per Konan's mandate, and the ledger enforces the same block on
+applied edits (`edit_ledger.build_record`).
+
+**First queue posted** 2026-09-23T20:26Z with 5 items: finish Hindsight (update the 20
+superseded tests), label independence (**blocks Phase 2**), merge the branch base, quarantine
+the shadow tree, and wire the freshness guard + sweep the remaining `Path.home()` constants.
+
+---
+
 ## 9. Falsifiers
 
 - Precision floor fails while yield rises → metric is being gamed; suspend.
