@@ -76,6 +76,32 @@ magnitude — DB mean yield/batch **45.5** (n=2,172) vs journal **26.6** (n=183)
 the unqualified `extraction_log` is measuring at least two different things.** Hence the `writer`
 column.
 
+### 2.1 Two further instrument defects, found while measuring
+
+**44 zero-yield batches — 2.0% of 2,182 parseable rows.** This is the measurable form of the #155
+hazard: ~**880 events retired from the cursor with no extraction** (44 × ~20 events). Small, but it is
+the concrete number behind "a zero-yield batch destroys events," and it is already identifiable, so it
+costs nothing to watch. **It is a probe, not a powered test** — 44 observations cannot carry a
+200-item claim and must not be written up as one.
+
+**`provisional` is degenerate in the prose, by construction.** The log text reads
+`provisional=True` in **2,181 of 2,182** rows (99.95% on one value). But the *column* carries real
+information:
+
+```
+entities.provisional      : {0: 22,175, 1: 353}   ->  1.6% provisional
+relationships.provisional : {0: 31,818, 1: 353}   ->  1.1% provisional
+```
+
+The prose records the state **at write time** (always `True`), and `finalize` later flips the column.
+So **anything filtering on the prose field is filtering on a constant** — query the column, not the
+text. 353 rows remain un-finalised, which is the number worth watching.
+
+**A related trap in the mistake ledger:** a `recorded` event keeps its *original* `state` forever
+(append-only by design), so reading `state` off the raw rows shows `open` for all 8 while the folded
+`stats` correctly reports `{learned: 5, open: 3}`. **Only the fold is authoritative** — the raw field
+is a historical artifact, not current state. Anything reading the raw rows reports a stale state.
+
 ## 3. Measured baseline (corrected)
 
 ```
@@ -133,17 +159,29 @@ only a **27%** change — nothing that would ever really happen.
 ## 6. Goodhart guards
 
 1. **Yield is gameable** (split entities, emit more per event). It is never a sole criterion.
-2. **Precision co-criterion — as a decision rule, not a preference:**
+2. **Precision co-criterion — as a decision rule, with BOTH conditions:**
 
-   - **If the vault can carry ≥200 labelled items → precision is PRIMARY, yield secondary.** Precision
-     is the objective that cannot be gamed.
-   - **If it cannot → yield-primary is defensible only with both:**
+   **Precision is PRIMARY iff the vault carries ≥200 labels from a source INDEPENDENT of the extractor
+   under test.** The independence condition is the binding one, not the count:
+
+   - **≥200 independent labels → precision is PRIMARY, yield secondary.** Precision is the objective
+     that cannot be gamed.
+   - **Labels from a judge sharing a backbone with the extractor → do NOT take this arm.** That
+     measures self-agreement, and precision-primary is then exactly as gameable as yield.
+   - **Otherwise → yield-primary is defensible only with both:**
      (a) the golden set **frozen and content-hashed before the first experiment** — without the hash,
      a yield win can be manufactured by relabelling, and "precision non-inferiority" becomes
      undetectably gameable;
      (b) a **pre-registered non-inferiority margin**, declared before the run, not chosen after.
 
-   A procedural constraint (label volume) must not silently become the objective.
+   A procedural constraint (label volume) must not silently become the objective. Nor may a
+   *shared-backbone judge* masquerade as an independent one — that is the failure mode that would make
+   precision-primary look principled while measuring the extractor against itself.
+
+   **Cost, and whose decision it is:** a judge from a **different model family** than the extractor
+   reaches the independent-label bar cheaply. Human labelling of 200 items is ≈**7 hours of Konan's
+   time** — bounded and real, but **his decision, not ours**. It is a cost to him, and it is not ours
+   to assign.
 3. **Tool-gate block rate is out of scope** (plan constraint #6) — a policy outcome, not capability.
 4. **No metric without its denominator.** Every reported rate carries `n` and its strata, or prints
    `n/a — no denominator`.
@@ -197,8 +235,18 @@ keying (done, `61293d4`); no per-profile sandbox gaps. **T2/T3 auto-apply stays 
 Q4 — Dojo excluded, not pending (§8). Q1 — replaced by the decision rule in §6.2. Q3 — threshold set
 from operational significance; buy pairing, not n (§5).
 
-**Still open:**
-1. Can the OOD vault carry **≥200 labelled items**? This determines which arm of §6.2 applies, and it
-   is the one open question that changes the design rather than the numbers.
-2. Is the golden set hashable **before** the first experiment, or does labelling have to happen
-   incrementally (which would weaken §6.2(b))?
+**v2.1 amendment — the §6.2 arm needs LABEL INDEPENDENCE, not just ≥200.** Thoth's correction, and it
+is the binding condition: labels from a judge sharing a backbone with the extractor measure
+self-agreement, and precision-primary is then exactly as gameable as yield. Full rule in §6.2.
+
+**Still open — one question, and it changes the design rather than the numbers:**
+
+1. **Can the vault carry ≥200 labels from a source INDEPENDENT of the extractor under test?** Candidate
+   volume is not the constraint (≈46K unprocessed events, ~500 batches/day). **Labelling is.** A judge
+   from a *different model family* than the extractor reaches the bar cheaply. Human labelling of 200
+   items is ≈**7 hours of Konan's time** — bounded, real, and **his decision, not ours to assign.**
+2. Is the golden set hashable **before** the first experiment, or must labelling happen incrementally
+   (which would weaken §6.2(b))?
+
+**Filed separately, not Phase 2 deliverables:** the Dojo writer stop (§8.1) and the Dojo report's
+profile-local location (§8.2).

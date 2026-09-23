@@ -128,3 +128,52 @@ def test_empty_ledger_is_not_an_error(tmp_path):
     missing = tmp_path / "nope.jsonl"
     assert M.load_mistakes(missing) == []
     assert M.stats(missing)["total"] == 0
+
+
+# ── `peer` detector: cross-god catches must be countable ───────────────────
+
+def _base(**over):
+    kw = dict(god="thoth", claim="a claim that was wrong", category="wrong_fact",
+              detected_by="peer", detected_by_god="hermes",
+              quote="the turn that revealed it", path=None)
+    kw.update(over)
+    return kw
+
+
+def test_peer_is_an_accepted_detector(tmp_path):
+    p = tmp_path / "ledger.jsonl"
+    rec = M.record_mistake(**_base(path=p))
+    assert rec["detected_by"] == "peer"
+    assert rec["detected_by_god"] == "hermes"
+
+
+def test_peer_requires_a_quote(tmp_path):
+    """Same evidence burden as a human catch: name the turn that revealed it."""
+    with pytest.raises(ValueError) as e:
+        M.record_mistake(**_base(path=tmp_path / "l.jsonl", quote=""))
+    assert "requires 'quote'" in str(e.value)
+
+
+def test_peer_requires_the_detecting_god(tmp_path):
+    """Without the god, the cross-god attribution this value exists for is lost."""
+    with pytest.raises(ValueError) as e:
+        M.record_mistake(**_base(path=tmp_path / "l.jsonl", detected_by_god=""))
+    assert "requires 'detected_by_god'" in str(e.value)
+
+
+def test_human_still_requires_a_quote(tmp_path):
+    with pytest.raises(ValueError) as e:
+        M.record_mistake(**_base(path=tmp_path / "l.jsonl", detected_by="human",
+                                        detected_by_god="", quote=""))
+    assert "detected_by='human' requires 'quote'" in str(e.value)
+
+
+def test_self_and_tool_need_no_quote(tmp_path):
+    p = tmp_path / "l.jsonl"
+    for d in ("self", "tool"):
+        M.record_mistake(**_base(path=p, detected_by=d, detected_by_god="", quote=""))
+    assert len([json.loads(l) for l in p.read_text().splitlines() if l.strip()]) == 2
+
+
+def test_detector_enum_is_exactly_the_four(tmp_path):
+    assert set(M.DETECTORS) == {"human", "self", "tool", "peer"}

@@ -89,7 +89,11 @@ CATEGORIES = (
 
 #: Who or what caught it. `human` is the highest-precision signal and the only
 #: one that requires a revealing turn.
-DETECTORS = ("human", "self", "tool")
+# `peer` exists because a peer god catching an error is neither human nor
+# self nor tool, and it is currently the most common real case. Without it a
+# cross-god catch has to be filed as "human", which flattens attribution in
+# the one artifact whose purpose is attribution. Pair it with detected_by_god.
+DETECTORS = ("human", "self", "tool", "peer")
 
 #: Lifecycle. `open` = recorded, not yet acted on. `learned` = a prevention has
 #: been written. `verified` = it has not recurred since. `wontfix` = accepted.
@@ -155,6 +159,15 @@ def validate(record: Dict[str, Any]) -> List[str]:
     if detected_by == "human" and not str(record.get("quote") or "").strip():
         problems.append("detected_by='human' requires 'quote' (the correcting turn)")
 
+    # A peer-caught mistake carries the same evidence burden as a human-caught
+    # one: name the turn that revealed it. And it must name WHICH peer, or the
+    # cross-god attribution this value exists to enable is still lost.
+    if detected_by == "peer":
+        if not str(record.get("quote") or "").strip():
+            problems.append("detected_by='peer' requires 'quote' (the revealing turn)")
+        if not str(record.get("detected_by_god") or "").strip():
+            problems.append("detected_by='peer' requires 'detected_by_god' (which peer)")
+
     # And every record must point at the offending instance.
     if not (record.get("offending_message_id") or record.get("claim")):
         problems.append("an offending instance is required (offending_message_id or claim)")
@@ -167,6 +180,7 @@ def record_mistake(
     claim: str,
     category: str,
     detected_by: str,
+    detected_by_god: str = "",
     quote: str = "",
     correction: str = "",
     offending_message_id: str = "",
@@ -191,6 +205,7 @@ def record_mistake(
         "claim": claim.strip(),
         "category": category,
         "detected_by": detected_by,
+        "detected_by_god": detected_by_god,
         "quote": quote.strip(),
         "correction": correction.strip(),
         "offending_message_id": offending_message_id,
@@ -315,6 +330,7 @@ def _cmd_record(args: argparse.Namespace) -> int:
         rec = record_mistake(
             god=args.god, claim=args.claim, category=args.category,
             detected_by=args.detected_by, quote=args.quote or "",
+            detected_by_god=getattr(args, "detected_by_god", "") or "",
             correction=args.correction or "",
             offending_message_id=args.offending_message_id or "",
             revealing_message_id=args.revealing_message_id or "",
@@ -367,6 +383,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_rec.add_argument("--claim", required=True, help="what exactly was wrong")
     p_rec.add_argument("--category", required=True, choices=list(CATEGORIES))
     p_rec.add_argument("--detected-by", required=True, choices=list(DETECTORS))
+    p_rec.add_argument("--detected-by-god", default="",
+                       help="which god detected it (required when --detected-by peer)")
     p_rec.add_argument("--quote", help="the turn that revealed it (required for human)")
     p_rec.add_argument("--correction", help="the correct form, if known")
     p_rec.add_argument("--offending-message-id")
