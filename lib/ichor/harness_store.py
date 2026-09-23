@@ -91,6 +91,12 @@ def _atomic_write(path: Path, data: bytes) -> None:
     os.replace(tmp, path)
 
 
+#: Artifact path segments shared across profiles BY DESIGN. A profile alias
+#: to one of these is the intended topology, not an accident: 2,328 of 3,008
+#: god SKILL.md files (77%) are symlinks into the shared global tree.
+_SHARED_BY_DESIGN = ("/skills/",)
+
+
 class HarnessStoreError(RuntimeError):
     pass
 
@@ -172,24 +178,53 @@ class HarnessStore:
 
     # ── core operations ────────────────────────────────────────────────────
 
-    def profiles_sharing(self, resolved: Path) -> List[str]:
-        """Profile names whose SOUL.md resolves to this same file.
+    def aliases_of(self, resolved: Path) -> List[str]:
+        """Every path under the live root that resolves to `resolved`.
 
-        Enumerates the real blast radius of an edit to a symlinked artifact:
-        editing the global SOUL.md changes every profile that points at it.
+        Generic on purpose. The previous version hardcoded `profiles/*/SOUL.md`,
+        so for ANY other artifact class it returned an empty list and the refusal
+        message read "changes 0 profile(s)" — understating the blast radius to
+        zero for a skill that is in fact shared by 8 gods. That is the class-4
+        failure (a confident number that is not obviously wrong) occurring inside
+        the guard that exists to report it.
+
+        Bounded to `*.md` under `profiles/*`: that covers the artifact classes the
+        store versions (SOUL.md, SKILL.md) without walking the whole of ~/.hermes,
+        which contains large unrelated trees.
         """
         out: List[str] = []
-        base = Path(self.live_root) / "profiles"
+        root = Path(self.live_root)
+        base = root / "profiles"
         if not base.is_dir():
             return out
         for prof in sorted(base.iterdir()):
-            soul = prof / "SOUL.md"
+            if not prof.is_dir():
+                continue
             try:
-                if soul.is_file() and soul.resolve() == resolved:
-                    out.append(prof.name)
+                for p in prof.rglob("*.md"):
+                    try:
+                        if p.is_symlink() and p.resolve() == resolved:
+                            out.append(str(p.relative_to(root)))
+                    except OSError:
+                        continue
             except OSError:
                 continue
-        return out
+        return sorted(out)
+
+    def is_shared_by_design(self, resolved: Path) -> bool:
+        """True when this artifact class is shared across profiles BY DESIGN.
+
+        Skills are deliberately fleet-wide: 2,328 of 3,008 god SKILL.md files
+        (77%) are symlinks into the shared global tree. A profile alias to one is
+        the intended topology, not an accident — unlike `profiles/hermes/SOUL.md`,
+        which aliases the global persona and surprises anyone who edits it.
+
+        So an alias to a shared-by-design artifact is NOT refused; it is resolved
+        and recorded against the resolved path, so one edit is one record instead
+        of up to eight profile-attributed ones.
+        """
+        s = str(resolved)
+        return any(seg in s for seg in _SHARED_BY_DESIGN)
 
     def snapshot_paths(self, paths: List[Path], message: str) -> str:
         """Copy live bytes into the store and commit. Returns the commit sha."""
@@ -287,21 +322,32 @@ class HarnessStore:
         # `expected_improvement.blast_radius` exists to prevent. So: refuse
         # unless the caller opts in, and when it does, record the real scope.
         symlink_extra: Dict[str, Any] = {}
+        record_path = live_path
         if live_path.is_symlink():
             resolved = live_path.resolve()
-            sharers = self.profiles_sharing(resolved)
-            if not allow_symlink:
+            aliases = self.aliases_of(resolved)
+            shared = self.is_shared_by_design(resolved)
+            if not allow_symlink and not shared:
                 raise HarnessStoreError(
                     f"{live_path} is a symlink to {resolved} — editing it changes "
-                    f"{len(sharers)} profile(s): {', '.join(sharers)}. Pass "
-                    f"allow_symlink=True to accept that scope, or target the "
+                    f"{len(aliases)} other path(s): {', '.join(aliases) or '(none found)'}. "
+                    f"Pass allow_symlink=True to accept that scope, or target the "
                     f"resolved path directly."
                 )
+            # Shared-by-design artifacts (skills) are resolved and RECORDED
+            # against the resolved path: one edit, one record, one honest
+            # blast radius — rather than up to eight profile-attributed edits to
+            # the same file, which is the defect this guard exists to surface.
+            if shared:
+                record_path = resolved
             symlink_extra = {
                 "resolved_target": str(resolved),
-                "shared_with": sharers,
-                "symlink_accepted": True,
+                "reached_via": str(live_path),
+                "aliases": aliases,
+                "shared_by_design": shared,
             }
+            if not shared:
+                symlink_extra["symlink_accepted"] = True
 
         rel = self.rel_for(live_path)
         before = live_path.read_bytes()
@@ -309,7 +355,7 @@ class HarnessStore:
         # ── no-op detection, RECORDED not skipped ─────────────────────────
         if marker and marker.encode("utf-8") in before:
             entry = edit_ledger.record_noop(
-                target_path=str(live_path),
+                target_path=str(record_path),
                 target_artifact_class=target_artifact_class,
                 author_god=author_god,
                 reason="marker already present",
@@ -320,7 +366,7 @@ class HarnessStore:
             return {"no_op": True, "reason": "marker already present", "event": entry}
         if new_bytes == before:
             entry = edit_ledger.record_noop(
-                target_path=str(live_path),
+                target_path=str(record_path),
                 target_artifact_class=target_artifact_class,
                 author_god=author_god,
                 reason="content identical to live bytes",
@@ -340,7 +386,7 @@ class HarnessStore:
             author_god=author_god,
             trigger=trigger,
             target_artifact_class=target_artifact_class,
-            target_path=str(live_path),
+            target_path=str(record_path),
             inputs_read=inputs_read,
             rationale=rationale,
             expected_improvement=expected_improvement,

@@ -290,7 +290,7 @@ def test_symlinked_target_records_its_real_scope_when_accepted(env):
     rec = edit_ledger.load_edits(env["ledger"])[0]
     # the diff understated nothing: the ledger names the resolution and the scope
     assert rec["resolved_target"].endswith("SOUL.md")
-    assert rec["shared_with"] == ["hermes"]
+    assert rec["aliases"] == ["profiles/hermes/SOUL.md"]
     assert rec["symlink_accepted"] is True
     # ...and the store keyed on the RESOLVED path, not the profile path
     assert res["rel"] == "hermes/SOUL.md", res["rel"]
@@ -421,3 +421,83 @@ def test_backup_artifacts_are_skipped_and_the_skip_is_recorded(env):
     tracked = env["store"]._git("ls-files").stdout.split()
     assert "hermes/SOUL.md" in tracked
     assert "hermes/profiles/_bootstrap-backups/SOUL.md" not in tracked
+
+
+# ── shared-by-design artifacts: skills are aliased fleet-wide on purpose ───
+
+def _make_shared_skill(env, gods=("thoth", "rheta", "marvin")):
+    """`profiles/<god>/skills/x/SKILL.md -> ~/.hermes/skills/x/SKILL.md`.
+
+    77% of god SKILL.md files are aliases to the shared global tree (2,328 of
+    3,008), because skills are deliberately fleet-wide. Unlike the SOUL.md
+    alias, this topology is intended.
+    """
+    global_skill = env["live"] / "skills" / "devops" / "demo" / "SKILL.md"
+    global_skill.parent.mkdir(parents=True, exist_ok=True)
+    global_skill.write_bytes(b"# Demo skill\n")
+    for g in gods:
+        d = env["live"] / "profiles" / g / "skills" / "devops" / "demo"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").symlink_to(global_skill)
+    return global_skill
+
+
+def test_a_shared_by_design_skill_alias_is_not_refused(env):
+    """Refusing these would reject 77% of skill edits on the first run."""
+    global_skill = _make_shared_skill(env)
+    alias = env["live"] / "profiles" / "thoth" / "skills" / "devops" / "demo" / "SKILL.md"
+
+    res = env["store"].apply_edit(
+        live_path=alias, new_bytes=b"# Demo skill\nCHANGED\n",
+        author_god="hermes", trigger="handoff", target_artifact_class="skill",
+        rationale="shared-by-design skill edit", expected_improvement=_ei(),
+        inputs_read=["/x/forge.jsonl"], human_approver="konan",
+    )
+    assert res["no_op"] is False
+    # the SHARED file carries it
+    assert global_skill.read_bytes() == b"# Demo skill\nCHANGED\n"
+
+
+def test_a_skill_edit_is_recorded_against_the_resolved_path(env):
+    """One edit, one record — not one per profile alias."""
+    _make_shared_skill(env)
+    alias = env["live"] / "profiles" / "thoth" / "skills" / "devops" / "demo" / "SKILL.md"
+    res = env["store"].apply_edit(
+        live_path=alias, new_bytes=b"# Demo skill\nCHANGED\n",
+        author_god="hermes", trigger="handoff", target_artifact_class="skill",
+        rationale="shared-by-design skill edit", expected_improvement=_ei(),
+        inputs_read=["/x/forge.jsonl"], human_approver="konan",
+    )
+    rec = edit_ledger.load_edits(env["ledger"])[0]
+    # keyed and recorded on the GLOBAL path, with the alias kept as provenance
+    assert res["rel"] == "hermes/skills/devops/demo/SKILL.md"
+    assert rec["target_path"].endswith("skills/devops/demo/SKILL.md")
+    assert "/profiles/" not in rec["target_path"]
+    assert rec["reached_via"].endswith("profiles/thoth/skills/devops/demo/SKILL.md")
+    assert rec["shared_by_design"] is True
+
+
+def test_aliases_are_enumerated_generically_not_just_for_soul_md(env):
+    """The old enumerator hardcoded profiles/*/SOUL.md, so for a skill it
+    returned [] and the refusal read "changes 0 profile(s)" — a blast radius of
+    zero for a file shared by three profiles."""
+    _make_shared_skill(env, gods=("thoth", "rheta", "marvin"))
+    resolved = env["live"] / "skills" / "devops" / "demo" / "SKILL.md"
+    aliases = env["store"].aliases_of(resolved)
+    assert len(aliases) == 3, aliases
+    assert aliases == sorted(aliases)
+    assert all(a.startswith("profiles/") for a in aliases)
+
+
+def test_a_non_shared_alias_is_still_refused(env):
+    """SOUL.md aliasing the global persona is NOT by-design; keep refusing it."""
+    link = _make_symlinked_profile(env)
+    assert env["store"].is_shared_by_design(link.resolve()) is False
+    with pytest.raises(HarnessStoreError) as e:
+        env["store"].apply_edit(
+            live_path=link, new_bytes=b"x", author_god="hermes", trigger="handoff",
+            target_artifact_class="soul_append", rationale="r", expected_improvement=_ei(),
+            inputs_read=["/x/forge.jsonl"], human_approver="konan",
+        )
+    assert "symlink" in str(e.value)
+    assert "(none found)" not in str(e.value), "the real alias must be named"
