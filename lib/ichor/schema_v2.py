@@ -28,14 +28,9 @@ import logging
 import sqlite3
 from pathlib import Path
 
-# Resolve through the account home, not `$HOME`: a god's gateway session runs
-# with HOME set to its profile sandbox, so `Path.home()` silently points at a
-# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
-from lib.pantheon_path import account_home as _account_home  # noqa: E402
-
 logger = logging.getLogger("lib.ichor.schema_v2")  # was "ichor_schema_v2" pre-2026-06-12
 
-DB_PATH = _account_home() / ".hermes" / "ichor.db"
+DB_PATH = Path.home() / ".hermes" / "ichor.db"
 
 SCHEMA_SQL = """
 -- HOT: Live per-session working state
@@ -116,34 +111,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
     content, category, name, event_type, brief, outline,
     tokenize='porter unicode61'
 );
-
--- FTS5 over warm_entities (2026-09-20). The warm tier had NO retrieval path and
--- no index: 188,762 rows with only category/importance indexes, so any lookup
--- was a full-table LIKE scan. External content + triggers (see
--- lib/ichor/migrations/v2_warm_entities_fts.py, which applies this to live DBs).
-CREATE VIRTUAL TABLE IF NOT EXISTS warm_entities_fts USING fts5(
-    name, value, brief, outline, category,
-    content='warm_entities',
-    content_rowid='id',
-    tokenize='porter unicode61'
-);
-
-CREATE TRIGGER IF NOT EXISTS warm_entities_fts_ai AFTER INSERT ON warm_entities BEGIN
-    INSERT INTO warm_entities_fts(rowid, name, value, brief, outline, category)
-    VALUES (new.id, new.name, new.value, coalesce(new.brief, ''), coalesce(new.outline, ''), new.category);
-END;
-
-CREATE TRIGGER IF NOT EXISTS warm_entities_fts_ad AFTER DELETE ON warm_entities BEGIN
-    INSERT INTO warm_entities_fts(warm_entities_fts, rowid, name, value, brief, outline, category)
-    VALUES ('delete', old.id, old.name, old.value, coalesce(old.brief, ''), coalesce(old.outline, ''), old.category);
-END;
-
-CREATE TRIGGER IF NOT EXISTS warm_entities_fts_au AFTER UPDATE ON warm_entities BEGIN
-    INSERT INTO warm_entities_fts(warm_entities_fts, rowid, name, value, brief, outline, category)
-    VALUES ('delete', old.id, old.name, old.value, coalesce(old.brief, ''), coalesce(old.outline, ''), old.category);
-    INSERT INTO warm_entities_fts(rowid, name, value, brief, outline, category)
-    VALUES (new.id, new.name, new.value, coalesce(new.brief, ''), coalesce(new.outline, ''), new.category);
-END;
 
 -- VECTOR: sqlite-vec embeddings of cold_events.raw_text
 -- Added 2026-06-20 (P5a — semantic search recovery). One 384-dim vector
@@ -275,64 +242,6 @@ CREATE INDEX IF NOT EXISTS idx_claim_entities_claim ON ichor_claim_entities(clai
 CREATE INDEX IF NOT EXISTS idx_claim_entities_name ON ichor_claim_entities(entity_name);
 """
 
-# Phase 3D — Recall Audit Trail (mnelo recall_log pattern).
-# One row per ichor_retrieve call: query text (truncated to 300 chars at
-# write time — full text is never stored), per-lane latency breakdown,
-# and the top result ids/scores. Written asynchronously so the caller is
-# never blocked. Rows older than 90 days are pruned by
-# lib/ichor_daily_maintenance.py. Kept as its own constant so the MCP
-# server and the daily-maintenance pruner can reuse the identical DDL;
-# SCHEMA_SQL appends it below.
-RECALL_LOG_DDL = """
-CREATE TABLE IF NOT EXISTS recall_log (
-    id INTEGER PRIMARY KEY,
-    query_text TEXT NOT NULL,
-    god_name TEXT DEFAULT 'unknown',
-    lanes_used TEXT DEFAULT '[]',          -- JSON array of backend names
-    per_lane_latency_ms TEXT DEFAULT '{}', -- JSON {backend: ms}
-    total_ms REAL NOT NULL DEFAULT 0,
-    top_result_ids TEXT DEFAULT '[]',      -- JSON array (max 10 ids)
-    top_result_scores TEXT DEFAULT '[]',   -- JSON array of scores
-    retrieved_at TEXT DEFAULT (datetime('now'))
-);
-"""
-SCHEMA_SQL = SCHEMA_SQL + RECALL_LOG_DDL
-
-# Phase 3B — Cascade triggers (SPEC names verbatim).  The `ichor_claims`
-# table signals supersede via the `superseded_by` column (added by
-# migrate()); when a claim is superseded, its evidence rows are expired
-# at the SQL layer — zero application code, single source of truth for
-# `valid_until`.  Two triggers with identical idempotent bodies per the
-# SPEC's naming (one for the chunk/claim supersede signal, one for the
-# claim-evidence cascade); both are recreated on every migrate() via
-# DROP TRIGGER IF EXISTS, and both are no-ops on re-supersede thanks to
-# the WHEN guard + `WHERE valid_until IS NULL`.
-_CLAIM_TRIGGERS_SQL = """
-DROP TRIGGER IF EXISTS expire_relations_on_chunk_supersede;
-CREATE TRIGGER expire_relations_on_chunk_supersede
-AFTER UPDATE OF superseded_by ON ichor_claims
-FOR EACH ROW
-WHEN NEW.superseded_by IS NOT NULL
-     AND (OLD.superseded_by IS NULL OR OLD.superseded_by <> NEW.superseded_by)
-BEGIN
-    UPDATE ichor_claim_evidence
-    SET valid_until = CURRENT_TIMESTAMP
-    WHERE claim_id = NEW.id AND valid_until IS NULL;
-END;
-
-DROP TRIGGER IF EXISTS expire_claim_evidence_on_claim_supersede;
-CREATE TRIGGER expire_claim_evidence_on_claim_supersede
-AFTER UPDATE OF superseded_by ON ichor_claims
-FOR EACH ROW
-WHEN NEW.superseded_by IS NOT NULL
-     AND (OLD.superseded_by IS NULL OR OLD.superseded_by <> NEW.superseded_by)
-BEGIN
-    UPDATE ichor_claim_evidence
-    SET valid_until = CURRENT_TIMESTAMP
-    WHERE claim_id = NEW.id AND valid_until IS NULL;
-END;
-"""
-
 
 def get_conn() -> sqlite3.Connection:
     """Open a connection with WAL mode and Row factory.
@@ -365,27 +274,6 @@ def get_conn() -> sqlite3.Connection:
     return conn
 
 
-def ensure_recall_log(conn=None) -> int:
-    """Idempotently create the recall_log table (Phase 3D).
-
-    Pass an open connection to reuse it (daily maintenance / MCP server);
-    otherwise a fresh connection to DB_PATH is opened and closed.  The
-    DDL is shared with SCHEMA_SQL via RECALL_LOG_DDL, so the table created
-    here is byte-identical to the one migrate() creates.  Returns 1 when
-    the table exists afterwards (always, unless the DB is unavailable).
-    """
-    own = conn is None
-    c = conn if conn is not None else get_conn()
-    try:
-        c.execute(RECALL_LOG_DDL)
-        if own:
-            c.commit()
-        return 1
-    finally:
-        if own:
-            c.close()
-
-
 def migrate() -> None:
     """Create 5-tier tables and backfill from ichor_events."""
     conn = get_conn()
@@ -403,45 +291,6 @@ def migrate() -> None:
         conn.execute("ALTER TABLE cold_events ADD COLUMN goal_id INTEGER REFERENCES strategic_goals(id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cold_goal ON cold_events(goal_id)")
         logger.info("A1 migration: added goal_id column to cold_events")
-
-    # Phase 3B — bitemporal supersede signal on claims + evidence validity.
-    # Idempotent: pragma_table_info guards; safe to run twice.
-    claims_exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ichor_claims'"
-    ).fetchone()
-    evidence_exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ichor_claim_evidence'"
-    ).fetchone()
-
-    if claims_exists:
-        has_superseded_by = conn.execute(
-            "SELECT 1 FROM pragma_table_info('ichor_claims') WHERE name='superseded_by' LIMIT 1"
-        ).fetchone()
-        if not has_superseded_by:
-            conn.execute(
-                "ALTER TABLE ichor_claims "
-                "ADD COLUMN superseded_by INTEGER REFERENCES ichor_claims(id)"
-            )
-            logger.info("Phase 3B: added superseded_by column to ichor_claims")
-    else:
-        logger.warning("Phase 3B: ichor_claims table missing — skipping superseded_by migration")
-
-    if evidence_exists:
-        has_valid_until = conn.execute(
-            "SELECT 1 FROM pragma_table_info('ichor_claim_evidence') WHERE name='valid_until' LIMIT 1"
-        ).fetchone()
-        if not has_valid_until:
-            conn.execute("ALTER TABLE ichor_claim_evidence ADD COLUMN valid_until TEXT")
-            logger.info("Phase 3B: added valid_until column to ichor_claim_evidence")
-    else:
-        logger.warning("Phase 3B: ichor_claim_evidence table missing — skipping valid_until migration")
-
-    # Phase 3B — cascade triggers (SPEC names verbatim, idempotent).
-    # valid_until on evidence rows is set ONLY by these triggers, never by
-    # application code.
-    if claims_exists and evidence_exists:
-        conn.executescript(_CLAIM_TRIGGERS_SQL)
-        logger.info("Phase 3B: cascade triggers installed (claim supersede → evidence expiry)")
 
     # Backfill: ichor_events → cold_events
     existing = conn.execute("SELECT id FROM cold_events LIMIT 1").fetchone()

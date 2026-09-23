@@ -13,7 +13,6 @@ import logging
 import os
 import sqlite3
 import sys
-import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -25,28 +24,14 @@ if __package__ in (None, ""):
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-# FastMCP moved out of the MCP SDK in ``mcp`` 2.0 (the high-level server now
-# lives at ``mcp.server.mcpserver.MCPServer``), so the old hardcoded
-# ``from mcp.server.fastmcp import FastMCP`` raised ModuleNotFoundError on every
-# interpreter in the fleet and took this module's entire test file with it.
-# ``lib.mcp_compat`` resolves whichever generation is installed, adapts the
-# constructor, and reports the path it used; ``MCP_SERVER_SOURCE`` is surfaced
-# by the health guardian.
-from lib.mcp_compat import create_server, describe_server_class
+from mcp.server.fastmcp import FastMCP
 
-MCP_SERVER_SOURCE = describe_server_class()
-
-from lib.ichor.entities import entity_resolve
 from lib.ichor_gates import GatePipeline, LogicGate, PhaseDetectionGate, ReadCache, StateGate
 from lib.ichor_hybrid import MemoryTrait
-# Resolve through the account home, not `$HOME`: a god's gateway session runs
-# with HOME set to its profile sandbox, so `Path.home()` silently points at a
-# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
-from lib.pantheon_path import account_home as _account_home  # noqa: E402
 
 logger = logging.getLogger("ichor-mcp")
 
-_HOME = _account_home()
+_HOME = Path(os.path.expanduser("~"))
 _ICHOR_DB = _HOME / ".hermes" / "ichor.db"
 _AUDIT_TABLE = "ichor_mcp_audit"
 _FOLDS_TABLE = "episodic_folds"
@@ -61,15 +46,9 @@ TOOL_NAMES = [
     "ichor_fold",
     "ichor_expand",
     "ichor_compare",
-    "ichor_entity_resolve",
-    "ichor_recall_stats",
 ]
 
-# Server instance. The class comes from whichever MCP SDK generation is
-# installed (see the import block above); the decorator surface this module uses
-# -- ``@mcp.tool(description=...)`` and ``mcp.run(transport="stdio")`` -- is
-# identical across all of them.
-mcp = create_server("Ichor MCP")
+mcp = FastMCP("Ichor MCP")
 
 
 @contextmanager
@@ -84,21 +63,6 @@ def _db_conn() -> Iterable[sqlite3.Connection]:
         conn.commit()
     finally:
         conn.close()
-
-
-def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
-    """Return True when ``table`` already has ``column`` (SQLite PRAGMA)."""
-    try:
-        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    except sqlite3.Error:
-        return False
-    return any(str(row[1]) == column for row in rows)
-
-
-def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
-    """Add a column to an existing table only when it is absent."""
-    if not _column_exists(conn, table, column):
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 def _ensure_support_tables() -> None:
@@ -134,32 +98,6 @@ def _ensure_support_tables() -> None:
         )
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{_FOLDS_TABLE}_session ON {_FOLDS_TABLE}(session_id)")
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{_FOLDS_TABLE}_expanded ON {_FOLDS_TABLE}(expanded_at)")
-        # Phase 3D — Recall Audit Trail. One row per ichor_retrieve call,
-        # written asynchronously so the caller is never blocked.
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS recall_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                query_text TEXT NOT NULL,
-                god_name TEXT DEFAULT 'unknown',
-                lanes_used TEXT DEFAULT '[]',
-                per_lane_latency_ms TEXT DEFAULT '{}',
-                total_ms REAL NOT NULL DEFAULT 0,
-                top_result_ids TEXT DEFAULT '[]',
-                top_result_scores TEXT DEFAULT '[]',
-                retrieved_at TEXT DEFAULT (datetime('now'))
-            )
-            """
-        )
-        # Hindsight upgrade (Phase 11): additive JSON/text metadata columns on
-        # recall_log so new retrieval metadata is stored without breaking
-        # existing rows or the async writer.
-        _add_column_if_missing(conn, "recall_log", "retrieval_metadata_json", "TEXT DEFAULT '{}'")
-        _add_column_if_missing(conn, "recall_log", "backends_requested_json", "TEXT DEFAULT '[]'")
-        _add_column_if_missing(conn, "recall_log", "candidate_counts_json", "TEXT DEFAULT '{}'")
-        _add_column_if_missing(conn, "recall_log", "strict_scope_excluded_counts_json", "TEXT DEFAULT '{}'")
-        _add_column_if_missing(conn, "recall_log", "warnings_json", "TEXT DEFAULT '[]'")
-        _add_column_if_missing(conn, "recall_log", "rerank_status", "TEXT DEFAULT 'unknown'")
 
 
 def _now() -> str:
@@ -182,39 +120,9 @@ def _json_dumps(value: Any) -> str:
     return json.dumps(_jsonable(value), indent=2, sort_keys=True, default=str)
 
 
-def _json_dumps_for_audit(value: Any, max_chars: int = 4000) -> str:
-    """Return valid JSON that fits the audit table's compact payload budget.
-
-    Audit rows are diagnostic breadcrumbs, not the source of truth. If a tool
-    output is too large, store a valid JSON summary instead of slicing the JSON
-    string mid-token; otherwise later audit readers cannot parse their own rows.
-    """
-
-    text = _json_dumps(value)
-    if len(text) <= max_chars:
-        return text
-
-    preview_budget = max(0, max_chars - 240)
-    summary = {
-        "_truncated": True,
-        "_original_chars": len(text),
-        "preview": text[:preview_budget],
-    }
-    bounded = _json_dumps(summary)
-    if len(bounded) <= max_chars:
-        return bounded
-    return json.dumps({
-        "_truncated": True,
-        "_original_chars": len(text),
-        "preview": text[: max(0, max_chars - 120)],
-    }, sort_keys=True)
-
-
 def _parse_backends(backends: str | list[str] | None) -> list[str]:
     if backends is None:
-        # Mirror the scorer's default lane set (it previously omitted `graph`,
-        # the dominant lane, while listing the then-dead `reference` lane).
-        return ["fts5", "graph", "reference", "warm"]
+        return ["fts5", "vector", "events", "reference"]
     if isinstance(backends, list):
         return [str(b).strip() for b in backends if str(b).strip()]
     return [part.strip() for part in str(backends).split(",") if part.strip()]
@@ -231,159 +139,12 @@ def _audit(tool_name: str, payload: dict[str, Any], result: Any, ok: bool, start
                     tool_name,
                     1 if ok else 0,
                     round((time.perf_counter() - started_at) * 1000.0, 3),
-                    _json_dumps_for_audit(payload),
-                    _json_dumps_for_audit(result),
+                    _json_dumps(payload)[:4000],
+                    _json_dumps(result)[:4000],
                 ),
             )
     except Exception as exc:
         logger.debug("audit write failed for %s: %s", tool_name, exc)
-
-
-# ---------------------------------------------------------------------------
-# Phase 3D — Recall Audit Trail (async writer)
-# ---------------------------------------------------------------------------
-
-# Module-level registry of in-flight recall_log writer threads so callers
-# (tests, shutdown paths) can drain pending async writes deterministically.
-# Production stays fire-and-forget (never blocks the caller); tests call
-# _drain_recall_log_writes() before tearing down temp DB dirs so the WAL
-# writer can't re-create -wal/-shm files inside a directory being rmtree'd.
-_RECALL_WRITER_THREADS: list[threading.Thread] = []
-
-
-def _drain_recall_log_writes(timeout: float = 5.0) -> int:
-    """Join all in-flight recall_log writer threads. Returns how many joined."""
-    threads = list(_RECALL_WRITER_THREADS)
-    joined = 0
-    for t in threads:
-        try:
-            t.join(timeout=timeout)
-            joined += 1
-        except Exception:
-            pass
-    _RECALL_WRITER_THREADS.clear()
-    return joined
-
-
-def _write_recall_log(query, god_name, result, total_ms, fallback_lanes) -> None:
-    """Write one recall_log row (run in a daemon thread — never blocks the
-    caller). Query text is truncated to 300 chars; full text is never stored.
-    valid_to/valid_until are untouched here — only the triggers write those.
-
-    Hindsight upgrade: additive retrieval metadata (budget, token ceilings,
-    candidate/temporal/strict-scope counts, warnings, rerank status) is
-    derived from the result payload and stored in the JSON/TEXT columns.
-    """
-    try:
-        _ensure_support_tables()
-        lanes = list(result.get("backends_used") or fallback_lanes or []) if isinstance(result, dict) else list(fallback_lanes or [])
-        results = list(result.get("results") or []) if isinstance(result, dict) else []
-
-        # Per-lane timing: sum latency_ms per backend from result rows when
-        # present; otherwise fall back to splitting total_ms evenly.
-        per_lane: dict[str, float] = {}
-        for r in results:
-            backend = str(r.get("backend") or "unknown")
-            ms = r.get("latency_ms")
-            if isinstance(ms, (int, float)):
-                per_lane[backend] = per_lane.get(backend, 0.0) + float(ms)
-        if not per_lane and lanes:
-            share = float(total_ms) / max(1, len(lanes))
-            per_lane = {b: round(share, 3) for b in lanes}
-
-        top_ids = [str(r.get("id") or "") for r in results[:10]]
-        top_scores = []
-        for r in results[:10]:
-            s = r.get("score")
-            if s is None:
-                s = r.get("fused_score")
-            top_scores.append(round(float(s), 4) if isinstance(s, (int, float)) else 0.0)
-
-        # Hindsight metadata: honor an explicit result["metadata"] dict, else
-        # assemble one from the well-known top-level recall-control keys.
-        metadata: dict[str, Any] = {}
-        if isinstance(result, dict):
-            nested = result.get("metadata")
-            if isinstance(nested, dict):
-                metadata = nested
-        if not metadata and isinstance(result, dict):
-            metadata = {
-                k: result[k]
-                for k in (
-                    "budget",
-                    "max_tokens",
-                    "token_budget",
-                    "estimated_tokens_returned",
-                    "results_dropped_for_token_budget",
-                    "prefer_observations_dropped_raw_count",
-                    "temporal_filter_dropped_count",
-                    "rerank_status",
-                    "tags",
-                    "tags_match",
-                    "warnings",
-                )
-                if k in result and result[k] is not None
-            }
-
-        if isinstance(result, dict):
-            backends_requested = result.get("backends_requested") or fallback_lanes or []
-            candidate_counts = result.get("candidate_counts") or metadata.get("candidate_counts") or {}
-            strict_counts = result.get("strict_scope_excluded_counts") or metadata.get("strict_scope_excluded_counts") or {}
-            warnings = result.get("warnings") or metadata.get("warnings") or []
-            rerank_status = str(result.get("rerank_status") or metadata.get("rerank_status") or "unknown")
-        else:
-            backends_requested = list(fallback_lanes or [])
-            candidate_counts = metadata.get("candidate_counts") or {}
-            strict_counts = metadata.get("strict_scope_excluded_counts") or {}
-            warnings = metadata.get("warnings") or []
-            rerank_status = str(metadata.get("rerank_status") or "unknown")
-
-        with _db_conn() as conn:
-            conn.execute(
-                "INSERT INTO recall_log (query_text, god_name, lanes_used, "
-                "per_lane_latency_ms, total_ms, top_result_ids, top_result_scores, "
-                "retrieval_metadata_json, backends_requested_json, candidate_counts_json, "
-                "strict_scope_excluded_counts_json, warnings_json, rerank_status) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    str(query)[:300],
-                    str(god_name or "unknown"),
-                    _json_dumps(lanes),
-                    _json_dumps(per_lane),
-                    round(float(total_ms), 3),
-                    _json_dumps(top_ids),
-                    _json_dumps(top_scores),
-                    _json_dumps(metadata),
-                    _json_dumps(backends_requested),
-                    _json_dumps(candidate_counts),
-                    _json_dumps(strict_counts),
-                    _json_dumps(warnings),
-                    rerank_status,
-                ),
-            )
-    except Exception as exc:
-        logger.debug("recall_log write failed: %s", exc)
-
-def _write_recall_log_async(query, god_name, result, total_ms, fallback_lanes) -> None:
-    """Enqueue a recall_log write on a daemon thread (fire-and-forget).
-
-    Registers the thread in the module-level _RECALL_WRITER_THREADS registry so
-    _drain_recall_log_writes() can deterministically join pending async writes
-    before a caller tears down a temporary DB directory. Without the registry,
-    a still-running writer thread re-creates SQLite -wal/-shm files inside a
-    directory that is mid-rmtree, causing flaky TemporaryDirectory cleanup
-    failures in tests (and the same hazard in any shutdown path).
-    """
-    try:
-        t = threading.Thread(
-            target=_write_recall_log,
-            args=(query, god_name, result, total_ms, fallback_lanes),
-            daemon=True,
-        )
-        _RECALL_WRITER_THREADS.append(t)
-        t.start()
-    except Exception as exc:
-        logger.debug("recall_log async enqueue failed: %s", exc)
 
 
 def _memory_trait() -> MemoryTrait:
@@ -495,57 +256,17 @@ def ichor_retrieve(
     min_score: float = 0.0,
     active_god: str = "",
     include_historical: bool = False,
-    budget: str | None = None,
-    max_tokens: int | None = None,
-    types: list[str] | None = None,
-    include_sources: bool = False,
-    include_raw: bool = False,
-    prefer_observations: bool = False,
-    query_timestamp: str | None = None,
-    tags: list[str] | None = None,
-    tags_match: str | None = None,
-    min_scores: dict[str, float] | None = None,
-    include_inactive: bool = False,
-    rerank: str | None = None,
-    requesting_person_id: str | None = None,
-    target_person: str | None = None,
-    person_context_domain: str = "profile",
-    person_fact_type: str = "private",
-    person_purpose: str = "general_retrieval",
-    source_platform: str | None = None,
-    channel_id: str | None = None,
 ) -> str:
     started_at = time.perf_counter()
     backend_list = _parse_backends(backends)
-    payload = _jsonable(
-        {
-            "query": query,
-            "limit": limit,
-            "backends": backend_list,
-            "min_score": min_score,
-            "active_god": active_god,
-            "include_historical": include_historical,
-            "budget": budget,
-            "max_tokens": max_tokens,
-            "types": types,
-            "include_sources": include_sources,
-            "include_raw": include_raw,
-            "prefer_observations": prefer_observations,
-            "query_timestamp": query_timestamp,
-            "tags": tags,
-            "tags_match": tags_match,
-            "min_scores": min_scores,
-            "include_inactive": include_inactive,
-            "rerank": rerank,
-            "requesting_person_id": requesting_person_id,
-            "target_person": target_person,
-            "person_context_domain": person_context_domain,
-            "person_fact_type": person_fact_type,
-            "person_purpose": person_purpose,
-            "source_platform": source_platform,
-            "channel_id": channel_id,
-        }
-    )
+    payload = {
+        "query": query,
+        "limit": limit,
+        "backends": backend_list,
+        "min_score": min_score,
+        "active_god": active_god,
+        "include_historical": include_historical,
+    }
     try:
         result = _memory_trait().retrieve(
             query=query,
@@ -553,53 +274,18 @@ def ichor_retrieve(
             backends=backend_list,
             min_score=min_score,
             active_god=active_god or None,
-            budget=budget,
-            max_tokens=max_tokens,
-            types=types,
-            include_sources=include_sources,
-            include_raw=include_raw,
-            prefer_observations=prefer_observations,
-            query_timestamp=query_timestamp,
-            tags=tags,
-            tags_match=tags_match,
-            min_scores=min_scores,
-            include_inactive=include_inactive,
-            rerank=rerank,
-            requesting_person_id=requesting_person_id,
-            target_person=target_person,
-            person_context_domain=person_context_domain,
-            person_fact_type=person_fact_type,
-            person_purpose=person_purpose,
-            source_platform=source_platform,
-            channel_id=channel_id,
         )
         if isinstance(result, dict) and "results" in result:
             result = dict(result)
             result["results"] = _filter_historical(list(result.get("results") or []), include_historical)
             result["returned"] = len(result["results"])
         _audit("ichor_retrieve", payload, result, True, started_at)
-        # The async recall writer derives metadata (budget, token ceilings,
-        # strict-scope counts, warnings, rerank status) from the result itself.
-        _write_recall_log_async(
-            query=query,
-            god_name=active_god or "unknown",
-            result=result,
-            total_ms=(time.perf_counter() - started_at) * 1000.0,
-            fallback_lanes=backend_list,
-        )
         return _json_dumps(result)
     except Exception as exc:
         result = {"error": f"ichor_retrieve failed: {exc}"}
         _audit("ichor_retrieve", payload, result, False, started_at)
-        # Failed retrievals still get a recall_log row (zero-hit signal).
-        _write_recall_log_async(
-            query=query,
-            god_name=active_god or "unknown",
-            result={},
-            total_ms=(time.perf_counter() - started_at) * 1000.0,
-            fallback_lanes=backend_list,
-        )
         return _json_dumps(result)
+
 
 @mcp.tool(description="Check Ichor backend health and support-table readiness.")
 def ichor_health() -> str:
@@ -871,105 +557,6 @@ def ichor_compare(
     except Exception as exc:
         result = {"error": f"ichor_compare failed: {exc}"}
         _audit("ichor_compare", payload, result, False, started_at)
-        return _json_dumps(result)
-
-
-@mcp.tool(description="Run Ichor entity resolution (Phase 2D dedup pass). Dry-run by default; apply=True performs the merge.")
-def ichor_entity_resolve(apply: bool = False) -> str:
-    _ensure_support_tables()
-    started_at = time.perf_counter()
-    payload = {"apply": apply}
-    try:
-        result = entity_resolve.run(dry_run=not apply)
-        _audit("ichor_entity_resolve", payload, result, True, started_at)
-        return _json_dumps(result)
-    except Exception as exc:
-        result = {"error": f"ichor_entity_resolve failed: {exc}"}
-        _audit("ichor_entity_resolve", payload, result, False, started_at)
-        return _json_dumps(result)
-
-
-@mcp.tool(description="Return Ichor recall-audit statistics from recall_log (avg/p95 latency, slowest lane, zero-hit rate, top events).")
-def ichor_recall_stats(recent: int = 200) -> str:
-    _ensure_support_tables()
-    started_at = time.perf_counter()
-    payload = {"recent": recent}
-    try:
-        n = max(1, int(recent))
-        with _db_conn() as conn:
-            rows = conn.execute(
-                "SELECT query_text, god_name, lanes_used, per_lane_latency_ms, "
-                "total_ms, top_result_ids, top_result_scores, retrieved_at "
-                "FROM recall_log ORDER BY id DESC LIMIT ?",
-                (n,),
-            ).fetchall()
-
-        totals = [float(r["total_ms"] or 0.0) for r in rows]
-        avg_total_ms = round(sum(totals) / len(totals), 3) if totals else 0.0
-        p95_total_ms = 0.0
-        if totals:
-            s = sorted(totals)
-            idx = min(len(s) - 1, int(round(0.95 * (len(s) - 1))))
-            p95_total_ms = round(s[idx], 3)
-
-        # Per-lane averages across the window.
-        lane_sums: dict[str, float] = {}
-        lane_counts: dict[str, int] = {}
-        for r in rows:
-            try:
-                per = json.loads(r["per_lane_latency_ms"] or "{}")
-            except Exception:
-                per = {}
-            if not isinstance(per, dict):
-                per = {}
-            for lane, ms in per.items():
-                if isinstance(ms, (int, float)):
-                    lane_sums[str(lane)] = lane_sums.get(str(lane), 0.0) + float(ms)
-                    lane_counts[str(lane)] = lane_counts.get(str(lane), 0) + 1
-        lane_avgs = {
-            lane: round(lane_sums[lane] / lane_counts[lane], 3)
-            for lane in lane_sums
-        }
-        slowest_lane = None
-        if lane_avgs:
-            name, avg = max(lane_avgs.items(), key=lambda kv: kv[1])
-            slowest_lane = {"lane": name, "avg_latency_ms": avg}
-
-        # Zero-hit rate: queries whose top_result_ids came back empty.
-        zero_hits = 0
-        event_counts: dict[str, int] = {}
-        for r in rows:
-            try:
-                ids = json.loads(r["top_result_ids"] or "[]")
-            except Exception:
-                ids = []
-            if not ids:
-                zero_hits += 1
-            for i in ids:
-                event_counts[str(i)] = event_counts.get(str(i), 0) + 1
-        zero_hit_rate_pct = round(100.0 * zero_hits / len(rows), 2) if rows else 0.0
-
-        top_events = [
-            {"id": eid, "count": cnt}
-            for eid, cnt in sorted(event_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
-        ]
-
-        result = {
-            "recent": n,
-            "queries_in_window": len(rows),
-            "avg_total_ms": avg_total_ms,
-            "p95_total_ms": p95_total_ms,
-            "slowest_lane": slowest_lane,
-            "per_lane_avg_ms": lane_avgs,
-            "zero_hit_rate_pct": zero_hit_rate_pct,
-            "top_retrieved_events": top_events,
-            "generated_at": _now(),
-        }
-        _audit("ichor_recall_stats", payload, result, True, started_at)
-        return _json_dumps(result)
-    except Exception as exc:
-        result = {"error": f"ichor_recall_stats failed: {exc}"}
-        _audit("ichor_recall_stats", payload, result, False, started_at)
         return _json_dumps(result)
 
 

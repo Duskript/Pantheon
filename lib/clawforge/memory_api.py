@@ -68,17 +68,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-# Resolve through the account home, not `$HOME`: a god's gateway session runs
-# with HOME set to its profile sandbox, so `Path.home()` silently points at a
-# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
-from lib.pantheon_path import account_home as _account_home  # noqa: E402
-
 logger = logging.getLogger("clawforge.memory_api")
 
 # --- Constants ---
 
 # Path to the retrieval log. Lives in the Hermes home directory.
-HERMES_HOME = _account_home() / ".hermes"
+HERMES_HOME = Path.home() / ".hermes"
 RETRIEVAL_LOG_PATH = HERMES_HOME / "pantheon" / "retrieval-log.jsonl"
 
 # Path to the Ichor DB. Same as in lib.ichor.entities.schema.

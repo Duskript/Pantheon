@@ -501,3 +501,64 @@ def test_a_non_shared_alias_is_still_refused(env):
         )
     assert "symlink" in str(e.value)
     assert "(none found)" not in str(e.value), "the real alias must be named"
+
+
+# ── the store must not fork on a sandboxed $HOME ───────────────────────────
+
+def test_a_sandboxed_home_does_not_fork_the_store(tmp_path, monkeypatch):
+    """The ledger forked this way; the store did too, one module over.
+
+    A god's gateway session runs with HOME set to its profile sandbox, so
+    `Path.home()` resolved to a DIFFERENT store repo — edits versioned silently
+    into the wrong place. And `aliases_of` then walked the sandbox's profile tree,
+    found nothing, and returned a confident empty list: the same "changes 0
+    profile(s)" class-4 failure this module was already fixed for once, arriving
+    again via a wrong root instead of a hardcoded glob.
+    """
+    from lib.ichor import harness_store as HS
+
+    sandbox = tmp_path / "profiles" / "thoth" / "home"
+    sandbox.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(sandbox))
+    monkeypatch.delenv("ICHOR_HARNESS_STORE", raising=False)
+    monkeypatch.delenv("ICHOR_LIVE_ROOT", raising=False)
+    try:
+        import importlib
+        mod = importlib.reload(HS)
+        real = mod._account_home()
+        if real.is_dir():
+            assert str(sandbox) not in str(mod.STORE_DIR), mod.STORE_DIR
+            assert str(sandbox) not in str(mod.LIVE_ROOT), mod.LIVE_ROOT
+        assert mod.sandboxed_home() == str(sandbox)
+    finally:
+        importlib.reload(HS)
+
+
+def test_account_home_ignores_home_env(tmp_path, monkeypatch):
+    from lib.ichor import harness_store as HS
+    monkeypatch.setenv("HOME", str(tmp_path))
+    try:
+        import importlib
+        mod = importlib.reload(HS)
+        assert mod._account_home() != tmp_path
+    finally:
+        importlib.reload(HS)
+
+
+def test_the_canonical_path_module_is_not_home_derived(tmp_path, monkeypatch):
+    """`_REAL_HOME = os.path.expanduser("~")` was a lie — '~' follows $HOME.
+
+    lib/pantheon_path.py is the canonical home module, so its being vulnerable
+    propagated to everything downstream of it.
+    """
+    import importlib
+    from lib import pantheon_path as PP
+    monkeypatch.setenv("HOME", str(tmp_path))
+    try:
+        mod = importlib.reload(PP)
+        assert str(tmp_path) not in str(mod._REAL_HOME)
+        # _REAL_HOME is a STR by contract (callers do `in` / .split on it)
+        assert isinstance(mod._REAL_HOME, str)
+        assert mod._REAL_HOME == str(mod.account_home())
+    finally:
+        importlib.reload(PP)

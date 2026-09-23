@@ -32,14 +32,9 @@ import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
-# Resolve through the account home, not `$HOME`: a god's gateway session runs
-# with HOME set to its profile sandbox, so `Path.home()` silently points at a
-# DIFFERENT DB — a shadow `ichor.db` was written in production this way.
-from lib.pantheon_path import account_home as _account_home  # noqa: E402
-
 logger = logging.getLogger("ichor.vector_backend")
 
-_DB_PATH = _account_home() / ".hermes" / "ichor.db"
+_DB_PATH = Path.home() / ".hermes" / "ichor.db"
 _EXPECTED_DIM = 384
 
 
@@ -203,20 +198,8 @@ class VectorBackend:
             retrieval_hydration.apply_rank_modifiers() → fused_score bump
         """
         if isinstance(query, str):
-            # Embed the query so semantic KNN works from a raw text query.
-            # Prefers the neural BGE embedder (lib.ichor.embedder); falls back
-            # to the deterministic local feature-hash embedding when the neural
-            # runtime is absent. Returns an empty list rather than crashing —
-            # the hybrid scorer's backend loop expects a uniform
-            # ``(query, limit) -> list`` contract.
-            try:
-                query_vec = get_embedding(query)
-            except Exception as exc:
-                logger.debug("VectorBackend query embedding failed: %s", exc)
-                return []
-            if not query_vec:
-                return []
-            query = query_vec
+            # No embedding service wired — return empty gracefully
+            return []
         if len(query) != _EXPECTED_DIM:
             raise ValueError(
                 f"Query vector dim {len(query)} != expected {_EXPECTED_DIM}"
@@ -240,27 +223,11 @@ class VectorBackend:
         results = []
         for r in rows:
             d = float(r["distance"])
-            eid = int(r["event_id"])
             results.append({
-                "id": f"vec:{eid}",
-                "score": 1.0 / (1.0 + d),  # convert distance → similarity
-                "backend": "vector",
-                "event_id": eid,
+                "event_id": int(r["event_id"]),
                 "distance": d,
+                "score": 1.0 / (1.0 + d),  # convert distance → similarity
             })
-
-        # Hydrate inline so the hybrid fusion's dedup (title+snippet) sees
-        # full hits instead of bare event_ids. The fusion pipeline calls
-        # hydrate_pipeline() again later, which is idempotent; this inline
-        # pass is what makes vector hits rankable in the first place.
-        try:
-            from lib.ichor.retrieval_hydration import (
-                hydrate_event_ids, hydrate_vector_results,
-            )
-            lookup = hydrate_event_ids(db, [r["event_id"] for r in results])
-            hydrate_vector_results(results, lookup)
-        except Exception as exc:
-            logger.debug("VectorBackend inline hydration failed: %s", exc)
         return results
 
     def count(self) -> int:
