@@ -94,8 +94,11 @@ def _find_value_after_block(key: str, block_name: str) -> str:
 
 
 def _master_enabled() -> bool:
-    """Read the master switch from the clawforge config. Returns
-    False (safe default) if anything goes wrong reading the file.
+    """Retained for reference only — NOT the run gate any more.
+
+    `pattern_sharing.enabled` now gates only the federation leg, which reads it
+    in lib/clawforge/adjustment_exporter.py via sharing_enabled(). This wrapper
+    no longer consults it; see the gate comment in main().
     """
     val = _find_value_after_block("enabled", "pattern_sharing")
     return val.lower() == "true"
@@ -140,8 +143,21 @@ async def _run_actual(name: str) -> int:
         except ImportError as e:
             print("  ERROR importing adjustment_exporter: " + str(e), flush=True)
             return 1
-        entry = await run(days=7)
-        print("  published " + str(len(entry.get("adjustments", []))) + " adjustment(s)", flush=True)
+        result = await run(days=7)
+        print("  adjustments:  " + str(result.get("adjustments", 0)), flush=True)
+        print("  artifact:     " + str(result.get("artifact") or "-"), flush=True)
+        print("  local relay:  " + ("published to " + str(result.get("local_url"))
+                                     if result.get("published_local") else "FAILED"), flush=True)
+        print("  federation:   " + ("published" if result.get("published_remote")
+                                     else "skipped (off) or failed"), flush=True)
+        for note in result.get("notes", []):
+            print("  note: " + str(note), flush=True)
+        # The LOCAL leg is the one local self-improvement depends on. If it did
+        # not publish, this export did not do its job — exit non-zero rather than
+        # reporting success for a run that produced nothing.
+        if not result.get("published_local"):
+            print("  ERROR: local relay publish did not succeed", flush=True)
+            return 1
         return 0
     if name == "memory":
         try:
@@ -170,15 +186,23 @@ def main() -> int:
         print("usage: clawforge_export_run.py {forge|memory|dojo}", flush=True)
         return 1
     name = sys.argv[1]
-    # Master switch (from config)
-    if not _master_enabled():
-        _log_skip(name, "pattern_sharing.enabled = false in config")
-        return 0
-    # Per-system opt-in (from config)
-    if not _is_per_system_enabled(name):
-        _log_skip(name, "per-system opt-in for " + name + " is false in config")
-        return 0
-    # Sentinel file (manual switch)
+    # ---- Gates, revised 2026-09-22 -----------------------------------------
+    # `pattern_sharing.enabled` used to gate this whole wrapper, so a
+    # cross-instance PRIVACY switch silently disabled LOCAL self-improvement, and
+    # the run logged `SKIPPED (...)` while exiting 0 — which is why it went
+    # unnoticed for months while systemd reported the unit healthy.
+    #
+    # The switch now gates ONLY the federation leg, inside the exporter
+    # (adjustment_exporter.run -> sharing_enabled()). What remains here is the
+    # per-system opt-in (which exporters are wanted at all) and the sentinel file
+    # (a manual arming switch).
+    # ------------------------------------------------------------------------
+    # The per-system opt-in (`pattern_sharing.<name>_patterns`) is NOT read here.
+    # It scopes SHARING, so it gates the federation leg only — read inside
+    # adjustment_exporter.sharing_allowed_for(). Reading it here would gate local
+    # production behind a sharing setting, which is the defect being fixed.
+    #
+    # Sentinel file: the manual arming switch for the LOCAL leg.
     sentinel = _sentinel_path(name)
     if not sentinel.exists():
         _log_skip(name, "sentinel file missing: " + str(sentinel))

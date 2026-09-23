@@ -23,7 +23,31 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 logger = logging.getLogger("improvement-report")
 
 HOME = os.path.expanduser("~")
-DOJO_DATA = Path(f"{HOME}/.hermes/skills/hermes-dojo/data/metrics.json")
+# The Dojo's metrics.json moved under the profile that owns the Dojo
+# (`profiles/marvin/skills/hermes-dojo/data/metrics.json`). The hardcoded legacy
+# path was never updated, so this report's Dojo section had been structurally
+# empty since the move — it did not fail, it just rendered nothing.
+_DOJO_DATA_CANDIDATES = (
+    Path(f"{HOME}/.hermes/skills/hermes-dojo/data/metrics.json"),
+    Path(f"{HOME}/.hermes/profiles/marvin/skills/hermes-dojo/data/metrics.json"),
+    Path(f"{HOME}/.hermes/profiles/marvin/dojo/data/metrics.json"),
+    Path(f"{HOME}/.hermes/hermes-dojo/data/metrics.json"),
+)
+
+
+def _discover_dojo_data() -> Path:
+    """First existing candidate, else the documented legacy path.
+
+    Path discovery rather than a hardcoded location so the next move does not
+    silently empty this section again.
+    """
+    for cand in _DOJO_DATA_CANDIDATES:
+        if cand.is_file():
+            return cand
+    return _DOJO_DATA_CANDIDATES[0]
+
+
+DOJO_DATA = _discover_dojo_data()
 FORGE_LOG = Path(f"{HOME}/.hermes/ichor/forge/all.jsonl")
 RETRIEVAL_LOG = Path(f"{HOME}/.hermes/pantheon/retrieval-log.jsonl")
 WEIGHTS_PATH = Path(f"{HOME}/pantheon/lib/ichor_hybrid.py")

@@ -22,7 +22,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 logging.basicConfig(
     level=logging.INFO,
@@ -210,8 +210,115 @@ async def publish(nc, subject: str, entry: dict) -> None:
     await nc.publish(subject, data)
 
 
-async def run(days: int = 7) -> dict:
-    """Top-level entry: build the entry, publish, return the entry."""
+# ---------------------------------------------------------------------------
+# Target resolution
+#
+# This pipeline has THREE legs with three different scopes, and conflating them
+# was the original defect:
+#
+#   1. LOCAL ARTIFACT — write down what this instance proposes. Always runs.
+#   2. LOCAL RELAY    — publish to the local NATS from `clawforge.yaml`'s
+#                       `relay:` block. Always runs, unauthenticated. This is
+#                       the leg local consumers (approval surface, Conductor)
+#                       read.
+#   3. FEDERATION     — transmit to a peer instance so another system can
+#                       contribute to and receive the learning (the NATS leg
+#                       for Tallon's system). Requires `pattern_sharing.enabled`
+#                       AND a client token.
+#
+# Legs 1 and 2 used to sit behind leg 3's switch, so a cross-instance PRIVACY
+# setting silently disabled local self-improvement — and the wrapper logged
+# SKIPPED while exiting 0, so it went unnoticed for months.
+# ---------------------------------------------------------------------------
+
+_CLAWFORGE_CONFIG = Path(os.path.expanduser("~/.hermes/clawforge.yaml"))
+_LOCAL_ARTIFACT = Path(os.path.expanduser("~/.hermes/pantheon/forge-adjustments-latest.json"))
+
+
+def _config() -> dict:
+    """Load ~/.hermes/clawforge.yaml. Returns {} when absent or unparseable.
+
+    Parsed with a real YAML loader on purpose: the wrapper in scripts/ hand-rolls
+    an indentation walk, and that is how a whole `pattern_sharing` block went
+    missing without anyone noticing.
+    """
+    try:
+        import yaml  # type: ignore
+        data = yaml.safe_load(_CLAWFORGE_CONFIG.read_text())
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:  # unreadable or invalid config must not crash a run
+        log.warning("could not read %s: %s", _CLAWFORGE_CONFIG, exc)
+        return {}
+
+
+def local_nats_url() -> str:
+    """The local relay endpoint, from the `relay:` block. Defaults to loopback."""
+    relay = _config().get("relay") or {}
+    host = relay.get("host") or "127.0.0.1"
+    port = relay.get("port") or 4222
+    return "nats://" + str(host) + ":" + str(port)
+
+
+def sharing_enabled() -> bool:
+    """True only when `pattern_sharing.enabled: true` is explicitly present."""
+    return bool((_config().get("pattern_sharing") or {}).get("enabled"))
+
+
+#: Which `pattern_sharing` key opts a given exporter's data into sharing.
+_SHARING_OPT_IN = {
+    "forge": "forge_adjustments",
+    "memory": "memory_patterns",
+    "dojo": "dojo_learnings",
+}
+
+
+def sharing_allowed_for(name: str) -> bool:
+    """Whether THIS artifact class may cross the instance boundary.
+
+    Both the master switch and the per-system opt-in must be true.
+
+    These keys live INSIDE the `pattern_sharing` block, so they scope sharing.
+    The wrapper used to read them as a gate on producing the artifact at all,
+    which is how a sharing setting came to disable local self-improvement —
+    the same defect as the master switch, one level down.
+    """
+    ps = _config().get("pattern_sharing") or {}
+    return bool(ps.get("enabled")) and bool(ps.get(_SHARING_OPT_IN.get(name, name)))
+
+
+def _federation_target() -> tuple:
+    """(nats_url, bearer_token) for the cross-instance leg.
+
+    Host and port come from the explicit `federation:` block. The previous code
+    defaulted the host to a hardcoded tailnet address, which made a PEER INSTANCE
+    the silent default destination of a purely local run.
+    """
+    fed = _config().get("federation") or {}
+    host = os.environ.get("CLAWFORGE_NATS_HOST") or fed.get("host") or ""
+    port = os.environ.get("CLAWFORGE_NATS_PORT") or fed.get("port") or 4222
+    if not host:
+        raise SystemExit(
+            "federation leg requested but no peer configured: set "
+            "`federation: {host: <host>, port: 4222}` in ~/.hermes/clawforge.yaml "
+            "or export CLAWFORGE_NATS_HOST"
+        )
+    return "nats://" + str(host) + ":" + str(port), load_token()
+
+
+def _write_local_artifact(entry: dict) -> Path:
+    _LOCAL_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
+    _LOCAL_ARTIFACT.write_text(json.dumps(entry, indent=2, sort_keys=True))
+    return _LOCAL_ARTIFACT
+
+
+async def run(days: int = 7, share: Optional[bool] = None) -> dict:
+    """Run all three legs and report which fired.
+
+    `share` overrides config detection. None means read `pattern_sharing.enabled`.
+
+    Returns a summary dict. `published_local` is the one that matters for local
+    self-improvement; `published_remote` covers the federation leg.
+    """
     import nats  # type: ignore
     from clawforge.instance_id import get_instance_id  # type: ignore
 
@@ -219,25 +326,71 @@ async def run(days: int = 7) -> dict:
     entry = export_forge_adjustments(instance_id, days=days)
     _assert_anonymized(entry)
 
-    token = load_token()
-    nats_host = os.environ.get("CLAWFORGE_NATS_HOST", "100.100.46.52")
-    nats_port = int(os.environ.get("CLAWFORGE_NATS_PORT", "4222"))
-    nats_url = "nats://" + nats_host + ":" + str(nats_port)
+    result: dict = {
+        "instance_id": instance_id,
+        "entry": entry,
+        "adjustments": len(entry.get("adjustments", [])),
+        "total_interventions": entry.get("total_interventions", 0),
+        "artifact": "",
+        "published_local": False,
+        "published_remote": False,
+        "local_url": local_nats_url(),
+        "notes": [],
+    }
 
-    log.info("connecting to %s", nats_url)
-    nc = await nats.connect(nats_url, token=token, name="clawforge-adjustment-exporter")
+    # Leg 1 — local artifact. Always. No switch can turn this off.
     try:
-        await publish(nc, "forge.adjustment.submitted", entry)
-        await nc.flush()
-        log.info(
-            "published forge.adjustment.submitted: %d adjustments, %d interventions, %d gates",
-            len(entry["adjustments"]),
-            entry["total_interventions"],
-            len(entry["gate_health"]),
+        result["artifact"] = str(_write_local_artifact(entry))
+    except OSError as exc:
+        result["notes"].append("local artifact write failed: " + str(exc))
+
+    # Leg 2 — local relay. Always, unauthenticated.
+    try:
+        nc = await nats.connect(result["local_url"], name="clawforge-adj-local")
+        try:
+            await publish(nc, "forge.adjustment.submitted", entry)
+            await nc.flush()
+            result["published_local"] = True
+            log.info(
+                "published forge.adjustment.submitted to LOCAL relay %s (%d adjustments)",
+                result["local_url"], result["adjustments"],
+            )
+        finally:
+            await nc.drain()
+    except Exception as exc:
+        result["notes"].append(
+            "local relay publish failed: " + type(exc).__name__ + ": " + str(exc)
         )
-    finally:
-        await nc.drain()
-    return entry
+
+    # Leg 3 — federation. Explicitly gated; a local run must never require it.
+    want_share = sharing_allowed_for("forge") if share is None else bool(share)
+    if not want_share:
+        result["notes"].append(
+            "federation leg skipped: pattern_sharing.enabled is false "
+            "(local artifact + local relay ran)"
+        )
+        return result
+
+    try:
+        url, token = _federation_target()
+    except SystemExit as exc:
+        result["notes"].append("federation leg skipped: " + str(exc))
+        return result
+
+    try:
+        nc = await nats.connect(url, token=token, name="clawforge-adj-federation")
+        try:
+            await publish(nc, "forge.adjustment.submitted", entry)
+            await nc.flush()
+            result["published_remote"] = True
+            log.info("published forge.adjustment.submitted to FEDERATION %s", url)
+        finally:
+            await nc.drain()
+    except Exception as exc:
+        result["notes"].append(
+            "federation publish failed: " + type(exc).__name__ + ": " + str(exc)
+        )
+    return result
 
 
 if __name__ == "__main__":
