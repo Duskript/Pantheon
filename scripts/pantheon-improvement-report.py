@@ -53,6 +53,65 @@ RETRIEVAL_LOG = Path(f"{HOME}/.hermes/pantheon/retrieval-log.jsonl")
 WEIGHTS_PATH = Path(f"{HOME}/pantheon/lib/ichor_hybrid.py")
 
 
+# ── Freshness gate ──────────────────────────────────────────────────────
+# A metric that cannot state when it was last written is indistinguishable from a
+# live reading. This report rendered the Dojo's success rate and its 7/30-day
+# deltas from a 65-day-old file — a plausible number from a dead source. The
+# guard (`lib/ichor/freshness.py`) was built and tested but NOTHING IMPORTED IT,
+# so it caught nothing. This is the wiring.
+# Import as `lib.ichor.freshness`, NOT `ichor.freshness`, with the REPO ROOT on the
+# path. `lib/ichor/__init__.py` does `from lib.ichor.migrations... import ...`, so
+# putting `lib/` on the path instead raises ModuleNotFoundError on `lib.ichor.migrations`.
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+try:
+    from lib.ichor.freshness import stamp_for_file  # noqa: E402
+    _FRESHNESS_AVAILABLE = True
+    _FRESHNESS_ERROR = ""
+except Exception as _e:
+    # An unavailable guard must NOT degrade to "assume fresh". That is the exact
+    # class-4 failure this wiring exists to remove: a plausible number from an
+    # unverifiable source. Say so, and let --strict fail on it.
+    _FRESHNESS_AVAILABLE = False
+    _FRESHNESS_ERROR = f"{type(_e).__name__}: {_e}"
+    logger.warning("freshness guard UNAVAILABLE (%s) — freshness cannot be verified", _e)
+
+
+def _freshness_gate(path: Path, name: str, result: Dict[str, Any]) -> bool:
+    """Stamp `path`, record staleness on `result`, return "safe to report numbers".
+
+    Returns False when the source is stale or absent. The caller must then NOT
+    populate derived values — a stale number rendered as current is exactly the
+    failure this guard exists to prevent.
+
+    Never raises. A report that raises produces nothing, and "nothing" is
+    indistinguishable from "no problem". Staleness is *stated* instead; `--strict`
+    turns it into a non-zero exit for cron, where a hard failure is correct.
+    """
+    result.setdefault("stale", False)
+    result.setdefault("age_days", None)
+    if not _FRESHNESS_AVAILABLE:
+        # Cannot verify -> not "fresh". Reporting the numbers anyway is how a
+        # stale figure becomes indistinguishable from a live one.
+        result["stale"] = True
+        result["stale_reason"] = (
+            f"{name}: freshness UNVERIFIABLE — guard failed to import ({_FRESHNESS_ERROR})"
+        )
+        return False
+    stamp = stamp_for_file(path, name)
+    result["age_days"] = round(stamp.age_s / 86400, 1)
+    if not stamp.is_fresh:
+        result["stale"] = True
+        result["stale_reason"] = (
+            f"{name}: last written {stamp.human_age()} ago, "
+            f"max {stamp.max_age_s / 3600:.0f}h — {path}"
+        )
+        logger.warning("  STALE  %s", result["stale_reason"])
+        return False
+    return True
+
+
 # ── Section 1: Dojo Skills ──────────────────────────────────────────────
 
 def get_dojo_metrics() -> Dict[str, Any]:
@@ -70,6 +129,12 @@ def get_dojo_metrics() -> Dict[str, Any]:
 
     if not DOJO_DATA.exists():
         logger.info("  Dojo: no metrics data at %s", DOJO_DATA)
+        result["stale"] = True
+        result["stale_reason"] = f"dojo_metrics: file absent — {DOJO_DATA}"
+        return result
+
+    # Gate BEFORE reading: a 65-day-old file must not yield a current-looking rate.
+    if not _freshness_gate(DOJO_DATA, "dojo_metrics", result):
         return result
 
     try:
@@ -147,6 +212,11 @@ def get_forge_metrics() -> Dict[str, Any]:
 
     if not FORGE_LOG.exists():
         logger.info("  Forge: no log at %s", FORGE_LOG)
+        result["stale"] = True
+        result["stale_reason"] = f"forge_improvement_report: log absent — {FORGE_LOG}"
+        return result
+
+    if not _freshness_gate(FORGE_LOG, "forge_improvement_report", result):
         return result
 
     # Try importing the forge analyzer directly
@@ -437,6 +507,10 @@ def main():
     parser = argparse.ArgumentParser(description="Pantheon Improvement Report")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--save", metavar="PATH", help="Save to file")
+    parser.add_argument(
+        "--strict", action="store_true",
+        help="Exit non-zero if any source is stale (use from cron)",
+    )
     args = parser.parse_args()
 
     logger.info("Collecting Dojo metrics...")
@@ -466,6 +540,16 @@ def main():
             path = path / f"pantheon-improvement-{datetime.now().strftime('%Y-%m-%d')}.md"
         path.write_text(output, encoding="utf-8")
         logger.info("Saved to %s", path)
+
+    # --strict: staleness is a hard failure where it matters (cron). The report
+    # itself never raises — it states the problem — but a scheduled run must not
+    # exit 0 while reporting from a dead source.
+    if args.strict:
+        stale = [n for n, sec in (("dojo", dojo), ("forge", forge)) if sec.get("stale")]
+        if stale:
+            logger.error("stale source(s): %s", ", ".join(stale))
+            sys.exit(2)
+        logger.info("all sources fresh")
 
 
 if __name__ == "__main__":
