@@ -192,6 +192,7 @@ def build_record(
     eval_baseline_ref: str = "",
     edit_id: str = "",
     ts: Optional[str] = None,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build and VALIDATE a record without appending it. Raises EditRejected.
 
@@ -218,6 +219,16 @@ def build_record(
         "eval_baseline_ref": eval_baseline_ref,
         "reverted": False,
     }
+    # `extra` carries facts the caller learned while applying — e.g. that the
+    # target was a symlink and what else it affected. It may not shadow a core
+    # field, because a caller must not be able to rewrite its own rationale,
+    # provenance, or approval after the fact.
+    if extra:
+        collisions = sorted(set(extra) & set(record))
+        if collisions:
+            raise EditRejected("extra cannot overwrite core fields: " + ", ".join(collisions))
+        record.update(extra)
+
     problems = validate(record)
     if problems:
         raise EditRejected("edit rejected: " + "; ".join(problems))

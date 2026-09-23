@@ -248,3 +248,109 @@ def test_parent_version_is_captured_before_the_change(env):
     parent_bytes = env["store"].bytes_at(res["rel"], res["parent_version"])
     assert parent_bytes == b"original\n"
     assert res["version"] != res["parent_version"]
+
+# ── symlinked targets: refuse, or record the real blast radius ─────────────
+
+def _make_symlinked_profile(env):
+    """`profiles/hermes/SOUL.md -> ../../SOUL.md`, as it is on the real system."""
+    (env["live"] / "SOUL.md").write_bytes(b"# Global persona\n")
+    link_dir = env["live"] / "profiles" / "hermes"
+    link_dir.mkdir(parents=True, exist_ok=True)
+    link = link_dir / "SOUL.md"
+    link.symlink_to(env["live"] / "SOUL.md")
+    return link
+
+
+def test_symlinked_target_is_refused_by_default(env):
+    link = _make_symlinked_profile(env)
+    with pytest.raises(HarnessStoreError) as e:
+        env["store"].apply_edit(
+            live_path=link, new_bytes=b"# Global persona\nCHANGED\n",
+            author_god="hermes", trigger="handoff", target_artifact_class="soul_append",
+            rationale="edit through the profile path", expected_improvement=_ei(),
+            inputs_read=["/x/forge.jsonl"], human_approver="konan",
+        )
+    msg = str(e.value)
+    assert "symlink" in msg
+    assert "hermes" in msg, "the refusal must name the profiles it would change"
+    assert (env["live"] / "SOUL.md").read_bytes() == b"# Global persona\n", "nothing written"
+
+
+def test_symlinked_target_records_its_real_scope_when_accepted(env):
+    link = _make_symlinked_profile(env)
+    res = env["store"].apply_edit(
+        live_path=link, new_bytes=b"# Global persona\nCHANGED\n",
+        author_god="hermes", trigger="handoff", target_artifact_class="soul_append",
+        rationale="edit through the profile path", expected_improvement=_ei(),
+        inputs_read=["/x/forge.jsonl"], human_approver="konan",
+        allow_symlink=True,
+    )
+    assert res["no_op"] is False
+
+    rec = edit_ledger.load_edits(env["ledger"])[0]
+    # the diff understated nothing: the ledger names the resolution and the scope
+    assert rec["resolved_target"].endswith("SOUL.md")
+    assert rec["shared_with"] == ["hermes"]
+    assert rec["symlink_accepted"] is True
+    # ...and the store keyed on the RESOLVED path, not the profile path
+    assert res["rel"] == "hermes/SOUL.md", res["rel"]
+
+    # reverting through the global path returns the shared file's bytes
+    env["store"].revert(res["edit_id"], reason="undo", automatic=True)
+    assert (env["live"] / "SOUL.md").read_bytes() == b"# Global persona\n"
+
+
+def test_editing_via_symlink_and_via_target_are_the_same_artifact(env):
+    link = _make_symlinked_profile(env)
+    global_path = env["live"] / "SOUL.md"
+    assert env["store"].rel_for(link) == env["store"].rel_for(global_path)
+
+
+def test_extra_cannot_shadow_core_ledger_fields(env):
+    with pytest.raises(edit_ledger.EditRejected) as e:
+        edit_ledger.build_record(
+            author_god="hermes", trigger="handoff", target_artifact_class="soul_append",
+            target_path="/x/SOUL.md", inputs_read=["/x/forge.jsonl"],
+            rationale="real reason", expected_improvement=_ei(),
+            parent_version="abc", human_approver="konan",
+            extra={"rationale": "rewritten after the fact"},
+        )
+    assert "cannot overwrite core fields" in str(e.value)
+
+
+def test_extra_is_preserved_and_validated(env):
+    rec = edit_ledger.build_record(
+        author_god="hermes", trigger="handoff", target_artifact_class="soul_append",
+        target_path="/x/SOUL.md", inputs_read=["/x/forge.jsonl"],
+        rationale="real reason", expected_improvement=_ei(), parent_version="abc",
+        human_approver="konan",
+        extra={"resolved_target": "/x/real/SOUL.md", "shared_with": ["hermes"]},
+    )
+    assert rec["resolved_target"] == "/x/real/SOUL.md"
+    assert rec["shared_with"] == ["hermes"]
+
+
+def test_apply_through_a_symlink_does_not_destroy_the_symlink(env):
+    """os.replace() on a symlink path replaces the LINK, not the target.
+
+    If that regresses, editing profiles/hermes/SOUL.md silently detaches the
+    profile from the shared global file and the edit never reaches the artifact
+    the store keyed it against.
+    """
+    link = _make_symlinked_profile(env)
+    global_path = env["live"] / "SOUL.md"
+
+    env["store"].apply_edit(
+        live_path=link, new_bytes=b"# Global persona\nCHANGED\n",
+        author_god="hermes", trigger="handoff", target_artifact_class="soul_append",
+        rationale="edit through the profile path", expected_improvement=_ei(),
+        inputs_read=["/x/forge.jsonl"], human_approver="konan",
+        allow_symlink=True,
+    )
+
+    assert link.is_symlink(), "the symlink must survive the edit"
+    assert link.resolve() == global_path.resolve()
+    assert global_path.read_bytes() == b"# Global persona\nCHANGED\n", (
+        "the SHARED artifact must carry the change, not a private copy"
+    )
+    assert link.read_bytes() == global_path.read_bytes()

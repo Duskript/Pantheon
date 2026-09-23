@@ -57,6 +57,19 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
+    """Atomically write `data` to `path`, writing THROUGH a symlink.
+
+    `os.replace` operates on the link itself: given a symlink path it replaces
+    the LINK with a regular file. An edit to `profiles/hermes/SOUL.md` (a symlink
+    to the shared `~/.hermes/SOUL.md`) would therefore not update the shared
+    artifact — it would silently detach that profile from it, leaving the global
+    file untouched and the profile holding a private copy. The store keys the
+    edit on the RESOLVED path, so the bytes would also land somewhere other than
+    where the ledger says. Resolve first so the write reaches the real artifact.
+    """
+    path = Path(path)
+    if path.is_symlink():
+        path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name("." + path.name + ".tmp-harness")
     tmp.write_bytes(data)
@@ -144,6 +157,25 @@ class HarnessStore:
 
     # ── core operations ────────────────────────────────────────────────────
 
+    def profiles_sharing(self, resolved: Path) -> List[str]:
+        """Profile names whose SOUL.md resolves to this same file.
+
+        Enumerates the real blast radius of an edit to a symlinked artifact:
+        editing the global SOUL.md changes every profile that points at it.
+        """
+        out: List[str] = []
+        base = Path(self.live_root) / "profiles"
+        if not base.is_dir():
+            return out
+        for prof in sorted(base.iterdir()):
+            soul = prof / "SOUL.md"
+            try:
+                if soul.is_file() and soul.resolve() == resolved:
+                    out.append(prof.name)
+            except OSError:
+                continue
+        return out
+
     def snapshot_paths(self, paths: List[Path], message: str) -> str:
         """Copy live bytes into the store and commit. Returns the commit sha."""
         for p in paths:
@@ -203,6 +235,7 @@ class HarnessStore:
         marker: str = "",
         tag_as: str = "",
         eval_baseline_ref: str = "",
+        allow_symlink: bool = False,
     ) -> Dict[str, Any]:
         """Apply an edit under the ledger's rules. Returns a result dict.
 
@@ -221,6 +254,31 @@ class HarnessStore:
                 f"artifact class {target_artifact_class!r} is frozen to human-only "
                 f"({edit_ledger.frozen_classes(self.ledger_path)[target_artifact_class]})"
             )
+
+        # Symlinked targets. `profiles/hermes/SOUL.md -> ~/.hermes/SOUL.md`, and
+        # `rel_for` keys on the RESOLVED path — correct for the store, but it
+        # means an edit made through the profile path writes the file every
+        # profile shares. If the ledger recorded the caller's path as-is, it
+        # would name one profile while the bytes changed for all of them: the
+        # diff would understate its own blast radius, which is the one thing
+        # `expected_improvement.blast_radius` exists to prevent. So: refuse
+        # unless the caller opts in, and when it does, record the real scope.
+        symlink_extra: Dict[str, Any] = {}
+        if live_path.is_symlink():
+            resolved = live_path.resolve()
+            sharers = self.profiles_sharing(resolved)
+            if not allow_symlink:
+                raise HarnessStoreError(
+                    f"{live_path} is a symlink to {resolved} — editing it changes "
+                    f"{len(sharers)} profile(s): {', '.join(sharers)}. Pass "
+                    f"allow_symlink=True to accept that scope, or target the "
+                    f"resolved path directly."
+                )
+            symlink_extra = {
+                "resolved_target": str(resolved),
+                "shared_with": sharers,
+                "symlink_accepted": True,
+            }
 
         rel = self.rel_for(live_path)
         before = live_path.read_bytes()
@@ -267,6 +325,7 @@ class HarnessStore:
             diff=diff,
             human_approver=human_approver,
             eval_baseline_ref=eval_baseline_ref,
+            extra=symlink_extra or None,
         )
 
         # Now safe to touch the store: the pre-state is committed so a revert
