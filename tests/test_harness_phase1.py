@@ -354,3 +354,36 @@ def test_apply_through_a_symlink_does_not_destroy_the_symlink(env):
         "the SHARED artifact must carry the change, not a private copy"
     )
     assert link.read_bytes() == global_path.read_bytes()
+
+
+def test_revert_through_a_symlink_path_preserves_the_symlink(env):
+    """The revert leg reaches _atomic_write through `materialize` (:219).
+
+    This is the leg the ORIGINAL defect surfaced on — the failure appeared at
+    revert time, not at apply time. Revert accepts a `live_path` override, so
+    passing the symlink exercises the identical `os.replace` hazard on the
+    revert path. Proven directly here rather than inferred from the edit leg:
+    a fix covering only the apply site would reintroduce this exact defect on
+    the next revert through a profile path.
+    """
+    link = _make_symlinked_profile(env)
+    global_path = env["live"] / "SOUL.md"
+    original = global_path.read_bytes()
+
+    res = env["store"].apply_edit(
+        live_path=link, new_bytes=original + b"CHANGED\n",
+        author_god="hermes", trigger="handoff", target_artifact_class="soul_append",
+        rationale="edit through the profile path", expected_improvement=_ei(),
+        inputs_read=["/x/forge.jsonl"], human_approver="konan", allow_symlink=True,
+    )
+    assert global_path.read_bytes() == original + b"CHANGED\n"
+
+    rev = env["store"].revert(
+        res["edit_id"], reason="undo through the link", automatic=True, live_path=link,
+    )
+
+    assert link.is_symlink(), "revert must not replace the symlink with a regular file"
+    assert link.resolve() == global_path.resolve()
+    assert global_path.read_bytes() == original, "the SHARED file must be restored"
+    assert rev["byte_identical"] is True
+    assert rev["live_sha256"] == rev["restored_sha256"]
