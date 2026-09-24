@@ -157,18 +157,41 @@ def collect_hades() -> str:
     return f"[Most recent Hades report: {latest.name} · modified {mtime}]\n{preview}"
 
 def collect_dawn_patrol() -> str:
-    """Read the most recent Thoth dawn patrol briefing."""
+    """Read the most recent Thoth dawn patrol briefing.
+
+    Two filename families live in this directory and they are NOT the same
+    document:
+
+      * ``{date}--briefing.md`` — the research digest Thoth writes (10s of KB).
+        The briefing calls this the durable copy.
+      * ``{date}.md``          — the 05:00 archive step's "Pantheon State" stub
+        (1-4 KB), which took over the canonical path on 2026-09-22.
+
+    Globbing only the plain path fed this brief a 1-4 KB stub for three
+    consecutive cycles while the real digest sat beside it:
+
+        2026-09-22  2,325 B vs 88,262 B   2026-09-23  1,361 B vs 65,311 B
+        2026-09-24  3,921 B vs 69,945 B
+
+    Selection rule: the newest ``{date}--briefing.md``. The plain series is used
+    only when NO briefing file exists at all. We never step BACKWARDS from a
+    briefing to an older plain file: on any date where both exist the plain file
+    is known to be the archive stub, so an older plain file is a stale digest
+    rather than a fresh one.
+    """
     patrol_dir = Path(ATHENAEUM_DIR) / "reports" / "dawn-patrol"
     if not patrol_dir.exists():
         return "[No dawn patrol directory — intelligence scan not yet set up]"
-    files = sorted(
-        patrol_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].md"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
+
+    date_glob = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+    briefings = sorted(patrol_dir.glob(f"{date_glob}--briefing.md"))
+    files = briefings or sorted(patrol_dir.glob(f"{date_glob}.md"))
     if not files:
         return "[No dawn patrol briefings found yet — first scan runs at midnight]"
-    latest = files[0]
+
+    # The stem is an ISO date, so name order IS chronological order. Sort on the
+    # name, not st_mtime: mtime is a rewrite time, not the date the report covers.
+    latest = max(files, key=lambda p: p.name)
     content = latest.read_text().strip()
     if not content:
         return f"[Dawn patrol report {latest.name} is empty]"
@@ -178,6 +201,7 @@ def collect_dawn_patrol() -> str:
     lines = content.splitlines()
 
     def section(title: str) -> list[str]:
+        """Extract a ``## {title}`` block (archive-report schema)."""
         marker = f"## {title}"
         start = next((i for i, line in enumerate(lines) if line.strip().startswith(marker)), None)
         if start is None:
@@ -188,18 +212,23 @@ def collect_dawn_patrol() -> str:
             chunk = chunk[:12]
         return chunk
 
-    sections = []
+    sections: list[str] = []
+    # Archive-report schema — matches the 05:00 stub and pre-2026-09-22 files.
     for title in ("📦 System Health", "🔍 Ichor Brief", "📰 Intel", "📨 Quarantine"):
         chunk = section(title)
         if chunk:
             sections.extend(chunk)
             sections.append("")
     if not sections:
+        # Briefing schema. Keep EVERY heading level including ``#### ``, which is
+        # where the paper IDs live: ``"#### x".startswith("### ")`` is False, so
+        # the previous prefix tuple dropped all 14 and the prior-brief paper-ID
+        # carry-forward lost its entire input.
         sections = [
             line for line in lines
-            if line.startswith(("# ", "## ", "### ", "- "))
+            if line.startswith(("# ", "## ", "### ", "#### ", "- "))
             or any(t in line for t in ("HIGH", "MEDIUM", "LOW", "⚠️", "❌", "✅", "🔴"))
-        ][:60]
+        ][:140]
     preview = "\n".join(sections).strip()
     return f"[Dawn Patrol: {latest.name} · modified {mtime}]\n{preview or content[:3000]}"
 
