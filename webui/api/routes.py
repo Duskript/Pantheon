@@ -7528,6 +7528,15 @@ def handle_post(handler, parsed) -> bool:
 
             username = body.get("username", "")
             password = body.get("password", "")
+            # Upstream hermes-webui clients (e.g. Hermex on Android) POST
+            # {"password": ...} only -- their login model has no username field.
+            # On a single-user deployment that request is unambiguous, so resolve
+            # the sole user and let normal authentication proceed. Multi-user
+            # deployments send an explicit username and are unaffected.
+            if not username:
+                _users = _olympus_get_data().get("users", [])
+                if len(_users) == 1:
+                    username = _users[0].get("username", "")
             user = _olympus_auth(username, password) if username else None
             if not user:
                 _record_login_attempt(client_ip)
@@ -7545,6 +7554,10 @@ def handle_post(handler, parsed) -> bool:
             set_auth_cookie(handler, session_token)
             handler.end_headers()
             handler.wfile.write(json.dumps({
+                # "ok" preserves the upstream hermes-webui success shape; clients
+                # (e.g. Hermex) deserialize LoginResponse(ok, token) and treat a
+                # missing/null "ok" as failure.
+                "ok": True,
                 "token": token_part,
                 "user": user_data.get("user", user) if isinstance(user_data, dict) else user,
             }).encode())
