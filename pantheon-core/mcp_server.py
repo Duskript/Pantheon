@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -36,6 +37,16 @@ _CHROMA_DIR = Path(f"{_REAL_HOME}/.hermes/pantheon/chroma")
 _MESSAGES_DIR = Path(f"{_REAL_HOME}/pantheon/gods/messages")
 _PANTHEON_DIR = Path(f"{_REAL_HOME}/pantheon")
 _HADES_REPORTS = Path(f"{_REAL_HOME}/athenaeum/Codex-Pantheon/reports")
+
+# Canonical daily Hades report filename: ``hades-YYYY-MM-DD.md``.
+# The reports directory also holds non-canonical stems that must NOT win a
+# filename sort: ``hades-cron-<date>-<slot>.md`` (cron-slot runs),
+# ``hades-<date>-compile.md``, ``hades-<date>-rebuild.md``. Sorting the raw
+# glob lexicographically ranked ``hades-cron-...`` above every daily report
+# for all time ('c' 0x63 > '2' 0x32), so ``hades_get_report()`` served a
+# stale June report as "most recent". Constrain to the date-shaped series
+# and order by the parsed date; ISO dates sort chronologically as strings.
+_HADES_REPORT_DATE_RE = re.compile(r"^hades-(\d{4}-\d{2}-\d{2})\.md$")
 _EMBEDDABLE_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
 
 # Ensure `~ / pantheon` is on sys.path at module import time so `import
@@ -1071,8 +1082,13 @@ def hades_get_report(
         if not report_path.exists():
             return json.dumps({"error": f"No report found for date {report_date}"}, indent=2)
     else:
-        # Find most recent
-        reports = sorted(_HADES_REPORTS.glob("hades-*.md"), reverse=True)
+        # Find most recent, considering only the canonical daily series.
+        reports = sorted(
+            (p for p in _HADES_REPORTS.glob("hades-*.md")
+             if _HADES_REPORT_DATE_RE.match(p.name)),
+            key=lambda p: _HADES_REPORT_DATE_RE.match(p.name).group(1),
+            reverse=True,
+        )
         if not reports:
             return json.dumps({"error": "No Hades reports found"}, indent=2)
         report_path = reports[0]
