@@ -88,6 +88,22 @@ def _sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
+def _source_text_for_relationship(conn: sqlite3.Connection, rel_id: int, limit: int = 700) -> str:
+    """Ground a relationship on its OWN recorded provenance.
+
+    `relationships.source_ref` is populated for ~35,810 rows and holds the text the
+    relationship was extracted from. The builder previously used the SOURCE ENTITY's
+    name (`_source_text(conn, sn)`), which produced an excerpt of whatever text
+    mentions that entity — e.g. for `(Konan) --[related]--> (Ledger)` it returned
+    ledger-unrelated text containing "Konan", so the judge correctly reported the
+    relation as ungrounded. The excerpt was wrong, not the verdict.
+    """
+    row = conn.execute("SELECT source_ref FROM relationships WHERE id = ?", (rel_id,)).fetchone()
+    if not row or not row[0]:
+        return ""
+    return str(row[0])[:limit]
+
+
 def _source_text(conn: sqlite3.Connection, name: str, limit: int = 700) -> str:
     """Grounding excerpt for an item: the events the name actually occurs in.
 
@@ -184,7 +200,11 @@ def sample_items(conn: sqlite3.Connection, n: int, seed: int = 20260923) -> list
                 "created_at": None,
                 "bucket": "relationship",
                 "source_event_ids": [],
-                "source_excerpt": _source_text(conn, sn),
+                # Ground on the relationship's OWN provenance, not the source entity's
+                # name — the latter cannot mention the object and makes the judge
+                # correctly report "not grounded" against the wrong excerpt.
+                "source_excerpt": (_source_text_for_relationship(conn, rid)
+                                   or _source_text(conn, sn)),
             })
 
     rng.shuffle(items)
