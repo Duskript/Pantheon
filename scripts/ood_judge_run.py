@@ -56,6 +56,40 @@ BATCH = 8
 # judge counts as a real disagreement rather than noise-in-the-noise.
 CONFIDENT = 0.7
 
+#: THE LABEL DEFINITION — versioned, because the metric is built on it.
+#:
+#: v1 said "a genuine named concept". Validating the judge against Konan's own
+#: judgements found that reading too NARROW: 5 of 6 disagreements were items the
+#: judge called NOISE and Konan called REAL — package relationships, directory
+#: paths, URLs, module relationships, script filenames. Those are *artifacts and
+#: identifiers*: not "concepts", but real referents worth retrieving.
+#:
+#: So the disagreement was definitional, not a competence failure, and the judge
+#: was consistent with the rule it was given. v2 states the rule Konan actually
+#: applies. Without this written down, every future measurement carries a silent
+#: ~15% skew in the conservative direction.
+LABEL_DEFINITION_VERSION = "v2"
+LABEL_DEFINITION = """\
+REAL — worth storing in a knowledge graph. This INCLUDES:
+  * named concepts: people, organisations, projects, products, tools, systems
+  * ARTIFACTS: file paths, directories, filenames, scripts, config files
+  * URLs, domains, endpoints, and handles
+  * package / module / namespace identifiers
+  * RELATIONSHIPS between any of the above, including package-to-package and
+    module-to-module, when the two sides are real referents
+  * technologies, formats, standards, and licences
+
+NOISE — not worth storing. This is:
+  * a sentence fragment cut off mid-word
+  * a log line or raw tool output (e.g. 'exit code 1', 'Traceback (most recent')
+  * a bare number, hash, or opaque ID with no referent (e.g. 'wf_bc1c9ae7')
+  * duplicated or garbled text
+  * a generic English phrase that names nothing (e.g. 'but I shouldn't be s')
+
+KEY TEST: if a human could sensibly ask "what is this?" and get an answer, it is
+REAL — even if the answer is "a file" or "a package". An artifact is a real thing.
+"""
+
 
 def _judge_call(prompt: str, model: str, key: str, base: str, timeout: int = 180) -> tuple[str, dict]:
     payload = json.dumps({
@@ -85,14 +119,13 @@ def _build_prompt(batch: list[dict]) -> str:
     lines = [
         "You are quality-labelling extracted knowledge-graph items for an audit.",
         "",
-        "For EACH numbered item decide whether it is:",
-        "  REAL  - a genuine named concept worth storing in a knowledge graph",
-        "  NOISE - a file path, license string, log line, sentence fragment cut off",
-        "          mid-word, or anything that is not a real named concept",
+        "Classify each item as REAL or NOISE using THIS definition:",
         "",
-        "Where a SOURCE excerpt is given, use it: an item is only REAL if the source",
-        "actually supports it as a concept. An item with no source and no clear",
-        "concept identity is NOISE.",
+        LABEL_DEFINITION,
+        "",
+        "Where a SOURCE excerpt is given, check the item is GROUNDED in it. An item",
+        "with no source and no clear referent is NOISE; an item with no source that",
+        "clearly names a real thing is still REAL.",
         "",
         "Answer with EXACTLY one line per item, no preamble:",
         "<n>. REAL|NOISE - <max 8 words why>",
@@ -160,6 +193,7 @@ def main() -> int:
     ap.add_argument("--vault", default=str(DEFAULT_VAULT))
     ap.add_argument("--model", default=JUDGE_MODEL)
     ap.add_argument("--limit", type=int, default=0, help="judge only the first N items")
+    ap.add_argument("--tag", default="", help="suffix for the output files (e.g. v2)")
     args = ap.parse_args()
 
     vault = Path(args.vault).expanduser()
@@ -209,11 +243,13 @@ def main() -> int:
     ]
     unparsed = [r for r in results if r["judge_verdict"] == "UNPARSED"]
 
-    (vault / "judge_results.jsonl").write_text(
+    _t = f"_{args.tag}" if args.tag else ""
+    (vault / f"judge_results{_t}.jsonl").write_text(
         "\n".join(json.dumps(r, sort_keys=True) for r in results) + "\n")
     summary = {
         "judged_at": datetime.now(timezone.utc).isoformat(),
         "judge_model": args.model,
+        "label_definition_version": LABEL_DEFINITION_VERSION,
         "n_judged": len(results),
         "calls": calls,
         "tokens_in": tok_in, "tokens_out": tok_out,
@@ -224,7 +260,7 @@ def main() -> int:
         "unparsed": len(unparsed),
         "contested_ids": [r["item_id"] for r in contested],
     }
-    (vault / "judge_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (vault / f"judge_summary{_t}.json").write_text(json.dumps(summary, indent=2) + "\n")
 
     logger.info("done in %.0fs | %d calls | tokens %d/%d", elapsed, calls, tok_in, tok_out)
     logger.info("  verdicts  : %s", summary["verdicts"])
