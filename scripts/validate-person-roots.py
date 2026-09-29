@@ -7,9 +7,9 @@ Checks (per PERSON_ROOTS_SCHEMA.md section 12 and the Wave 1/2 fusion build):
   3.  every person folder listed in INDEX.md exists (and every non-underscore
       folder on disk is listed in the index)
   4.  required base files exist for each person:
-      PROFILE.md, RELATIONSHIP_TO_OWNER.md, ALIASES.md, PERMISSIONS.md,
+      PROFILE.md, RELATIONSHIP_TO_KONAN.md, ALIASES.md, PERMISSIONS.md,
       MEMORY_POLICY.md, INTERACTION_LOG.md, NOTES.md
-  5.  direct users have ROOT.md, PREFERENCES.md, RELATIONSHIPS/owner.md, and
+  5.  direct users have ROOT.md, PREFERENCES.md, RELATIONSHIPS/konan.md, and
       at least one PROJECTS/*.md when a project lane is declared
   6.  every markdown file has YAML frontmatter
   7.  frontmatter parses (PyYAML when installed; stdlib fallback otherwise)
@@ -17,7 +17,7 @@ Checks (per PERSON_ROOTS_SCHEMA.md section 12 and the Wave 1/2 fusion build):
   9.  document_type is one of the allowed enum values
  10.  sensitivity is one of the allowed enum values
  11.  trust_tier, when present, is one of the allowed enum values
- 12.  RELATIONSHIP_TO_OWNER.md defaults to shareable_by_default: false
+ 12.  RELATIONSHIP_TO_KONAN.md defaults to shareable_by_default: false
 
 CLI:
     python3 validate-person-roots.py --root <relationships-root>
@@ -39,7 +39,7 @@ except ImportError:  # noqa: E722 - deliberate narrow catch
 
 BASE_FILES = (
     "PROFILE.md",
-    "RELATIONSHIP_TO_OWNER.md",
+    "RELATIONSHIP_TO_KONAN.md",
     "ALIASES.md",
     "PERMISSIONS.md",
     "MEMORY_POLICY.md",
@@ -50,7 +50,7 @@ BASE_FILES = (
 DIRECT_USER_FILES = ("ROOT.md", "PREFERENCES.md")
 
 DOCUMENT_TYPES = frozenset({
-    "index", "profile", "relationship_to_owner", "aliases", "permissions",
+    "index", "profile", "relationship_to_konan", "aliases", "permissions",
     "memory_policy", "interaction_log", "notes", "root", "preferences",
     "relationship", "project",
 })
@@ -316,8 +316,8 @@ def validate(root):
             for extra in DIRECT_USER_FILES:
                 if not os.path.isfile(os.path.join(person_dir, extra)):
                     errors.append("%s: direct user missing %s" % (pid, extra))
-            if not os.path.isfile(os.path.join(person_dir, "RELATIONSHIPS", "owner.md")):
-                errors.append("%s: direct user missing RELATIONSHIPS/owner.md" % pid)
+            if not os.path.isfile(os.path.join(person_dir, "RELATIONSHIPS", "konan.md")):
+                errors.append("%s: direct user missing RELATIONSHIPS/konan.md" % pid)
 
             project_lanes = profile_fm.get("project_lanes")
             projects_dir = os.path.join(person_dir, "PROJECTS")
@@ -340,9 +340,9 @@ def validate(root):
                 if not project_files:
                     warnings.append("%s: PROJECTS/ exists but contains no .md files" % pid)
 
-        # Explicit spec: Sample Developer's code-roast lane file
-        if pid == "sample-dev" and not os.path.isfile(os.path.join(person_dir, "PROJECTS", "code-review.md")):
-            errors.append("sample-dev: expected PROJECTS/code-review.md (code-roast lane)")
+        # Explicit spec: Xander's code-roast lane file
+        if pid == "xander" and not os.path.isfile(os.path.join(person_dir, "PROJECTS", "code-roast.md")):
+            errors.append("xander: expected PROJECTS/code-roast.md (code-roast lane)")
 
     # 6-12. frontmatter / field checks on every markdown file
     for dirpath, dirnames, filenames in os.walk(root):
@@ -384,8 +384,8 @@ def validate(root):
             if "trust_tier" in data and data.get("trust_tier") not in TRUST_TIERS:
                 errors.append("%s: invalid trust_tier %r" % (rel_path, data.get("trust_tier")))
 
-            # 12. relationship-to-Owner files default to shareable_by_default: false
-            if dtype == "relationship_to_owner":
+            # 12. relationship-to-Konan files default to shareable_by_default: false
+            if dtype == "relationship_to_konan":
                 shareable = data.get("shareable_by_default")
                 if shareable in _TRUE_VALUES:
                     errors.append(
@@ -405,7 +405,7 @@ def main(argv=None):
     )
     parser.add_argument(
         "--root",
-        default="~/.pantheon/person-roots/relationships",
+        default="/home/konan/athenaeum/Codex-User/relationships",
         help="Path to the relationships root (default: %(default)s)",
     )
     args = parser.parse_args(argv)

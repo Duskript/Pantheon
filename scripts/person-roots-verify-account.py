@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--person-id', required=True)
     parser.add_argument('--platform', required=True, choices=['discord', 'telegram'])
     parser.add_argument('--account-id', required=True)
-    parser.add_argument('--verified-by', default='owner')
+    parser.add_argument('--verified-by', default='konan')
     parser.add_argument('--proof-json', default='')
     parser.add_argument('--proof-file', default='')
     parser.add_argument('--today', default=None)

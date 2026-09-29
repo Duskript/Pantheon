@@ -1,14 +1,21 @@
-# Person Roots Framework (Sanitized)
+# Person Roots Spec Pack
 
-Generic Person Roots framework: resolver, ACL evaluator, guarded ingest/apply, explicit-marker observer, pending resolver, account verification helpers, and a standalone Ichor-compatible retrieval backend.
+**Date:** 2026-08-06
 
-This package intentionally excludes operator-specific profiles, private relationship folders, account IDs, private names, live Athenaeum paths, and built profile data. Tests create synthetic roots in temporary directories.
+This directory contains the canonical planning pack for the Pantheon Person Roots + Privacy ACL layer.
 
-Runtime roots must be supplied by `PERSON_ROOTS_ROOT` or explicit CLI `--root` arguments.
+## Files
 
-## Verification
+1. `PERSON_ROOTS_THESIS.md` — product thesis, problem, principles, first slice.
+2. `PERSON_ROOTS_PRIVACY_ACL.md` — source authority, trust tiers, domain-scoped permissions, ACL rules.
+3. `PERSON_ROOTS_SCHEMA.md` — folder/file/frontmatter schema for relationship folders and direct-user roots.
+4. `PERSON_ROOTS_BUILD_GATES.md` — acceptance gates, regression blockers, evidence requirements.
+5. `PERSON_ROOTS_FUSION_BUILD_PLAN.md` — wave plan and first executor Spec Contract.
 
-```bash
-python3 -m py_compile lib/person_roots/*.py lib/ichor/person_roots_backend.py scripts/person-roots-*.py scripts/validate-person-roots.py
-python3 -m unittest tests/test_person_roots_framework.py
-```
+## Core doctrine
+
+> Know people deeply. Share narrowly. Update only from trusted sources.
+
+## Fusion mode
+
+Hermes is planner/reviewer. Default coding executor is DeepSeek V4 Flash through Hermes delegation. Marvin is reserved for persona/domain-specific work like Xander's code-roast lane.

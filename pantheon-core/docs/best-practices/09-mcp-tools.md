@@ -1,145 +1,161 @@
 ---
 title: "MCP Tools — the operator-facing tool surface"
-last_verified: 2026-06-19
+last_verified: 2026-09-01
 ---
 
 # MCP Tools — the operator-facing tool surface
 
-The Pantheon MCP server exposes 28 tools that gods (and operators) call directly. This page is a categorized reference, not auto-generated. For the full schema of any tool, call it in your MCP client — the descriptions are part of the tool manifest.
+As of 2026-09-01, `pantheon-core/mcp_server.py` registers **35 MCP tools** with FastMCP. This page is a human-maintained guide to that current source inventory; tool names and counts can change between releases, so verify the live manifest when upgrading.
 
 ## Categories
 
-- [Memory and Knowledge](#memory-and-knowledge) — 9 tools
+- [Athenaeum and Ichor](#athenaeum-and-ichor) — 19 tools
 - [Messaging](#messaging) — 2 tools
-- [God Operations](#god-operations) — 3 tools
+- [Gods and reports](#gods-and-reports) — 2 tools
 - [Skills](#skills) — 3 tools
-- [System Health](#system-health) — 3 tools
-- [Conductor Workflows](#conductor-workflows) — 1 tool
-- [Web and Research](#web-and-research) — 2 tools
+- [System](#system) — 2 tools
+- [Conductor](#conductor) — 1 tool
+- [Pantheon index and paths](#pantheon-index-and-paths) — 6 tools
 
-## Memory and Knowledge
+## Athenaeum and Ichor
 
-These tools read and write the Athenaeum and Ichor memory layers.
+These tools cover file-backed knowledge, FTS5 memory, goals, gates, graph operations, and entity extraction.
 
-| Tool | Purpose | When to use |
-|---|---|---|
-| `athenaeum_walk` | Navigate the Athenaeum index tree | Starting a research task — find the codex for your topic |
-| `athenaeum_read` | Read a specific file by path | After `athenaeum_walk` returns a path |
-| `athenaeum_list_codexes` | List all codexes | Discovering what knowledge domains exist |
-| `athenaeum_search` | FTS5 keyword search across the Athenaeum | Looking for content by keyword (not entity) |
-| `athenaeum_graph_search` | Entity/relationship graph search | Looking for content by entity name |
-| `athenaeum_write` | Write a file to the Athenaeum | Contributing structured knowledge or session artifacts |
-| `ichor_retrieve` | Fused search across all memory backends | The default "find what I know about X" |
-| `ichor_store` | Store content with auto-routing by category | Recording a fact, decision, insight, or commitment |
-| `ichor_forget` | Delete an item by key | Retracting a stored item (use sparingly) |
+| Tool | Purpose |
+|---|---|
+| `athenaeum_search` | FTS5 keyword search over Athenaeum/Ichor reference data |
+| `athenaeum_read` | Read a file by path relative to the Athenaeum root |
+| `athenaeum_walk` | Browse the Athenaeum index structure |
+| `athenaeum_write` | Write or overwrite a file in the Athenaeum |
+| `athenaeum_list_codexes` | List Athenaeum Codexes, optionally with counts |
+| `ichor_brief` | Ranked zero-query context brief |
+| `ichor_ledger` | Structured current-state ledger for a god |
+| `ichor_retrieve` | Fused retrieval across FTS5, vector, graph, and event backends |
+| `ichor_store` | Store memory and route it by category |
+| `ichor_forget` | Delete an Ichor item by backend-qualified key |
+| `ichor_goal` | Add, list, inspect, update, complete, pause, inject, or summarize strategic goals |
+| `ichor_health` | Check Ichor memory backends |
+| `ichor_gates` | Run state, logic, phase-detection, handoff, or pipeline-health gates |
+| `ichor_forge` | Analyze gate interventions and propose harness adjustments |
+| `ichor_graph_query` | Run a multi-hop entity/relationship graph query |
+| `ichor_l2_stats` | Read L2 entity/relationship extraction statistics |
+| `ichor_extract_entities` | Run one incremental L2 extraction pass |
+| `ichor_l2_finalize` | Finalize provisional L2 entities and relationships |
+| `athenaeum_graph_search` | Search the WARM entity/relationship table |
 
-**The most-used pair:** `ichor_retrieve` (read) + `ichor_store` (write). Together they cover 80% of memory operations.
+`athenaeum_search` currently uses SQLite FTS5 and reference tables; it is not a ChromaDB search wrapper. `ichor_retrieve` is the broader fused retrieval surface.
 
 ## Messaging
 
-| Tool | Purpose | When to use |
-|---|---|---|
-| `messaging_send` | Send a message to another god's inbox | Asynchronous handoff, notification, request, or alert |
-| `messaging_check_inbox` | Check a god's inbox for unread messages | At the start of a session, or when a notification is expected |
+| Tool | Purpose |
+|---|---|
+| `messaging_send` | Write an asynchronous notification, request, alert, or handoff to a god's inbox |
+| `messaging_check_inbox` | Return unread messages for a god; `mark_read=True` mutates the returned message files |
 
-**Important:** `messaging_send` is for *asynchronous* handoffs, not for asking a god a question in real time. For synchronous Q&A, use the chat interface.
+The MCP messaging inbox is file-backed under `~/pantheon/gods/messages/<god>/`. It is not a synchronous Q&A channel and should not be polled in a tight loop.
 
-## God Operations
+## Gods and reports
 
-| Tool | Purpose | When to use |
-|---|---|---|
-| `god_list` | List all registered gods with capabilities | Discovering who exists and what they can do |
-| `ichor_brief` | Get a ranked context brief for a god | The canonical "what should I know right now?" query |
-| `ichor_health` | Health check for all Ichor memory backends | Diagnosing memory issues |
+| Tool | Purpose |
+|---|---|
+| `god_list` | Read the registered god roster from `~/pantheon/gods/gods.yaml` |
+| `hades_get_report` | Read the latest or a specified Hades consolidation report |
 
 ## Skills
 
-| Tool | Purpose | When to use |
-|---|---|---|
-| `skill_list` | List all available skills in the hub | Discovering what skills exist |
-| `skill_info` | Get detailed info on a specific skill | Before invoking an unfamiliar skill |
-| `skill_run` | Execute a skill by name with arguments | When a skill is a script (not a markdown body) |
+| Tool | Purpose |
+|---|---|
+| `skill_list` | List executable shared skills in the Pantheon skills hub |
+| `skill_info` | Inspect a shared skill's manifest and arguments |
+| `skill_run` | Execute a shared skill by name with arguments |
 
-For more on skills, see [Skills](02-skills.md) and [Making a Skill](04-making-a-skill.md).
+These are distinct from Hermes Markdown skills loaded with `skill_view` or `/<skill-name>`. Inspect an executable skill before running it, especially when it has side effects.
 
-## System Health
+## System
 
-| Tool | Purpose | When to use |
-|---|---|---|
-| `system_health` | Check ChromaDB, Athenaeum, embedding service | First step in any "something is broken" diagnosis |
-| `system_current_model` | Get the current model and provider for a session | Verifying a model change took effect |
-| `hades_get_report` | Get the most recent Hades nightly consolidation report | Understanding what the nightly maintenance did |
+| Tool | Purpose |
+|---|---|
+| `system_health` | Check Pantheon Ichor vector/event state, Athenaeum filesystem, and embedding service |
+| `system_current_model` | Report the configured model/provider for a session or active profile |
 
-## Conductor Workflows
+## Conductor
 
-| Tool | Purpose | When to use |
-|---|---|---|
-| `conductor_start_workflow` | Start a Conductor workflow instance | Triggering a multi-step workflow |
+| Tool | Purpose |
+|---|---|
+| `conductor_start_workflow` | Start a Conductor v2 workflow instance and mint a workflow ID |
 
-For more on Conductor, see the [Conductor documentation](https://github.com/Duskript/Pantheon/tree/main/conductor).
+Conductor's wider lifecycle has additional endpoints outside this MCP server; consult the Conductor documentation for handoff, acknowledgement, and workflow-state operations.
 
-## Web and Research
+## Pantheon index and paths
 
-| Tool | Purpose | When to use |
-|---|---|---|
-| `web_search` | Search the web | Operator-initiated research, not god-initiated |
-| `web_extract` | Extract content from a URL | After `web_search` returns a result, or when given a URL directly |
+| Tool | Purpose |
+|---|---|
+| `pantheon_path` | Resolve a canonical path for a Pantheon artifact type |
+| `pantheon_index_refresh` | Rebuild the Pantheon System Index |
+| `pantheon_search` | Full-text search indexed files, tools, skills, cron jobs, gods, and workflows |
+| `pantheon_locate` | Locate a known component by name or path |
+| `pantheon_list` | List indexed components by category |
+| `pantheon_index_status` | Show index location, size, timestamp, and category counts |
+
+Run `pantheon_index_refresh` after adding indexed files, tools, skills, cron jobs, gods, or workflows if the index is expected to reflect the change immediately.
 
 ## How to call a tool
 
 ### From chat
 
-Just ask. The active god will pick the right tool:
+Ask the active agent for the outcome you need:
 
 ```
-> What do we know about ChromaDB?
+> What do we know about SQLite FTS5 memory retrieval?
 ```
 
-The god will call `ichor_retrieve` (or `athenaeum_search`) and synthesize the result.
+The agent can select `ichor_retrieve`, `athenaeum_search`, or a graph/index tool based on the question.
 
 ### From a build plan
 
-In a build plan's "Tools" section, reference tools by name. The plan executor calls them at the appropriate step.
+Reference the tool name in the plan's Tools section. The executor remains responsible for passing the required arguments and handling side effects.
 
 ### Programmatically
 
-```python
-import json
-import subprocess
+Use the MCP client library appropriate to your host:
 
-# Call a tool via the MCP client of your choice
+```python
 result = mcp_client.call(
     "ichor_store",
     {
-        "key": "fact:chromadb-was-replaced",
-        "content": "ChromaDB was replaced by SQLite FTS5 in P4d (2026-05).",
+        "key": "fact:fts5-memory",
+        "content": "The current Athenaeum keyword path uses SQLite FTS5.",
         "category": "fact",
     },
 )
 ```
 
+Always inspect the returned envelope. In particular, `athenaeum_write`, `messaging_send`, `skill_run`, workflow start, and memory mutation tools have side effects.
+
 ## Anti-patterns
 
-- **Don't poll `messaging_check_inbox` in a tight loop.** The inbox is durable. Check at session start, or on demand, not on a timer.
-- **Don't `ichor_store` volatile data.** Use session memory for things that should expire with the conversation. Ichor is for durable knowledge.
-- **Don't use `athenaeum_write` to overwrite someone else's work.** The Athenaeum is a knowledge base, not a wiki to be casually edited. Propose, then write.
-- **Don't `ichor_forget` to "clean up."** Forgetting destroys signal. If something is wrong, mark it as superseded, don't delete it.
-- **Don't bypass `god_list` to talk directly to a specific god.** Let the routing table do its job. If you go direct, you skip the capability check.
+- **Don't rely on the count in this page as a protocol guarantee.** Discover the live MCP manifest after a release or server change.
+- **Don't poll `messaging_check_inbox` in a tight loop.** Check at session start or when a message is expected.
+- **Don't `ichor_store` volatile data.** Ichor is for durable memory; use session context for expiring state.
+- **Don't confuse `ichor_store(category="decision")` with the Markdown decision log.** It writes an FTS5 event; important decisions also belong in `shared/decisions/INDEX.md`.
+- **Don't `ichor_forget` to clean up ordinary noise.** Prefer a correction or superseding event when history matters.
+- **Don't use `athenaeum_write` as a path escape hatch.** It is rooted at the Athenaeum; use the canonical Pantheon path and file workflow for shared decisions or plans.
+- **Don't run `skill_run` or workflow mutations without checking the arguments and side effects.**
 
-## The five most-used tools
+## The most-used tools
 
-If you're new, these are the tools you'll use 90% of the time:
+For routine memory and coordination, start with:
 
-1. **`ichor_store`** — record things
-2. **`ichor_retrieve`** — find things
-3. **`ichor_brief`** — what's important right now
-4. **`messaging_send`** — hand off to another god
-5. **`messaging_check_inbox`** — see what came in
+1. `ichor_retrieve` — find durable knowledge
+2. `ichor_store` — record durable knowledge
+3. `ichor_brief` — see ranked current context
+4. `messaging_send` — send an asynchronous handoff or notification
+5. `messaging_check_inbox` — inspect unread messages
 
-The remaining 23 tools are situational. Learn them as you need them.
+Use the remaining tools when the task requires a specific subsystem.
 
 ## See also
 
-- [Skills](02-skills.md) — skills vs MCP tools
-- [Context Management](01-context-management.md) — how the memory tools fit together
-- [Quickstart](00-quickstart.md) — the 5 commands to get started
+- [Skills](02-skills.md) — Markdown skills vs executable skills
+- [Decision Log](08-decision-log.md) — how durable decisions are recorded
+- [Quickstart](00-quickstart.md) — the five operator actions

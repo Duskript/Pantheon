@@ -1,7 +1,7 @@
 """Person-root resolver for names, aliases, and safe folder paths.
 
 The resolver reads the alpha markdown tree at
-``~/.pantheon/person-roots/relationships`` and returns safe in-memory
+``/home/konan/athenaeum/Codex-User/relationships`` and returns safe in-memory
 records. It is read-only by design: account linking, runtime god injection, and
 profile mutation happen in later layers after ACL checks.
 
@@ -16,7 +16,6 @@ Resolver responsibilities:
 
 from __future__ import annotations
 
-import os
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -24,11 +23,11 @@ from typing import Any
 from lib.person_roots.frontmatter import markdown_table_rows, read_frontmatter
 from lib.person_roots.schema import PersonRecord
 
-DEFAULT_ROOT = Path(os.environ.get('PERSON_ROOTS_ROOT', str(Path.home() / '.pantheon' / 'person-roots' / 'relationships')))
+DEFAULT_ROOT = Path('/home/konan/athenaeum/Codex-User/relationships')
 _TRUE_VALUES = {True, 'true', 'True', 'yes', 'Yes', 'on', 'On'}
 _COMMON_AMBIGUOUS_FIRST_NAMES = frozenset({
     'alex',
-    'alesample-dev',
+    'alexander',
     'amy',
     'andrew',
     'anna',
@@ -109,7 +108,10 @@ class PersonRootsRepository:
     def classify_candidate_name(self, name_or_alias: str) -> dict[str, Any]:
         """Classify an observed name before automatic person-root creation.
 
-        Confirmed aliases still resolve immediately once the owner has confirmed that mapping. Unknown short/common names or names similar to existing aliases must ask the owner before creating a new root or merging with an existing person.
+        Confirmed aliases still resolve immediately (for example, ``Sam`` may
+        resolve to ``sammy`` once Konan has confirmed that mapping). Unknown
+        short/common names or names similar to existing aliases must ask Konan
+        before creating a new root or merging with an existing person.
         """
 
         needle = _normalize(name_or_alias)
@@ -135,7 +137,7 @@ class PersonRootsRepository:
         similar_people = self.find_similar_people(name_or_alias)
         if _is_common_ambiguous_name(needle):
             return {
-                'decision': 'needs_owner_approval',
+                'decision': 'needs_konan_approval',
                 'person_id': None,
                 'requires_clarification': True,
                 'similar_people': tuple(similar_people),
@@ -143,7 +145,7 @@ class PersonRootsRepository:
             }
         if similar_people:
             return {
-                'decision': 'needs_owner_approval',
+                'decision': 'needs_konan_approval',
                 'person_id': None,
                 'requires_clarification': True,
                 'similar_people': tuple(similar_people),

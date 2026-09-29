@@ -43,7 +43,7 @@ def build_account_verification_plan(
     person_id: str,
     platform: str,
     account_id: str,
-    verified_by: str = 'owner',
+    verified_by: str = 'konan',
     root: str | Path = DEFAULT_ROOT,
     proof: Mapping[str, Any] | None = None,
     today: str | None = None,
@@ -53,7 +53,7 @@ def build_account_verification_plan(
     root_path = Path(root).expanduser()
     platform_key = platform.strip().casefold()
     account_key = str(account_id).strip()
-    verifier = str(verified_by).strip() or 'owner'
+    verifier = str(verified_by).strip() or 'konan'
     if platform_key not in _SUPPORTED_PLATFORMS:
         raise ValueError(f'Unsupported platform: {platform}')
     if not account_key or account_key.startswith('(pending'):
@@ -121,7 +121,7 @@ def verify_account_link(
     person_id: str,
     platform: str,
     account_id: str,
-    verified_by: str = 'owner',
+    verified_by: str = 'konan',
     root: str | Path = DEFAULT_ROOT,
     proof: Mapping[str, Any] | None = None,
     today: str | None = None,

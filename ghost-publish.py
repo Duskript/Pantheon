@@ -7,7 +7,8 @@ Usage:  python3 ghost-publish.py <title> <file.md>
         python3 ghost-publish.py --status
 """
 
-import sys, json, time, hmac, hashlib, base64, urllib.request, urllib.error, argparse
+import sys, json, time, hmac, hashlib, base64, urllib.request, urllib.error, argparse, mimetypes
+from pathlib import Path
 
 GHOST_URL = "https://blog.theoforgesolutions.com"
 API_KEY = "b2c3d4e5f6a7b8c9d0e1f2a3:edaa37b8708fa472d6c6ed4f65e8240b971a4b7fbc6fc81c79405c162918bf9c"
@@ -50,6 +51,48 @@ def api(method, path, data=None):
     except Exception as e:
         return {"error": str(e)}
 
+
+def upload_image(image_path):
+    """Upload a local image to Ghost and return its public URL."""
+    path = Path(str(image_path)).expanduser()
+    if not path.exists():
+        return {"error": f"feature image not found: {path}"}
+    token = make_jwt()
+    boundary = f"----HermesGhostImage{int(time.time() * 1000)}"
+    mime = mimetypes.guess_type(str(path))[0] or "image/png"
+    data = path.read_bytes()
+    body = b"".join([
+        f"--{boundary}\r\n".encode(),
+        f'Content-Disposition: form-data; name="file"; filename="{path.name}"\r\n'.encode(),
+        f"Content-Type: {mime}\r\n\r\n".encode(),
+        data,
+        f"\r\n--{boundary}--\r\n".encode(),
+    ])
+    req = urllib.request.Request(
+        f"{GHOST_URL}/ghost/api/admin/images/upload/",
+        data=body,
+        headers={
+            "Authorization": f"Ghost {token}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept-Version": "v5.0",
+            "User-Agent": "Hermes-Kairos/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode()[:300]
+        return {"error": f"HTTP {e.code}: {body_text}"}
+    except Exception as e:
+        return {"error": str(e)}
+    image = (result.get("images") or [{}])[0]
+    url = image.get("url") or image.get("src")
+    if not url:
+        return {"error": f"Ghost image upload returned no URL: {str(result)[:300]}"}
+    return {"ok": True, "url": url, "result": result}
+
 def list_posts():
     """List all posts"""
     result = api("GET", "posts/?limit=50&include=tags")
@@ -64,7 +107,7 @@ def list_posts():
         status = "📝" if p["status"] == "draft" else "✅"
         print(f"  {status} {p['title']} ({p['slug']}) — {p['status']}")
 
-def create_post(title, markdown_path, publish=True):
+def create_post(title, markdown_path, publish=True, feature_image=None):
     """Create a post from a markdown file"""
     try:
         with open(markdown_path) as f:
@@ -89,13 +132,23 @@ def create_post(title, markdown_path, publish=True):
     
     html = "\n".join(html_lines)
     
-    post_data = {
-        "posts": [{
-            "title": title,
-            "html": html,
-            "status": "published" if publish else "draft",
-        }]
+    post = {
+        "title": title,
+        "html": html,
+        "status": "published" if publish else "draft",
     }
+    if feature_image:
+        image_value = str(feature_image)
+        if image_value.startswith(("http://", "https://")):
+            post["feature_image"] = image_value
+        else:
+            uploaded = upload_image(image_value)
+            if "error" in uploaded:
+                print(f"Error: feature image upload failed: {uploaded['error']}")
+                return
+            post["feature_image"] = uploaded["url"]
+            print(f"   Feature image: {uploaded['url']}")
+    post_data = {"posts": [post]}
     
     result = api("POST", "posts/", post_data)
     if "error" in result:
@@ -104,7 +157,8 @@ def create_post(title, markdown_path, publish=True):
     
     post = result.get("posts", [{}])[0]
     url = f"{GHOST_URL}/{post.get('slug', '')}/"
-    print(f"✅ Published: {post.get('title')}")
+    label = "Published" if post.get("status") == "published" else "Draft created"
+    print(f"✅ {label}: {post.get('title')}")
     print(f"   URL: {url}")
     print(f"   Status: {post.get('status')}")
     return post
@@ -124,6 +178,7 @@ if __name__ == "__main__":
     parser.add_argument("--list", action="store_true", help="List posts")
     parser.add_argument("--status", action="store_true", help="Show blog status")
     parser.add_argument("--draft", action="store_true", help="Save as draft (don't publish)")
+    parser.add_argument("--feature-image", help="Local image path or public URL to use as the Ghost featured image")
     parser.add_argument("title", nargs="?", help="Post title")
     parser.add_argument("file", nargs="?", help="Markdown file path")
     
@@ -134,11 +189,11 @@ if __name__ == "__main__":
     elif args.status:
         site_status()
     elif args.title and args.file:
-        create_post(args.title, args.file, publish=not args.draft)
+        create_post(args.title, args.file, publish=not args.draft, feature_image=args.feature_image)
     else:
         parser.print_help()
         print("\nExamples:")
         print("  python3 ghost-publish.py --status")
         print("  python3 ghost-publish.py --list")
         print('  python3 ghost-publish.py "My Post" /path/to/post.md')
-        print('  python3 ghost-publish.py --draft "Draft" /path/to/draft.md')
+        print('  python3 ghost-publish.py --draft --feature-image /path/to/hero.png "Draft" /path/to/draft.md')

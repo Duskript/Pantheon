@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from lib.person_roots.pending_resolver import list_pending, resolve_pending_records
 
-DEFAULT_ROOT = Path(os.environ.get('PERSON_ROOTS_ROOT', str(Path.home() / '.pantheon' / 'person-roots' / 'relationships')))
+DEFAULT_ROOT = Path('/home/konan/athenaeum/Codex-User/relationships')
 
 
 def main(argv: list[str] | None = None) -> int:

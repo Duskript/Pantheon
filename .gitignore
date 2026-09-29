@@ -345,3 +345,64 @@ reports/tech_debt_scan_*.py
 
 # Runtime shared scratch; canonical decision docs are selectively tracked.
 shared/tmp/
+
+# =============================================================================
+# Added 2026-09-29 — ops cleanup: scratch probes + Dojo runtime output
+# =============================================================================
+# Repo-root scratch probes and temp dirs written during debugging sessions.
+# These accumulate per investigation (caduceus delivery checks, loop probes).
+.tmp_*
+.verify-*
+.check-*
+.caduceus*
+pr35-*
+.vendor-mcp1/
+.recursive-loop-backups/
+
+# Hermes Dojo runtime output: per-sweep crystallization notes, mining
+# artifacts, JSONL result logs, and the archive of one-off scripts.
+hermes-dojo/batch-notes-*
+hermes-dojo/outputs/
+hermes-dojo/archive/
+hermes-dojo/results.log
+hermes-dojo/scripts/patterns*.jsonl
+
+# Throwaway probe scripts (leading underscore = scratch, never source).
+scripts/_*.py
+
+# shared/ probe scratch + the archive of stale active-task artifacts.
+shared/verify-*
+shared/tmp_*
+shared/archive/
+
+# Dated one-off cron helpers and local report captures.
+cron/archive-*
+cron/poll-search-*
+cron/diag-*
+cron/dedupe-*
+hub/
+blog-queue/
+briefings/
+gap-check/
+backups/
+notion-briefing-archive/
+
+# Loose local report/scratch files at the repo root.
+/sales-check-report.md
+/revenue-check-*.md
+/phronesis_cycle_report.json
+/pantheon-operations-report.md
+/gumroad-check.md
+/composio-create-page.md
+/notion-briefing-*.md
+/briefings*.md
+/briefings.json
+/20260830_*.md
+/execute_crystallization.py
+/create-briefings.py
+/consolidate-report.sh
+
+# Dated one-off briefing posts/verifiers and local screenshots.
+cron/post-*-[0-9][0-9][0-9][0-9].py
+cron/verify-*
+shared/*.png

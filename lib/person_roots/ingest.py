@@ -20,7 +20,7 @@ Planning rules (mirroring the fusion spec contract):
    propose/apply it.
 3. If known, use the resolved ``person_id`` and ``propose_update(...)``.
 4. ``allow`` -> ``applies``.
-5. ``needs_owner_approval`` -> ``approvals``.
+5. ``needs_konan_approval`` -> ``approvals``.
 6. ``deny`` -> ``denied``.
 7. Preserve ``provenance`` in every emitted item.
 """
@@ -35,7 +35,7 @@ from typing import Any, Iterable, Mapping
 from lib.person_roots.clarification import build_name_clarification
 from lib.person_roots.proposals import propose_update
 from lib.person_roots.resolver import DEFAULT_ROOT, PersonRootsRepository
-from lib.person_roots.schema import ALLOW, DENY, NEEDS_OWNER_APPROVAL
+from lib.person_roots.schema import ALLOW, DENY, NEEDS_KONAN_APPROVAL
 
 _REQUIRED_FIELDS = (
     'candidate_name',
@@ -176,7 +176,7 @@ def build_ingest_plan(
         }
         if proposal.decision == ALLOW:
             applies.append(item)
-        elif proposal.decision == NEEDS_OWNER_APPROVAL:
+        elif proposal.decision == NEEDS_KONAN_APPROVAL:
             approvals.append(item)
         else:
             denied.append(item)

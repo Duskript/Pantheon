@@ -3504,7 +3504,9 @@ a:hover{{text-decoration:underline}}
         return True
 
     if parsed.path in ("/api/work/lanes", "/api/work/ideas", "/api/work/cron",
-                       "/api/work/failures", "/api/workflows/runs"):
+                       "/api/work/failures", "/api/workflows", "/api/workflows/runs",
+                       "/api/workflows/topic-bank", "/api/workflows/scheduled-queue",
+                       "/api/workflows/notifications") or parsed.path == "/api/workflows/image":
         from api.work_bridge import handle_work
         result = handle_work(handler, parsed)
         if result is False:
@@ -5275,6 +5277,14 @@ def handle_post(handler, parsed) -> bool:
             except ValueError as exc:
                 results[flag_name] = str(exc)
         return j(handler, {"saved": results})
+
+    if parsed.path in ("/api/workflows/start", "/api/workflows/pipelines", "/api/workflows/decision",
+                       "/api/workflows/topic-bank/refresh"):
+        from api.work_bridge import handle_work_post
+        result = handle_work_post(handler, parsed, body)
+        if result is False:
+            return bad(handler, "Unknown workflow endpoint", status=404)
+        return True
 
     if parsed.path.startswith("/api/kanban/"):
         from api.kanban_bridge import handle_kanban_post

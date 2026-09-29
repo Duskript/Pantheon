@@ -22,7 +22,8 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import List, Optional
+from collections import OrderedDict
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("ichor.embedder")
 
@@ -91,12 +92,67 @@ def embed(texts: List[str]) -> List[List[float]]:
         return []
 
 
-def embed_one(text: str) -> Optional[List[float]]:
-    """Convenience: embed a single text. Returns None on failure."""
+# Query-embedding cache. The same query text recurs constantly: a follow-up turn
+# re-asks the same thing, and the weight tuner scores one query set under a dozen
+# configurations. A CPU embedding costs 40-120 ms and buys nothing the second
+# time. Bounded by entry count (vectors are deterministic for a given model), so
+# the cache cannot grow without limit in a long-lived process.
+_QUERY_CACHE: "OrderedDict[str, Tuple[float, ...]]" = OrderedDict()
+_QUERY_CACHE_MAX = 512
+_QUERY_CACHE_LOCK = threading.Lock()
+_QUERY_CACHE_HITS = 0
+_QUERY_CACHE_MISSES = 0
+
+
+def embed_one(text: str, *, use_cache: bool = True) -> Optional[List[float]]:
+    """Convenience: embed a single text. Returns None on failure.
+
+    Memoised by stripped query text (see `_QUERY_CACHE`). Pass
+    `use_cache=False` when measuring true embedding cost.
+    """
     if not text or not text.strip():
         return None
-    results = embed([text])
-    return results[0] if results else None
+    key = text.strip()
+
+    global _QUERY_CACHE_HITS, _QUERY_CACHE_MISSES
+    if use_cache:
+        with _QUERY_CACHE_LOCK:
+            cached = _QUERY_CACHE.get(key)
+            if cached is not None:
+                _QUERY_CACHE.move_to_end(key)
+                _QUERY_CACHE_HITS += 1
+                return list(cached)
+            _QUERY_CACHE_MISSES += 1
+
+    results = embed([key])
+    vector = results[0] if results else None
+    if vector is not None and use_cache:
+        with _QUERY_CACHE_LOCK:
+            _QUERY_CACHE[key] = tuple(vector)
+            _QUERY_CACHE.move_to_end(key)
+            while len(_QUERY_CACHE) > _QUERY_CACHE_MAX:
+                _QUERY_CACHE.popitem(last=False)
+    return vector
+
+
+def query_cache_stats() -> Dict[str, int]:
+    """Cache telemetry: entries, hits, misses (for eval reports and ops)."""
+    with _QUERY_CACHE_LOCK:
+        return {
+            "entries": len(_QUERY_CACHE),
+            "max_entries": _QUERY_CACHE_MAX,
+            "hits": _QUERY_CACHE_HITS,
+            "misses": _QUERY_CACHE_MISSES,
+        }
+
+
+def query_cache_clear() -> None:
+    """Drop cached query vectors (tests, and after a model swap)."""
+    global _QUERY_CACHE_HITS, _QUERY_CACHE_MISSES
+    with _QUERY_CACHE_LOCK:
+        _QUERY_CACHE.clear()
+        _QUERY_CACHE_HITS = 0
+        _QUERY_CACHE_MISSES = 0
 
 
 def is_available() -> bool:

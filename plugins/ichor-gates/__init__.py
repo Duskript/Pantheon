@@ -13,6 +13,9 @@ Pre-tool-call hooks:
 Post-tool-call hooks:
   - Logic Gate: syntax-validates write_file/patch output
   - ForgeLogger: records all interventions per-model
+  - Eval recorder: records every Logic Gate check, pass or fail, so the
+    forge has a denominator for its block rate (`all.jsonl` only holds
+    failures, which made `blocked / total` read 100% by construction)
 
 The pipeline is lazy-initialized and singleton per-process. All failures are
 caught and logged at DEBUG level — gates never block the agent's tool loop
@@ -50,6 +53,7 @@ logger = logging.getLogger("ichor_gates_plugin")
 _pipeline = None
 _read_cache = None
 _forge_logger = None
+_eval_recorder = None
 _session_id = ""
 _god_name = ""
 _cached_active_model: Optional[str] = None
@@ -149,9 +153,11 @@ def _ensure_gates():
         pipeline = GatePipeline()
         pipeline.read_cache = _read_cache
 
-        # Register gates
+        # Register gates. The Logic Gate gets an eval sink so every check
+        # it performs (pass or fail) is recorded — that is the forge's
+        # denominator; without it block_rate is always 100%.
         pipeline.register(StateGate(_read_cache))
-        pipeline.register(LogicGate())
+        pipeline.register(LogicGate(eval_sink=_on_gate_eval))
         pipeline.register(PhaseDetectionGate())
 
         _pipeline = pipeline
@@ -171,6 +177,51 @@ def _get_read_cache():
 def _get_forge_logger():
     _ensure_gates()
     return _forge_logger
+
+
+def _get_eval_recorder():
+    """Lazy singleton for the forge's eval recorder (denominator source).
+
+    Returns the recorder, or False when lib.ichor_forge is unavailable —
+    callers treat a falsy return as "no eval logging", never as an error.
+    """
+    global _eval_recorder
+    if _eval_recorder is not None:
+        return _eval_recorder
+    try:
+        from lib.ichor_forge import (  # type: ignore[import-untyped]
+            EvalRecorder,
+        )
+
+        _eval_recorder = EvalRecorder()
+    except Exception as exc:
+        logger.debug("Ichor Gates: eval recorder unavailable: %s", exc)
+        _eval_recorder = False
+    return _eval_recorder
+
+
+def _on_gate_eval(entry: Dict[str, Any]) -> None:
+    """Logic Gate eval sink — records every check, pass or fail.
+
+    This is what makes the forge's block rate real. `all.jsonl` only ever
+    holds failures, so a rate derived from it alone is 100% by
+    construction. Best-effort: a logging failure must never break a god's
+    tool loop.
+    """
+    try:
+        recorder = _get_eval_recorder()
+        if not recorder:
+            return
+        recorder.record(
+            gate=str(entry.get("gate") or "logic_gate"),
+            failed=bool(entry.get("failed")),
+            god=_god_name,
+            # Same model resolution the intervention path uses, so per-model
+            # rates join cleanly against per-model interventions.
+            model=_get_active_model(),
+        )
+    except Exception as exc:
+        logger.debug("Ichor Gates: eval sink error (non-fatal): %s", exc)
 
 
 # ---------------------------------------------------------------------------

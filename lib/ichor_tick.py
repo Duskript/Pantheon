@@ -354,12 +354,13 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
             _resolve_llm_provider,
             _load_provider_config,
             resolve_provider_credentials,
+            resolve_l2_model,
         )
         from lib.ichor.entities import extract_incremental
         from lib.ichor.entities.schema import get_conn as _get_l2_conn
     except Exception as e:
         return _degraded_extract(f"l2_module_import_failed: {e}", cursor)
-    
+
     # First prefer Marvin's god/profile provider, then fall back to the
     # provider named opencode-go.
     provider_cfg = _resolve_llm_provider("marvin") or _load_provider_config("opencode-go")
@@ -368,6 +369,11 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
 
     provider_name = provider_cfg.get("name") or "opencode-go"
 
+    # The extraction model is chosen explicitly (see resolve_l2_model): the
+    # provider block's own `default_model` may be a reasoning model that returns
+    # no visible content, and the tick and the l2-drainer must agree on one id.
+    extract_model = resolve_l2_model(provider_cfg)
+
     # Resolve the credential from the Hermes CREDENTIAL POOL first.
     # config.yaml provider blocks intentionally carry an empty `api_key` (the
     # real tokens live in ~/.hermes/auth.json and are rotated by Hermes), so
@@ -375,6 +381,10 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
     # that variable is absent — or whenever the provider name resolves to a
     # spelling whose variable does not exist. That is how this step went dark
     # for 456 ticks, including 26 unbroken days, while the unit read healthy.
+    #
+    # `provider_name` is the DISPLAY name ("Nous Portal"), not the pool key
+    # ("nous"); resolve_provider_credentials canonicalizes it before lookup, so
+    # passing the display name is safe.
     api_key, _pool_base_url = resolve_provider_credentials(str(provider_name))
     if not api_key:
         return _degraded_extract(f"no_credential_for_{provider_name}", cursor)
@@ -399,12 +409,19 @@ def _step_extract(dry_run: bool = True) -> Dict[str, Any]:
         try:
             conn = _get_l2_conn()
             try:
+                # Model is passed EXPLICITLY rather than letting _call_llm fall
+                # back to `provider_cfg["default_model"]`. The provider's
+                # configured default may be a reasoning model that emits no
+                # visible `content` (only a `reasoning` field), which makes every
+                # batch return an empty string and silently produce zero
+                # entities. `extract_model` is resolved once above via
+                # resolve_l2_model(), which both L2 writers share.
                 result = extract_incremental(
                     conn,
                     last_event_id=cursor,
                     batch_size=_L2_EXTRACT_BATCH_SIZE,
                     provider_cfg=provider_cfg,
-                    model=None,
+                    model=extract_model,
                     session_id="ichor-tick",
                 )
             finally:

@@ -29,8 +29,9 @@ WorkingDirectory=/home/konan/pantheon/services/theoforge-bridge
 
 # Defaults are in server.mjs (PORT=4323, HOST=127.0.0.1). Override here
 # only if you have a reason.
-Environment=BRIDGE_HOST=100.68.106.59
+Environment=BRIDGE_HOST=100.115.50.41
 Environment=BRIDGE_PORT=4323
+Environment=RESEND_ENV_PATH=/home/konan/.hermes/.env
 Environment=HERMES_PROFILE=mercer
 Environment=NODE_ENV=production
 Environment=NODE_OPTIONS=--max-old-space-size=256
@@ -47,6 +48,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/home/konan/athenaeum/Codex-God-Mercer/leads
+ReadWritePaths=/home/konan/pantheon/shared/active
 
 # Logs
 StandardOutput=journal

@@ -44,5 +44,10 @@ from lib.ichor.migrations.v2_temporal_backfill import (  # noqa: F401
 from lib.ichor.migrations.v2_l2_scenarios import (  # noqa: F401
     run_migration as run_l2_scenarios_migration,
 )
+# The warm_entities FTS index (2026-09-20) gives the never-wired "WARM entity
+# lookup" an indexed path. Explicit invocation, same pattern as the others.
+from lib.ichor.migrations.v2_warm_entities_fts import (  # noqa: F401
+    run_migration as run_warm_entities_fts_migration,
+)
 from lib.ichor.contracts import Claim, ClaimEntity, ClaimStore, Evidence  # noqa: F401
 from lib.ichor.vector_backend import EmbeddingProvider, get_embedding  # noqa: F401

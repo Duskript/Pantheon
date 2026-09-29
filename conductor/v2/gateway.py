@@ -40,7 +40,8 @@ DEFAULT_BASE_URL = os.environ.get("CONDUCTOR_GATEWAY_URL", "http://127.0.0.1:864
 DEFAULT_KEY_PATH = Path(os.environ.get("CONDUCTOR_GATEWAY_KEY_PATH", Path.home() / ".hermes" / ".env"))
 DEFAULT_POLL_INTERVAL = float(os.environ.get("CONDUCTOR_POLL_INTERVAL", "2.0"))
 DEFAULT_RUN_TIMEOUT = float(os.environ.get("CONDUCTOR_RUN_TIMEOUT", "1800"))  # 30m
-DEFAULT_MODEL = os.environ.get("CONDUCTOR_MODEL", "thoth")  # Thoth is default dispatcher
+DEFAULT_PROVIDER = os.environ.get("CONDUCTOR_PROVIDER", "opencode-go")
+DEFAULT_MODEL = os.environ.get("CONDUCTOR_MODEL", "deepseek-v4-flash")
 
 
 def _load_key(path: Path = DEFAULT_KEY_PATH) -> str:
@@ -62,6 +63,7 @@ class GatewayConfig:
     api_key: str = field(default_factory=_load_key)
     poll_interval: float = DEFAULT_POLL_INTERVAL
     run_timeout: float = DEFAULT_RUN_TIMEOUT
+    default_provider: str = DEFAULT_PROVIDER
     default_model: str = DEFAULT_MODEL
     timeout: float = 300.0  # per-request HTTP timeout
 
@@ -140,9 +142,8 @@ class GatewayClient:
 
         Args:
             input_text: The user-message / handoff text for the god.
-            model: God profile to dispatch to. Default: thoth.
-                   (Conductor uses different profiles by god name; this
-                   default is for handoffs routed to thoth.)
+            model: LLM model id for the Hermes API server. God/profile names
+                   like kairos or rheta are role context, not valid model ids.
             session_id: Optional X-Hermes-Session-Id header for continuity.
             session_key: Optional X-Hermes-Session-Key for memory scoping.
             extra: Additional fields merged into the request body.
@@ -154,6 +155,8 @@ class GatewayClient:
             "model": model or self.config.default_model,
             "input": input_text,
         }
+        if self.config.default_provider:
+            body.setdefault("provider", self.config.default_provider)
         if extra:
             body.update(extra)
 
@@ -172,7 +175,7 @@ class GatewayClient:
         run_id = data.get("run_id") or data.get("id")
         if not run_id:
             raise GatewayError(f"submit_run returned no run_id: {data}")
-        LOG.info(f"submit_run ok: run_id={run_id} model={body['model']}")
+        LOG.info(f"submit_run ok: run_id={run_id} provider={body.get('provider')} model={body.get('model')}")
         return run_id
 
     async def get_run(self, run_id: str) -> RunResult:

@@ -24,7 +24,12 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from lib.ichor_db import IchorDB, auto_generate_tiers
+from lib.ichor_db import (
+    IchorDB,
+    auto_generate_tiers,
+    content_hash as _content_hash,
+)
+from lib.ichor_temporal import newer_than_sql
 from lib.ichor_patterns import PATTERNS, EVENT_TYPE_META, ALL_TYPES
 
 logger = logging.getLogger("ichor_tier_a")
@@ -34,6 +39,56 @@ CONFIDENCE_FLOOR = 0.5
 
 # Default path for the Ichor database
 ICHOR_DB_PATH = os.path.expanduser("~/.hermes/ichor.db")
+
+# ── System-session guard (2026-09-17) ─────────────────────────────────────
+# Cron/runner sessions are machine-generated: their transcripts contain the
+# job prompt, the collector/injected context, and tool scaffolding. Regex
+# extraction turns that scaffolding into junk "blocker"/"reference" events
+# (the observed inbox pollution: literal prompt fragments like
+# "HARD FAILURE RULE" classified as blockers). The gateway already passes
+# skip_memory=True for cron sessions; this guard enforces the same invariant
+# at the extraction choke point so every caller (provider sync_turn /
+# on_session_end, inactivity nudge, scripts) honours it.
+SYSTEM_SESSION_PREFIXES = ("cron_", "run_", "hook_", "webhook_", "subagent_")
+
+
+# Upstream half of the 2026-09-21 dedupe work: refuse to re-store identical
+# content. Measured before this: 88% of the surviving memory was byte-identical
+# duplication and one prompt fragment had been stored 19,108 times, because the
+# extractor ran on every turn and stored the same text again each time. The
+# content_hash column (see ichor-content-hash-migrate.py) makes the check an
+# indexed lookup. Duplicates are dropped, not merged blindly: the first stored
+# copy stays canonical and gets its importance nudged instead.
+CONTENT_DEDUPE_WINDOW_DAYS: int = 30
+
+
+def _find_duplicate_id(db, content_hash: str) -> Optional[int]:
+    """Row id of an identical event stored inside the dedupe window, else None.
+
+    Fails open (returns None) so a lookup problem - including a database that
+    has not had the content_hash migration applied yet - can never block a
+    memory write.
+    """
+    try:
+        conn = db.connect()
+        row = conn.execute(
+            # Normalised window (see lib/ichor_temporal.CREATED_AT_SHAPES):
+            # the raw column compared to a same-shaped literal is only
+            # correct to the DAY, which would let a duplicate from just
+            # outside the window slip through. The content_hash index still
+            # drives the plan, so this costs nothing on the write path.
+            f"SELECT id FROM ichor_events WHERE content_hash = ? "
+            f"AND {newer_than_sql('created_at', days=CONTENT_DEDUPE_WINDOW_DAYS)} LIMIT 1",
+            (content_hash,),
+        ).fetchone()
+        return int(row[0]) if row else None
+    except Exception as exc:  # noqa: BLE001 - never block a write
+        logger.debug("content dedupe lookup skipped: %s", exc)
+        return None
+
+
+def _is_system_session(session_id: str) -> bool:
+    return bool(session_id) and session_id.startswith(SYSTEM_SESSION_PREFIXES)
 
 # ── Merge threshold for adjacent fragment collapse (P4d) ─────────────────
 # Two same-type events from the same session are merged if their raw_text
@@ -63,6 +118,43 @@ _BLOCK_WORDS = frozenset({
     "halted", "impassable", "dead end", "roadblock", "brick wall",
     "no way forward", "at a standstill",
 })
+
+
+# ── Junk-blocker filter (2026-09-25) ─────────────────────────────────────
+# The blocker patterns match error-ish words inside tool output, source
+# code, prompt fragments and gateway metadata, so the store filled with
+# fragments like `"exit_code": 0} {"output": "..."` and `102|  except
+# Exception`. Measured over 9,799 historical blockers: ~84% are non-prose
+# fragments. Blocker baseline_confidence is 0.8, so every blocker lands
+# >=0.70 and _downgrade_noisy_blockers (threshold 0.65) never fires --
+# content, not confidence, has to decide. Fragments are DROPPED, not
+# reclassified: they are noise, not follow-ups.
+_JUNK_BLOCKER_RE = re.compile(
+    r'exit_code|"output"|"stdout"|"stderr"|prompt_preview|Gateway message origin'
+    r'|Traceback \(most recent call last\)|Ran \d+ tests|FAILED \(failures='
+    r'|\d+\|'
+    r'|\\n|\\"|\\u[0-9a-f]{4}|\\x1b|\[\d+m'
+    r'|[{}\[\]<>]|```|`[\w_]+`',
+    re.M,
+)
+
+
+def _alpha_ratio(text: str) -> float:
+    """Share of characters that are letters or whitespace (prose-ness)."""
+    stripped = text.strip()
+    if not stripped:
+        return 1.0
+    return sum(ch.isalpha() or ch.isspace() for ch in stripped) / len(stripped)
+
+
+def _is_junk_blocker(raw_text: str) -> bool:
+    """True when a blocker's raw_text is a code/tool/transcript fragment."""
+    text = (raw_text or "").strip()
+    if len(text) < 12:
+        return True
+    if _JUNK_BLOCKER_RE.search(text):
+        return True
+    return len(text) >= 40 and _alpha_ratio(text) < 0.72
 
 # Default importance (0-100) seeded at Tier A insert time, indexed by
 # event_type. Higher = more retrieval-worthy on day-zero before any
@@ -440,6 +532,24 @@ class TierAExtractor:
 
         return events
 
+    def _drop_junk_blockers(self, events: List[Dict]) -> List[Dict]:
+        """Drop blocker events whose raw_text is a code/tool fragment.
+
+        Complements _downgrade_noisy_blockers: that one reclassifies
+        low-confidence *prose* that is really a task; this one removes
+        non-prose fragments that are not blockers of any kind.
+        """
+        kept: List[Dict] = []
+        dropped = 0
+        for ev in events:
+            if ev.get("event_type") == "blocker" and _is_junk_blocker(ev.get("raw_text", "")):
+                dropped += 1
+                continue
+            kept.append(ev)
+        if dropped:
+            logger.debug("junk-blocker filter: dropped %d fragment(s)", dropped)
+        return kept
+
     # ── Store extraction results ─────────────────────────────────────────
 
     def extract_and_store(
@@ -460,11 +570,14 @@ class TierAExtractor:
         Returns:
             Number of events stored.
         """
+        if _is_system_session(session_id):
+            return 0
         events = self.extract_from_text(text, session_id, god_name, speaker)
 
         # P4d: post-extraction cleanup (merge adjacent fragments + reclassify)
         events = self._merge_adjacent_events(events)
         events = self._downgrade_noisy_blockers(events)
+        events = self._drop_junk_blockers(events)
 
         return self._store_events(events, session_id, god_name)
 
@@ -480,6 +593,8 @@ class TierAExtractor:
         Returns:
             Number of events stored.
         """
+        if _is_system_session(session_id):
+            return 0
         events = self.extract_from_segment(
             user_msg, assistant_msg, session_id, god_name
         )
@@ -487,6 +602,7 @@ class TierAExtractor:
         # P4d: post-extraction cleanup
         events = self._merge_adjacent_events(events)
         events = self._downgrade_noisy_blockers(events)
+        events = self._drop_junk_blockers(events)
 
         return self._store_events(events, session_id, god_name)
 
@@ -502,8 +618,29 @@ class TierAExtractor:
         cold_events (new 5-tier schema, the canonical home going forward).
         """
         count = 0
+        deduped = 0
         for ev in events:
             try:
+                _raw_for_hash = ev.get("raw_text", "") or ""
+                _dup_id = _find_duplicate_id(self.db, _content_hash(_raw_for_hash))
+                if _dup_id is not None:
+                    # Identical content already stored inside the window. Keep
+                    # one canonical row: nudge its score/timestamp instead of
+                    # writing a duplicate. Safe for the FTS index because
+                    # ichor_events_au is column-filtered, so a non-text update
+                    # no longer rewrites the document.
+                    try:
+                        conn_bump = self.db.connect()
+                        conn_bump.execute(
+                            "UPDATE ichor_events SET importance = MIN(100, importance + 1), "
+                            "last_access = datetime('now') WHERE id = ?",
+                            (_dup_id,),
+                        )
+                        conn_bump.commit()
+                    except Exception as bump_exc:  # noqa: BLE001
+                        logger.debug("dedupe score bump failed (non-fatal): %s", bump_exc)
+                    deduped += 1
+                    continue
                 self.db.insert_event(
                     session_id=session_id,
                     event_type=ev["event_type"],
@@ -716,12 +853,37 @@ def _raw_texts_overlap(a: str, b: str, min_ngram: int = 8) -> bool:
     return any(ng in longer for ng in ngrams)
 
 
+# Extra span each way when snapping a match's context outward to a sentence
+# boundary. Bounded so a long unpunctuated blob (tool output, code) still
+# falls back to the plain +/-80 window instead of swallowing the whole turn.
+_CONTEXT_SNAP = 60
+
+
 def _extract_context(text: str, match_start: int, match_end: int) -> str:
-    """Extract surrounding context around a match."""
+    """Extract surrounding context, snapped outward to sentence boundaries.
+
+    A raw +/-80 window sliced mid-word and mid-clause, so stored blockers
+    read as fragments ("Those are independent"). Snap outward to the nearest
+    sentence boundary within _CONTEXT_SNAP chars; if none is near (code,
+    tool output), keep the plain window - the junk-blocker filter drops
+    those cases.
+    """
     start = max(0, match_start - 80)
     end = min(len(text), match_end + 80)
-    context = text[start:end].strip()
-    return context
+
+    lower = max(0, start - _CONTEXT_SNAP)
+    for i in range(start, lower - 1, -1):
+        if text[i] in ".!?\n":
+            start = i + 1
+            break
+
+    upper = min(len(text), end + _CONTEXT_SNAP)
+    for i in range(end, upper):
+        if text[i] in ".!?\n":
+            end = i + 1
+            break
+
+    return text[start:end].strip()
 
 
 def _extract_subject(text: str, match_start: int, match_end: int) -> str:

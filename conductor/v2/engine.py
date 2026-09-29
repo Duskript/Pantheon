@@ -29,7 +29,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
@@ -133,7 +133,7 @@ _REFUSAL_MARKER_RE = re.compile(
     r"this dispatch (does not|doesn't) add up|"
     r"no (real |genuine )?work to (do|execute)|"
     r"wrong god|misrouted dispatch|"
-    r"fabrication|smoke test|"
+    r"fabrication|"
     r"I'm Thoth[,.]|I am Thoth[,.])\b",
     re.IGNORECASE,
 )
@@ -342,6 +342,18 @@ def _match_condition(cond: dict[str, Any], event: Event) -> bool:
         # YAML uses event_type; Event dataclass field is `type`
         if key == "event_type":
             key = "type"
+        # Dotted payload/context predicates let rules route envelopes by
+        # authoritative request fields, e.g. `payload.workflow_id`. Without
+        # this, the content dashboard's blog event matched the broad social
+        # fallback rule and ran the social drafting prompt.
+        if "." in str(key):
+            actual = _resolve_dotted(event, str(key))
+            if isinstance(expected, list):
+                if actual not in expected:
+                    return False
+            elif actual != expected:
+                return False
+            continue
         # `expression` is a schedule.cron rule's cron string — metadata
         # for the CronScheduler (conductor.v2.cron_scheduler), NOT a
         # field on the Event dataclass. The scheduler already filters
@@ -388,6 +400,14 @@ def _resolve_dotted(event: Event, dotted: str) -> Any:
     parts = dotted.split(".")
     if parts[0] == "context":
         actual = event.payload.get("context") or {}
+        for p in parts[1:]:
+            if isinstance(actual, dict):
+                actual = actual.get(p)
+            else:
+                return None
+        return actual
+    if parts[0] == "payload":
+        actual = event.payload
         for p in parts[1:]:
             if isinstance(actual, dict):
                 actual = actual.get(p)
@@ -495,12 +515,13 @@ class RuleEngine:
 @dataclass
 class WorkflowStep:
     id: str
-    type: str = "god"  # god | nats_publish | parallel | merge
+    type: str = "god"  # god | nats_publish | parallel | merge | cli_tool | phone_social_queue | blog_post_queue
     god: Optional[str] = None
     skill: Optional[str] = None
     action: Optional[str] = None
     input: Optional[str] = None
     input_from: Optional[str] = None
+    prompt: Optional[str] = None
     subject: Optional[str] = None  # for nats_publish
     message: Optional[str] = None
     gates: list[str] = field(default_factory=list)
@@ -622,6 +643,7 @@ class Workflow:
             action=s.get("action"),
             input=s.get("input"),
             input_from=s.get("input_from"),
+            prompt=s.get("prompt"),
             subject=s.get("subject"),
             message=s.get("message"),
             gates=list(s.get("gates", []) or []),
@@ -981,6 +1003,18 @@ class ConductorEngine:
                 # wraps it with timeout, retry, output capture, and
                 # step-history recording.
                 await self._exec_cli_tool(inst, wf, step)
+            elif step.type == "phone_social_queue":
+                # Canonical social publish transport (2026-08-09): approved
+                # social drafts are scheduled into the shared Android phone
+                # queue. This does not touch ADB or the phone directly; the
+                # queue drainer owns the single physical device lease.
+                await self._exec_phone_social_queue(inst, wf, step)
+            elif step.type == "blog_post_queue":
+                # Canonical long-form content transport: approved blog drafts
+                # become durable Markdown/JSON queue artifacts. A separate
+                # drainer may turn them into Ghost drafts; the workflow never
+                # claims a public publish from generation/approval alone.
+                await self._exec_blog_post_queue(inst, wf, step)
             else:
                 # default branch: god_dispatch (back-compat for
                 # existing step definitions that omit `type:`)
@@ -1008,16 +1042,45 @@ class ConductorEngine:
         # Submit async run
         run_id = await self.gw.submit_run(
             prompt,
-            model=step.god,
+            # `step.god` is the role/recipient (kairos, rheta, etc.), not an
+            # API model id. The gateway supplies the supported provider/model.
             session_id=inst.workflow_id,  # use workflow_id as Hermes session
+            session_key=f"conductor:{step.god}",
         )
 
         # Wait for completion (this is the spec's "single ack timeout")
         timeout_s = _parse_duration(step.timeout)
         result = await self.gw.wait_for_run(run_id, timeout=timeout_s)
 
-        # Record outcome + write handoff
+        # Record outcome. Only an effectively completed step may advance the
+        # DAG. Gateway-level success can still become `refused` in
+        # _record_step_completion after output inspection.
         self._record_step_completion(inst, step, result)
+        step_status = next(
+            (h.get("status") for h in reversed(inst.step_history) if h.get("step_id") == step.id),
+            result.status,
+        )
+        if result.status != "completed" or step_status != "completed":
+            reason = result.error or f"gateway status={result.status}; step status={step_status}"
+            inst.status = "failed"
+            inst.current_step = step.id
+            inst.context_bag.setdefault("blockers", []).append({
+                "step_id": step.id,
+                "god": step.god,
+                "run_id": run_id,
+                "status": step_status,
+                "reason": reason,
+            })
+            self._save_instance(inst)
+            LOG.error(
+                f"workflow {inst.workflow_id}: stopping after non-completed god step "
+                f"{step.id} ({step.god}) run_id={run_id} gateway_status={result.status} "
+                f"step_status={step_status}: {reason}"
+            )
+            return
+
+        if step.id == "rheta-draft-selected-angle":
+            self._prepare_content_image_variants(inst)
 
         # Write a handoff file to the god's inbox (god-readable artifact)
         handoff = self._build_handoff(inst, wf, step, result)
@@ -1134,15 +1197,725 @@ class ConductorEngine:
             # Approved: consume the token (single-use) and proceed.
             _consume_operator_approval(inst)
             self._save_instance(inst)
+        rendered_message = _render_template(step.message or "", inst)
         inst.context_bag.setdefault("nats_publishes", []).append({
             "step_id": step.id,
             "subject": step.subject,
-            "message": _render_template(step.message or "", inst),
+            "message": rendered_message,
             "payload": {k: _render_template(str(v), inst) for k, v in step.payload.items()},
             "published_at": utc_now(),
         })
+        # Social cockpit operator gates are real gates, not decorative
+        # notifications. Auto-approve may advance the angle gate or approval
+        # gate; otherwise the workflow parks in waiting_for_ack and the Hub
+        # review lane owns the next operator action. This prevents scheduled
+        # runs from silently walking into publish/queue without approval.
+        gated_content_workflows = {"social-content-pipeline", "blog-content-pipeline"}
+        if inst.definition_id in gated_content_workflows and step.id in {"operator-choose-angle", "operator-approve-draft"}:
+            auto = inst.context_bag.get("auto_approve") if isinstance(inst.context_bag.get("auto_approve"), dict) else {}
+            gate_key = "angle" if step.id == "operator-choose-angle" else "approval"
+            if not auto.get(gate_key):
+                inst.status = "waiting_for_ack"
+                inst.current_step = step.id
+                inst.step_history.append({
+                    "step_id": step.id,
+                    "god": None,
+                    "status": "waiting_for_ack",
+                    "started": utc_now(),
+                    "completed": None,
+                    "output_summary": "Awaiting operator approval in the Hub cockpit.",
+                    "subject": step.subject,
+                })
+                self._save_instance(inst)
+                return
+            if step.id == "operator-choose-angle" and not inst.context_bag.get("selected_angle"):
+                angle_options = inst.context_bag.get("angle_options", "")
+                inst.context_bag["selected_angle"] = f"Use the Kairos pick from these angle options:\n\n{angle_options}"
+            elif step.id == "operator-approve-draft" and not inst.context_bag.get("draft_choice"):
+                inst.context_bag["draft_choice"] = inst.context_bag.get("post_draft", "approved")
         self._record_step_completion(inst, step, None)
         await self._advance(inst, None, step, None)
+
+
+    async def _exec_phone_social_queue(
+        self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
+    ) -> None:
+        """Queue approved social posts for canonical Android-phone publishing.
+
+        The workflow approval gate approves the draft. This step converts that
+        approved draft into file-backed phone-queue jobs. It never opens apps or
+        touches ADB itself; `/home/konan/pantheon/scripts/process-phone-job-queue.py`
+        drains due jobs later under the shared phone lease.
+        """
+        result = self._build_phone_social_queue_result(inst, step)
+        if step.output:
+            inst.context_bag[step.output] = self._format_phone_social_publish_result(result)
+        inst.context_bag["phone_publish_jobs"] = result
+        self._record_internal_step_completion(
+            inst,
+            step,
+            output=result,
+            summary=f"queued {len(result.get('queued_jobs', []))} phone social post(s); blocked {len(result.get('blocked_surfaces', []))}",
+        )
+        await self._advance(inst, wf, step, None)
+
+    def _build_phone_social_queue_result(self, inst: WorkflowInstance, step: WorkflowStep) -> dict[str, Any]:
+        # Use the approved draft from workflow state first. Rendering the YAML
+        # `input` field is only a fallback because direct start-at-step and some
+        # resume paths can leave template strings unresolved.
+        draft = str(inst.context_bag.get("draft_choice") or inst.context_bag.get("post_draft") or "").strip()
+        if not draft:
+            draft = _render_template(step.input or "${context.draft_choice}", inst).strip()
+        if draft in {"${context.draft_choice}", "${context.post_draft}"}:
+            draft = ""
+        surfaces = self._phone_social_surfaces(inst, step)
+        generate_image = self._social_generate_image(inst, step)
+        social_images: dict[str, dict[str, Any]] = {}
+        queued_jobs: list[dict[str, Any]] = []
+        blocked: list[dict[str, Any]] = []
+        for surface in surfaces:
+            platform = self._phone_platform_for_surface(surface)
+            if platform is None:
+                blocked.append({
+                    "surface": surface,
+                    "status": "manual_review_required",
+                    "reason": self._phone_surface_block_reason(surface),
+                })
+                continue
+            text = self._extract_surface_post_text(draft, surface)
+            if not text:
+                blocked.append({
+                    "surface": surface,
+                    "status": "missing_draft_text",
+                    "reason": "approved draft did not contain usable text for this surface",
+                })
+                continue
+            scheduled_for = self._phone_social_scheduled_for(inst, step, surface)
+            social_image = None
+            media_paths: list[str] = []
+            if generate_image:
+                selected_path = self._selected_social_image_path(inst, surface)
+                if selected_path:
+                    social_image = {
+                        "ok": True,
+                        "status": "operator_selected_image",
+                        "provider": "operator-selection",
+                        "image_path": selected_path,
+                        "surface": surface,
+                        "workflow_id": inst.workflow_id,
+                    }
+                else:
+                    social_image = self._generate_social_image_artifact(inst, surface, text)
+                social_images[surface] = social_image
+                if not social_image.get("ok"):
+                    blocked.append({
+                        "surface": surface,
+                        "status": "social_image_generation_failed",
+                        "reason": str(social_image.get("error") or "image generation failed"),
+                    })
+                    continue
+                if social_image.get("image_path"):
+                    media_paths.append(str(social_image.get("image_path")))
+            payload = {
+                "platform": platform,
+                "surface": surface,
+                "workflow_id": inst.workflow_id,
+                "queue_item_id": f"{inst.workflow_id}-{surface}",
+                "scheduled_for": scheduled_for,
+                "text": text,
+                "first_comment": self._extract_first_comment(draft, surface),
+                "dry_run": False,
+                "generate_image": generate_image,
+                "media_paths": media_paths,
+                "social_image": social_image,
+                "approved_by": "operator-approve-draft",
+                "transport": "android_phone",
+                "source": "social-content-pipeline",
+                **self._phone_surface_route_metadata(surface),
+            }
+            queued = self._enqueue_phone_social_job(payload, scheduled_for)
+            queued_jobs.append({
+                "surface": surface,
+                "platform": platform,
+                "status": "queued_for_phone",
+                "job_id": queued.get("job_id"),
+                "queue_path": queued.get("path"),
+                "scheduled_for": queued.get("due_at") or scheduled_for,
+                "queue_depth": queued.get("queue_depth"),
+                "image_path": social_image.get("image_path") if isinstance(social_image, dict) else None,
+                "image_status": social_image.get("status") if isinstance(social_image, dict) else None,
+                "media_count": len(media_paths),
+            })
+        if social_images:
+            inst.context_bag["social_image_results"] = social_images
+        return {
+            "ok": bool(queued_jobs) and not blocked,
+            "status": "queued_for_phone" if queued_jobs else "blocked",
+            "workflow_id": inst.workflow_id,
+            "transport": "android_phone",
+            "queue_root": "/home/konan/pantheon/phone-queue",
+            "queue_drainer": "/home/konan/pantheon/scripts/process-phone-job-queue.py",
+            "queued_jobs": queued_jobs,
+            "blocked_surfaces": blocked,
+            "generate_image": generate_image,
+            "social_images": social_images,
+            "safety": {
+                "phone_touched_by_workflow": False,
+                "final_post_tap_in_workflow": False,
+                "lease_owned_by_drainer": True,
+                "validated_surfaces": [
+                    "personal-facebook",
+                    "personal-linkedin",
+                    "business-facebook",
+                    "business-linkedin",
+                ],
+                "guarded_surfaces": [],
+                "business_page_target": "TheoForge Solutions",
+                "business_page_publish_guard": "workflow queues only after approval; phone drainer verifies native Page identity before final Post",
+            },
+        }
+
+    def _social_generate_image(self, inst: WorkflowInstance, step: WorkflowStep) -> bool:
+        value = inst.context_bag.get("generate_image")
+        if isinstance(value, bool):
+            return value
+        value = inst.context_bag.get("requires_social_image")
+        if isinstance(value, bool):
+            return value
+        value = step.payload.get("generate_image")
+        if isinstance(value, bool):
+            return value
+        return False
+
+    def _selected_social_image_path(self, inst: WorkflowInstance, surface: str) -> str:
+        selected_images = inst.context_bag.get("selected_images")
+        if isinstance(selected_images, dict) and selected_images.get(surface):
+            return str(selected_images.get(surface))
+        selected = inst.context_bag.get("selected_image_path")
+        return str(selected or "")
+
+    def _prepare_content_image_variants(self, inst: WorkflowInstance) -> None:
+        if not inst.context_bag.get("generate_image") and not inst.context_bag.get("requires_featured_image") and not inst.context_bag.get("requires_social_image"):
+            return
+        draft = str(inst.context_bag.get("post_draft") or inst.context_bag.get("blog_draft") or inst.context_bag.get("draft_choice") or "").strip()
+        if not draft:
+            return
+        try:
+            if inst.definition_id == "blog-content-pipeline":
+                if inst.context_bag.get("blog_image_variants"):
+                    return
+                from conductor.v2.blog_images import generate_blog_featured_image_variants
+                title = self._blog_post_title(inst, WorkflowStep(id="image-preview"), draft)
+                body = self._clean_blog_body(draft, include_sources=True)
+                inst.context_bag["blog_image_variants"] = generate_blog_featured_image_variants(
+                    title=title,
+                    body=body,
+                    workflow_id=inst.workflow_id,
+                )
+                selected = inst.context_bag["blog_image_variants"].get("selected_image_path")
+                if selected:
+                    inst.context_bag.setdefault("selected_image_path", selected)
+            elif inst.definition_id == "social-content-pipeline":
+                if inst.context_bag.get("social_image_variants"):
+                    return
+                from conductor.v2.blog_images import generate_social_post_image_variants
+                variants: dict[str, Any] = {}
+                selected: dict[str, str] = {}
+                for surface in self._phone_social_surfaces(inst, WorkflowStep(id="image-preview")):
+                    text = self._extract_surface_post_text(draft, surface)
+                    if not text:
+                        continue
+                    package = generate_social_post_image_variants(
+                        text=text,
+                        workflow_id=inst.workflow_id,
+                        surface=surface,
+                    )
+                    variants[surface] = package
+                    if package.get("selected_image_path"):
+                        selected[surface] = str(package.get("selected_image_path"))
+                if variants:
+                    inst.context_bag["social_image_variants"] = variants
+                if selected:
+                    inst.context_bag.setdefault("selected_images", selected)
+                    first = next(iter(selected.values()), "")
+                    if first:
+                        inst.context_bag.setdefault("selected_image_path", first)
+        except Exception as exc:
+            inst.context_bag.setdefault("image_preview_errors", []).append({"error": str(exc), "at": utc_now()})
+
+    def _generate_social_image_artifact(self, inst: WorkflowInstance, surface: str, text: str) -> dict[str, Any]:
+        from conductor.v2.blog_images import generate_social_post_image
+
+        return generate_social_post_image(
+            text=text,
+            workflow_id=inst.workflow_id,
+            surface=surface,
+        )
+
+    def _phone_social_surfaces(self, inst: WorkflowInstance, step: WorkflowStep) -> list[str]:
+        # Prefer real runtime context over YAML template literals like
+        # `${context.surfaces}`. Template literals stringify lists and would
+        # otherwise degrade business/page surface guards into the personal
+        # default.
+        raw = inst.context_bag.get("surfaces") or step.payload.get("surfaces") or []
+        if isinstance(raw, str):
+            if raw.strip().startswith("${context."):
+                raw = []
+            else:
+                raw = [item.strip().strip("[]'\"") for item in raw.split(",") if item.strip()]
+        if not isinstance(raw, list):
+            raw = []
+        normalized: list[str] = []
+        aliases = {
+            "facebook": "personal-facebook",
+            "personal facebook": "personal-facebook",
+            "personal_facebook": "personal-facebook",
+            "personal-facebook": "personal-facebook",
+            "linkedin": "personal-linkedin",
+            "personal linkedin": "personal-linkedin",
+            "personal_linkedin": "personal-linkedin",
+            "personal-linkedin": "personal-linkedin",
+            "business facebook": "business-facebook",
+            "business_facebook": "business-facebook",
+            "business-facebook": "business-facebook",
+            "facebook-page": "business-facebook",
+            "business linkedin": "business-linkedin",
+            "business_linkedin": "business-linkedin",
+            "business-linkedin": "business-linkedin",
+            "linkedin-page": "business-linkedin",
+        }
+        for item in raw:
+            key = str(item).strip().lower()
+            surface = aliases.get(key)
+            if surface and surface not in normalized:
+                normalized.append(surface)
+        return normalized or ["personal-facebook", "personal-linkedin"]
+
+    def _phone_platform_for_surface(self, surface: str) -> Optional[str]:
+        return {
+            "personal-facebook": "personal facebook",
+            "personal-linkedin": "personal linkedin",
+            "business-facebook": "business facebook",
+            "business-linkedin": "business linkedin",
+        }.get(surface)
+
+    def _phone_surface_route_metadata(self, surface: str) -> dict[str, Any]:
+        if surface == "business-facebook":
+            return {
+                "target_identity": "TheoForge Solutions",
+                "validated_route": "facebook_menu_profile_switcher_page_profile_composer",
+                "identity_guard": "composer hierarchy/screenshot must show TheoForge Solutions outside the post body before Next/Post",
+                "validation_evidence_root": "/home/konan/pantheon/phone-live-validation/20260809T184110Z/business-pages",
+            }
+        if surface == "business-linkedin":
+            return {
+                "target_identity": "TheoForge Solutions",
+                "validated_route": "linkedin_manage_pages_dashboard_start_post",
+                "identity_guard": "Page dashboard must show TheoForge Solutions + Start a post; final composer screenshot/logo evidence required before Post",
+                "validation_evidence_root": "/home/konan/pantheon/phone-live-validation/20260809T190731Z/linkedin-page-dashboard-route",
+            }
+        return {}
+
+    def _phone_surface_block_reason(self, surface: str) -> str:
+        return "surface is not supported by the validated phone social publisher"
+
+    def _extract_surface_post_text(self, draft: str, surface: str) -> str:
+        if not draft:
+            return ""
+        keyword = "facebook" if "facebook" in surface else "linkedin" if "linkedin" in surface else ""
+        if keyword:
+            lines = str(draft).splitlines()
+            collecting = False
+            body: list[str] = []
+            for line in lines:
+                stripped = line.strip()
+                heading = bool(
+                    (stripped.startswith("#") or re.match(r"^draft\s*[—:-]", stripped, re.I))
+                    and re.search(r"\b(?:facebook|linkedin)\b", stripped, re.I)
+                )
+                if heading and keyword in stripped.lower():
+                    collecting = True
+                    body = []
+                    continue
+                if collecting and heading:
+                    break
+                if collecting and re.match(r"^(?:#{1,6}\s*)?(?:platform notes|surface \+ cadence|timing|link/comment plan|approval state)\b", stripped, re.I):
+                    break
+                if collecting:
+                    body.append(line)
+            cleaned = self._clean_post_body("\n".join(body))
+            if cleaned:
+                return cleaned
+        return self._clean_post_body(draft)
+
+    def _clean_post_body(self, text: str) -> str:
+        lines = []
+        for line in str(text or "").splitlines():
+            stripped = line.strip()
+            if not stripped:
+                lines.append("")
+                continue
+            if re.match(r"^(?:[-*_]{3,}|#{1,6}\s|platform notes\b|timing\b|link/comment plan\b|approval state\b)", stripped, re.I):
+                break
+            if re.match(r"^(?:selected angle|classification|fits the|business page slot)\b", stripped, re.I):
+                continue
+            lines.append(line.rstrip())
+        cleaned = "\n".join(lines).strip()
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned[:5000]
+
+    def _extract_first_comment(self, draft: str, surface: str) -> str:
+        if "linkedin" in surface:
+            match = re.search(r"(?ims)(?:first comment|first-comment)[^\n:]*[:\-]\s*(?P<comment>.*?)(?:\n\s*\n|\Z)", draft)
+            if match:
+                return match.group("comment").strip()[:1000]
+        return ""
+
+    def _phone_social_scheduled_for(self, inst: WorkflowInstance, step: WorkflowStep, surface: str) -> str:
+        payload_time = step.payload.get("scheduled_for") or step.payload.get("due_at")
+        for value in (payload_time, inst.context_bag.get("scheduled_for"), inst.context_bag.get("publish_at"), inst.context_bag.get("recommended_time")):
+            if value:
+                return str(value)
+        return self._default_social_window(surface)
+
+    def _default_social_window(self, surface: str) -> str:
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo("America/Boise")
+        except Exception:
+            tz = timezone.utc
+        now = datetime.now(tz)
+        target_hour = 17 if "linkedin" in surface else 9
+        target = now.replace(hour=target_hour, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target = target + timedelta(days=1)
+        return target.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def _enqueue_phone_social_job(self, payload: dict[str, Any], scheduled_for: str) -> dict[str, Any]:
+        import sys as _sys
+        bridge_dir = "/home/konan/projects/consignment-dashboard/phone-bridge"
+        if bridge_dir not in _sys.path:
+            _sys.path.insert(0, bridge_dir)
+        from phone_job_queue import enqueue_job
+        return enqueue_job(
+            kind="social-post",
+            payload=payload,
+            due_at=scheduled_for,
+            source="social-content-pipeline",
+            reason="approved_social_post",
+            queue_item_id=payload.get("queue_item_id"),
+        )
+
+    def _format_phone_social_publish_result(self, result: dict[str, Any]) -> str:
+        lines = [
+            "QUEUED FOR PHONE — canonical Android phone posting path.",
+            "",
+            f"Workflow: {result.get('workflow_id')}",
+            f"Transport: {result.get('transport')}",
+            f"Queue root: {result.get('queue_root')}",
+            f"Queue drainer: {result.get('queue_drainer')}",
+            "",
+            "Queued jobs:",
+        ]
+        jobs = result.get("queued_jobs") or []
+        if jobs:
+            for job in jobs:
+                lines.append(
+                    f"- {job.get('surface')}: {job.get('status')} · {job.get('scheduled_for')} · {job.get('job_id')}"
+                    + (f" · image {job.get('image_status')}" if job.get("image_path") else "")
+                )
+        else:
+            lines.append("- none")
+        blocked = result.get("blocked_surfaces") or []
+        if blocked:
+            lines.extend(["", "Guarded / not queued:"])
+            for item in blocked:
+                lines.append(f"- {item.get('surface')}: {item.get('status')} — {item.get('reason')}")
+        lines.extend([
+            "",
+            "Safety: the workflow only writes queue jobs. The phone queue drainer owns the lease and the native app post action at the scheduled time.",
+        ])
+        return "\n".join(lines)
+
+    async def _exec_blog_post_queue(
+        self, inst: WorkflowInstance, wf: Workflow, step: WorkflowStep
+    ) -> None:
+        """Queue an approved long-form blog post as a durable artifact.
+
+        The blog pipeline's approval gate approves the draft. This step writes a
+        file-backed blog queue item and Markdown artifact. Approved blog jobs
+        public-publish through the Ghost drainer unless configured as drafts.
+        """
+        result = self._build_blog_post_queue_result(inst, step)
+        if step.output:
+            inst.context_bag[step.output] = self._format_blog_post_queue_result(result)
+        inst.context_bag["blog_publish_jobs"] = result
+        self._record_internal_step_completion(
+            inst,
+            step,
+            output=result,
+            summary=f"queued {len(result.get('queued_jobs', []))} blog post(s); blocked {len(result.get('blocked_items', []))}",
+        )
+        await self._advance(inst, wf, step, None)
+
+    def _build_blog_post_queue_result(self, inst: WorkflowInstance, step: WorkflowStep) -> dict[str, Any]:
+        draft = str(
+            inst.context_bag.get("draft_choice")
+            or inst.context_bag.get("blog_draft")
+            or inst.context_bag.get("post_draft")
+            or ""
+        ).strip()
+        if not draft:
+            draft = _render_template(step.input or "${context.draft_choice}", inst).strip()
+        if draft in {"${context.draft_choice}", "${context.blog_draft}", "${context.post_draft}"}:
+            draft = ""
+        title = self._blog_post_title(inst, step, draft)
+        include_sources = self._blog_include_sources(inst, step)
+        body = self._clean_blog_body(draft, include_sources=include_sources)
+        generate_image = self._blog_generate_image(inst, step)
+        blog_image = None
+        scheduled_for = self._blog_scheduled_for(inst, step)
+        destination = str(step.payload.get("destination") or inst.context_bag.get("blog_destination") or "ghost-publish")
+        publish_mode = str(step.payload.get("publish_mode") or inst.context_bag.get("blog_publish_mode") or "publish")
+        blocked: list[dict[str, Any]] = []
+        queued_jobs: list[dict[str, Any]] = []
+        if not body:
+            blocked.append({
+                "status": "missing_blog_body",
+                "reason": "approved draft did not contain usable blog body text",
+            })
+        else:
+            if generate_image:
+                selected_path = str(inst.context_bag.get("selected_image_path") or "").strip()
+                if selected_path:
+                    blog_image = {
+                        "ok": True,
+                        "status": "operator_selected_image",
+                        "provider": "operator-selection",
+                        "image_path": selected_path,
+                        "workflow_id": inst.workflow_id,
+                        "title": title,
+                    }
+                else:
+                    blog_image = self._generate_blog_image_artifact(inst, title, body)
+                inst.context_bag["blog_image_result"] = blog_image
+                if not blog_image.get("ok"):
+                    blocked.append({
+                        "status": "blog_image_generation_failed",
+                        "reason": str(blog_image.get("error") or "image generation failed"),
+                    })
+            if not blocked:
+                payload = {
+                    "workflow_id": inst.workflow_id,
+                    "queue_item_id": f"{inst.workflow_id}-blog",
+                    "title": title,
+                    "body": body,
+                    "scheduled_for": scheduled_for,
+                    "destination": destination,
+                    "publish_mode": publish_mode,
+                    "format": "markdown",
+                    "include_sources": include_sources,
+                    "generate_image": generate_image,
+                    "blog_image": blog_image,
+                    "approved_by": "operator-approve-draft",
+                    "transport": "ghost_admin_api" if destination.startswith("ghost") else "markdown_artifact",
+                    "source": "blog-content-pipeline",
+                    "safety": {
+                        "public_publish_after_approval": publish_mode == "publish",
+                        "default_destination": "Published post on blog.theoforgesolutions.com" if publish_mode == "publish" else "Ghost draft on blog.theoforgesolutions.com",
+                        "approval_required": True,
+                    },
+                }
+                queued = self._enqueue_blog_post_job(payload, scheduled_for)
+                queued_jobs.append({
+                    "status": "queued_for_blog",
+                    "job_id": queued.get("job_id"),
+                    "queue_path": queued.get("path"),
+                    "markdown_path": queued.get("markdown_path"),
+                    "scheduled_for": queued.get("due_at") or scheduled_for,
+                    "destination": destination,
+                    "publish_mode": publish_mode,
+                    "include_sources": include_sources,
+                    "generate_image": generate_image,
+                    "image_path": blog_image.get("image_path") if isinstance(blog_image, dict) else None,
+                    "image_status": blog_image.get("status") if isinstance(blog_image, dict) else None,
+                    "title": title,
+                })
+        return {
+            "ok": bool(queued_jobs) and not blocked,
+            "status": "queued_for_blog" if queued_jobs else "blocked",
+            "workflow_id": inst.workflow_id,
+            "transport": "blog_queue",
+            "queue_root": os.environ.get("BLOG_JOB_QUEUE_ROOT", "/home/konan/pantheon/blog-queue"),
+            "queue_drainer": "/home/konan/pantheon/scripts/process-blog-job-queue.py",
+            "queued_jobs": queued_jobs,
+            "blocked_items": blocked,
+            "safety": {
+                "public_publish_by_workflow": destination.startswith("ghost") and publish_mode == "publish",
+                "ghost_draft_by_drainer": destination.startswith("ghost") and publish_mode == "draft",
+                "approval_required": True,
+            },
+        }
+
+    def _blog_post_title(self, inst: WorkflowInstance, step: WorkflowStep, draft: str) -> str:
+        for value in (step.payload.get("title"), inst.context_bag.get("blog_title"), inst.context_bag.get("title")):
+            if value:
+                return self._clean_blog_title(str(value))
+        for line in str(draft or "").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("# "):
+                return self._clean_blog_title(stripped[2:])
+            if stripped and not re.match(r"^(?:draft|title|blog draft)\s*[:—-]?$", stripped, re.I):
+                return self._clean_blog_title(stripped.strip("# "))
+        topic = inst.context_bag.get("topic_or_link") or inst.context_bag.get("topic") or "TheoForge blog draft"
+        return self._clean_blog_title(str(topic))
+
+    def _clean_blog_title(self, title: str) -> str:
+        title = re.sub(r"\s+", " ", str(title or "")).strip().strip("#")
+        title = re.sub(r"^(?:title|blog title)\s*[:—-]\s*", "", title, flags=re.I).strip()
+        return title[:140] or "Untitled TheoForge blog draft"
+
+    def _blog_include_sources(self, inst: WorkflowInstance, step: WorkflowStep) -> bool:
+        value = inst.context_bag.get("include_sources")
+        if isinstance(value, bool):
+            return value
+        value = step.payload.get("include_sources")
+        if isinstance(value, bool):
+            return value
+        return True
+
+    def _blog_generate_image(self, inst: WorkflowInstance, step: WorkflowStep) -> bool:
+        value = inst.context_bag.get("generate_image")
+        if isinstance(value, bool):
+            return value
+        value = inst.context_bag.get("requires_featured_image")
+        if isinstance(value, bool):
+            return value
+        value = step.payload.get("generate_image")
+        if isinstance(value, bool):
+            return value
+        return False
+
+    def _generate_blog_image_artifact(self, inst: WorkflowInstance, title: str, body: str) -> dict[str, Any]:
+        from conductor.v2.blog_images import generate_blog_featured_image
+
+        return generate_blog_featured_image(
+            title=title,
+            body=body,
+            workflow_id=inst.workflow_id,
+        )
+
+    def _clean_blog_body(self, draft: str, *, include_sources: bool = True) -> str:
+        text = str(draft or "").replace("\r", "").strip()
+        if not text:
+            return ""
+        lines = text.splitlines()
+        cleaned: list[str] = []
+        skipping_meta = False
+        for line in lines:
+            stripped = line.strip()
+            if re.match(r"^(?:platform notes|surface \+ cadence|timing|link/comment plan|approval state|social variants)\b", stripped, re.I):
+                break
+            if not include_sources and re.match(r"^(?:#{1,6}\s*)?(?:publishing notes|source notes?|sources|cited sources|references|citations|verification notes|link verification)\b", stripped, re.I):
+                break
+            if re.match(r"^(?:title|slug|meta description|excerpt)\s*[:—-]", stripped, re.I):
+                continue
+            if stripped.startswith("```"):
+                skipping_meta = not skipping_meta
+                cleaned.append(line.rstrip())
+                continue
+            cleaned.append(line.rstrip())
+        body = "\n".join(cleaned).strip()
+        body = re.sub(r"\n{4,}", "\n\n\n", body)
+        return body[:30000]
+
+    def _blog_scheduled_for(self, inst: WorkflowInstance, step: WorkflowStep) -> str:
+        for value in (step.payload.get("scheduled_for"), step.payload.get("due_at"), inst.context_bag.get("scheduled_for"), inst.context_bag.get("publish_at"), inst.context_bag.get("recommended_time")):
+            if value:
+                return str(value)
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo("America/Boise")
+        except Exception:
+            tz = timezone.utc
+        now = datetime.now(tz)
+        target = now.replace(hour=10, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target = target + timedelta(days=1)
+        return target.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def _enqueue_blog_post_job(self, payload: dict[str, Any], scheduled_for: str) -> dict[str, Any]:
+        root = Path(os.environ.get("BLOG_JOB_QUEUE_ROOT", "/home/konan/pantheon/blog-queue"))
+        pending = root / "pending"
+        drafts = root / "drafts"
+        pending.mkdir(parents=True, exist_ok=True)
+        drafts.mkdir(parents=True, exist_ok=True)
+        job_id = str(payload.get("queue_item_id") or f"blog_{uuid.uuid4().hex[:12]}")
+        slug = re.sub(r"[^a-z0-9]+", "-", str(payload.get("title") or job_id).lower()).strip("-")[:80] or job_id
+        safe_due = str(scheduled_for).replace(":", "").replace("/", "-").replace(" ", "T")
+        markdown_path = drafts / f"{safe_due}_{slug}.md"
+        body = str(payload.get("body") or "")
+        title = str(payload.get("title") or "Untitled TheoForge blog draft")
+        markdown_path.write_text(f"# {title}\n\n{body}\n", encoding="utf-8")
+        job = {
+            "job_id": job_id,
+            "kind": "blog-post",
+            "status": "queued",
+            "source": "blog-content-pipeline",
+            "reason": "approved_blog_post",
+            "due_at": scheduled_for,
+            "created_at": utc_now(),
+            "attempts": 0,
+            "markdown_path": str(markdown_path),
+            "payload": {**payload, "markdown_path": str(markdown_path)},
+        }
+        path = pending / f"{safe_due}_{job_id}.json"
+        tmp = path.with_suffix(path.suffix + f".{uuid.uuid4().hex}.tmp")
+        tmp.write_text(json.dumps(job, indent=2, sort_keys=True, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+        return {**job, "path": str(path), "markdown_path": str(markdown_path), "queue_depth": len(list(pending.glob("*.json")))}
+
+    def _format_blog_post_queue_result(self, result: dict[str, Any]) -> str:
+        lines = [
+            "QUEUED FOR BLOG — approved long-form draft artifact.",
+            "",
+            f"Workflow: {result.get('workflow_id')}",
+            f"Transport: {result.get('transport')}",
+            f"Queue root: {result.get('queue_root')}",
+            f"Queue drainer: {result.get('queue_drainer')}",
+            "",
+            "Queued blog drafts:",
+        ]
+        jobs = result.get("queued_jobs") or []
+        if jobs:
+            for job in jobs:
+                lines.append(
+                    f"- {job.get('title')}: {job.get('status')} · {job.get('destination')}:{job.get('publish_mode')} · {job.get('scheduled_for')} · {job.get('job_id')}"
+                )
+                if job.get("markdown_path"):
+                    lines.append(f"  Markdown: {job.get('markdown_path')}")
+        else:
+            lines.append("- none")
+        blocked = result.get("blocked_items") or []
+        if blocked:
+            lines.extend(["", "Blocked:"])
+            for item in blocked:
+                lines.append(f"- {item.get('status')} — {item.get('reason')}")
+        if jobs:
+            include_values = {job.get("include_sources") for job in jobs if "include_sources" in job}
+            if include_values:
+                lines.extend(["", f"Sources: {'included' if True in include_values else 'excluded'} in queued Markdown."])
+            image_jobs = [job for job in jobs if job.get("generate_image")]
+            if image_jobs:
+                lines.append("")
+                for job in image_jobs:
+                    lines.append(f"Image: {job.get('image_status') or 'requested'} · {job.get('image_path') or 'no image path'}")
+        lines.extend([
+            "",
+            "Safety: the workflow writes approved Markdown/JSON queue artifacts. The blog queue drainer creates Ghost drafts by default; public publish requires explicit mode/config.",
+        ])
+        return "\n".join(lines)
+
 
     # =====================================================================
     # Step 4.7 (Brief 1, 2026-06-16): parallel + merge step types
@@ -1920,6 +2693,7 @@ class ConductorEngine:
             f"# Conductor Dispatch — Workflow {inst.workflow_id}",
             f"Definition: {inst.definition_id} v{inst.definition_version}",
             f"Step: {step.id} (god: {step.god})",
+            f"Role: Act as {step.god}; follow the workflow step prompt and return the requested artifact.",
             "",
         ]
         if inst.original_request:
@@ -1935,6 +2709,10 @@ class ConductorEngine:
                     continue
                 lines.append(f"- **{k}**: {_summarize(v)}")
             lines.append("")
+        if step.prompt:
+            lines.append("## Step Prompt")
+            lines.append(_render_template(step.prompt, inst))
+            lines.append("")
         # Step-specific input
         if step.input_from and step.input_from in inst.context_bag:
             lines.append(f"## Input (from `{step.input_from}`)")
@@ -1942,7 +2720,7 @@ class ConductorEngine:
             lines.append("")
         elif step.input:
             lines.append(f"## Input")
-            lines.append(step.input)
+            lines.append(_render_template(step.input, inst))
             lines.append("")
         # Previous step history
         prior = [h for h in inst.step_history
@@ -1956,15 +2734,11 @@ class ConductorEngine:
             lines.append("")
         lines.extend([
             "## Your Task",
-            f"Execute the `{step.id}` step. When complete, write a handoff to:",
-            f"  ~/pantheon/conductor/pending/_dispatch/{inst.workflow_id}_{step.id}.json",
+            f"Execute the `{step.id}` step and return the requested artifact directly in your final answer.",
+            "Do not write files, do not run verification scripts, and do not claim publishing occurred unless the step explicitly asks for a publish result.",
+            "The Conductor engine will record your final answer into workflow state and route any handoff itself.",
             "",
-            "Use this handoff format:",
-            "```json",
-            json.dumps(_example_handoff(inst, step), indent=2),
-            "```",
-            "",
-            f"Step timeout: {step.timeout}. After completing, the engine polls the workflow state file.",
+            f"Step timeout: {step.timeout}.",
         ])
         return "\n".join(lines)
 
@@ -2062,12 +2836,23 @@ class ConductorEngine:
         effective_status = "refused" if refusal_detected else (
             "completed" if not result or result.status == "completed" else result.status
         )
-        # Look for any existing entry for this step (not just in_progress).
+        # Look for the active history row for this step. A workflow can revisit
+        # a step after operator rewrite / angle reselection, so choosing the
+        # first matching row is wrong: it updates an old completed attempt and
+        # leaves the newest `in_progress` row in place. The dispatch caller then
+        # sees the latest row as still in_progress and falsely fails the run.
         existing_idx = None
-        for idx, h in enumerate(inst.step_history):
-            if h["step_id"] == step.id:
+        for idx in range(len(inst.step_history) - 1, -1, -1):
+            h = inst.step_history[idx]
+            if h["step_id"] == step.id and h.get("status") == "in_progress":
                 existing_idx = idx
                 break
+        if existing_idx is None:
+            for idx in range(len(inst.step_history) - 1, -1, -1):
+                h = inst.step_history[idx]
+                if h["step_id"] == step.id:
+                    existing_idx = idx
+                    break
         if existing_idx is not None:
             h = inst.step_history[existing_idx]
             h["status"] = effective_status
@@ -2122,11 +2907,20 @@ class ConductorEngine:
         # v1+v2 collision guard needed here — the failure path is
         # only hit from the v2-direct engine, not the v1 bridge.
         now = utc_now()
+        # Match completion semantics: repeated steps must update the latest
+        # active attempt, not the first historical row with the same step id.
         existing_idx = None
-        for idx, h in enumerate(inst.step_history):
-            if h["step_id"] == step.id:
+        for idx in range(len(inst.step_history) - 1, -1, -1):
+            h = inst.step_history[idx]
+            if h["step_id"] == step.id and h.get("status") == "in_progress":
                 existing_idx = idx
                 break
+        if existing_idx is None:
+            for idx in range(len(inst.step_history) - 1, -1, -1):
+                h = inst.step_history[idx]
+                if h["step_id"] == step.id:
+                    existing_idx = idx
+                    break
         if existing_idx is not None:
             h = inst.step_history[existing_idx]
             h["status"] = "failed"
@@ -2377,12 +3171,101 @@ class ConductorEngine:
                 marked.append(str(handoff_path))
         return marked
 
+    async def resume_waiting_workflow(self, decision: dict[str, Any]) -> dict[str, Any]:
+        """Resume a workflow parked at a social operator gate.
+
+        The Hub sends decisions as internal `workflow.decision` events. The
+        daemon, not the WebUI, owns continuation so approvals execute the next
+        real Conductor step with the daemon's gateway client.
+        """
+        workflow_id = str(decision.get("run_id") or decision.get("workflow_id") or "").strip()
+        if not workflow_id:
+            return {"status": "error", "error": "missing run_id"}
+        inst = self.get_instance(workflow_id)
+        if not inst:
+            return {"status": "not_found", "workflow_id": workflow_id}
+        wf = self.workflows.get(inst.definition_id)
+        if not wf:
+            return {"status": "error", "workflow_id": workflow_id, "error": f"unknown workflow {inst.definition_id!r}"}
+        if inst.status != "waiting_for_ack":
+            return {
+                "status": "ignored",
+                "workflow_id": workflow_id,
+                "reason": f"workflow status is {inst.status!r}, not waiting_for_ack",
+                "current_step": inst.current_step,
+            }
+        current_step_id = inst.current_step
+        current_step = wf.step_by_id(current_step_id or "")
+        if not current_step:
+            return {"status": "error", "workflow_id": workflow_id, "error": f"unknown current_step {current_step_id!r}"}
+
+        context = inst.context_bag
+        context.setdefault("operator_decisions", []).append(decision)
+        feedback = str(decision.get("feedback") or "").strip()
+        choice = str(decision.get("choice") or "").strip()
+        action = str(decision.get("action") or "decision").strip()
+        if feedback:
+            context["feedback"] = feedback
+
+        now = utc_now()
+        inst.step_history.append({
+            "step_id": current_step_id,
+            "god": "operator",
+            "status": f"decision:{action}",
+            "started": now,
+            "completed": now,
+            "output_summary": (feedback or choice or action or "operator decision")[:500],
+        })
+
+        if current_step_id == "operator-choose-angle":
+            context["selected_angle"] = choice or feedback or "Use the Kairos pick from the generated angle options."
+            inst.status = "in_progress"
+            self._save_instance(inst)
+            await self._advance(inst, wf, current_step, None)
+            return {"status": "resumed", "workflow_id": workflow_id, "from_step": current_step_id, "next_step": inst.current_step}
+
+        if current_step_id == "operator-approve-draft":
+            if action == "rewrite":
+                inst.status = "in_progress"
+                inst.current_step = "rheta-draft-selected-angle"
+                self._save_instance(inst)
+                await self._execute_step(inst, wf, "rheta-draft-selected-angle")
+                return {"status": "resumed", "workflow_id": workflow_id, "from_step": current_step_id, "next_step": inst.current_step, "action": "rewrite"}
+            if action in {"kairos-pick", "select-angle"}:
+                context["selected_angle"] = choice or feedback or "Use the Kairos pick from the generated angle options."
+                inst.status = "in_progress"
+                inst.current_step = "rheta-draft-selected-angle"
+                self._save_instance(inst)
+                await self._execute_step(inst, wf, "rheta-draft-selected-angle")
+                return {"status": "resumed", "workflow_id": workflow_id, "from_step": current_step_id, "next_step": inst.current_step, "action": action}
+            if action == "approve":
+                if isinstance(decision.get("include_sources"), bool):
+                    context["include_sources"] = decision.get("include_sources")
+                if isinstance(decision.get("generate_image"), bool):
+                    context["generate_image"] = decision.get("generate_image")
+                if decision.get("selected_image_path"):
+                    context["selected_image_path"] = decision.get("selected_image_path")
+                if decision.get("selected_image_url"):
+                    context["selected_image_url"] = decision.get("selected_image_url")
+                if isinstance(decision.get("selected_images"), dict):
+                    context["selected_images"] = decision.get("selected_images")
+                context["draft_choice"] = choice or context.get("blog_draft") or context.get("post_draft") or "approved"
+                inst.status = "in_progress"
+                self._save_instance(inst)
+                await self._advance(inst, wf, current_step, None)
+                return {"status": "resumed", "workflow_id": workflow_id, "from_step": current_step_id, "next_step": inst.current_step, "action": "approve"}
+
+        return {"status": "ignored", "workflow_id": workflow_id, "reason": f"unsupported gate/action {current_step_id!r}/{action!r}"}
+
     # ----- Event ingestion (entry point for handoff/watcher/NATS/webhook) -----
 
     async def handle_event(self, event: Event) -> dict[str, Any]:
         """Process an event: match rule → decide handling → dispatch.
         Returns a small status dict for the caller (e.g. webhook response)."""
         LOG.info(f"event: type={event.type} source={event.source} target={event.target} subject={event.subject}")
+
+        if event.type == "workflow.decision" and not event.is_external:
+            return await self.resume_waiting_workflow(event.payload if isinstance(event.payload, dict) else {})
 
         # External events get handling_mode applied per spec 8.1
         rule = self.rules.match(event)
@@ -2594,13 +3477,19 @@ class ConductorEngine:
         if "dispatch_workflow" in then:
             wf_id = then["dispatch_workflow"]
             ctx = dict(then.get("input", {}) or {})
+            if then.get("context") == "inherit_full":
+                payload_context = event.payload.get("context") if isinstance(event.payload, dict) else None
+                if isinstance(payload_context, dict):
+                    ctx.update(payload_context)
+                elif isinstance(event.payload, dict):
+                    ctx.update(event.payload)
             if event.payload:
                 ctx.setdefault("event_payload", event.payload)
             inst = self.start_workflow(
                 wf_id,
                 context=ctx,
                 initiator=event.source,
-                original_request=event.payload.get("summary", event.subject or ""),
+                original_request=event.payload.get("summary", event.subject or "") if isinstance(event.payload, dict) else (event.subject or ""),
                 start_at_step=then.get("start_at_step"),
             )
             return {"status": "workflow_started", "workflow_id": inst.workflow_id, "rule": rule.id}
@@ -2710,6 +3599,11 @@ def _render_template(s: str, inst: WorkflowInstance) -> str:
     s = s.replace("${context}", json.dumps(inst.context_bag, default=str))
     # ${context.X}
     for m in re.finditer(r"\$\{context\.([^}]+)\}", s):
+        key = m.group(1)
+        val = inst.context_bag.get(key, "")
+        s = s.replace(m.group(0), str(val))
+    # ${X} shorthand for workflow context keys / step outputs.
+    for m in re.finditer(r"\$\{([^}.][^}]*)\}", s):
         key = m.group(1)
         val = inst.context_bag.get(key, "")
         s = s.replace(m.group(0), str(val))

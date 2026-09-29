@@ -1,169 +1,117 @@
 #!/usr/bin/env python3
-"""Skill Crystallization — find candidates for skill creation from Ichor events.
+"""Hermes Dojo Skill Crystallization — candidate scanner (standalone).
 
-Scans ``ichor_events`` for high-importance insights, completed tasks, and
-complex multi-step workflows from the last 24 hours. Outputs candidate
-lines that the hourly agent cron reads and decides which to crystallize
-into reusable skills.
+Finds recent COMPLEX COMPLETED TASKS and proposes them as candidates for the
+agent to evaluate for crystallization into reusable skills.
 
-Run by the Hermes Dojo hourly cron. Output goes to stdout for the agent.
+Design note (2026-09-19 rewrite): the previous version imported a package
+(`hermes_dojo.scripts.skill_crystallization`) that does not exist — the package
+dir is `hermes-dojo` (dash), which is not importable — so it printed
+"Using fallback mode" and `sys.exit(0)` doing nothing. A later variant queried
+ichor_events for non-existent `key`/`content` columns and crashed. Both caused
+the agent to improvise junk skills.
+
+Source of truth: the Hermes session store (`~/.hermes/state.db`). A "complex
+completed task" is a recent session that used many tools. This is a far better
+signal than the ichor_events stream, which in this deployment is 100%
+regex-derived (source='tier_a') and therefore noisy.
+
+This script only PROPOSES candidates. It never creates skills — that is the
+agent's job via `skill_manage`.
 
 Usage:
-    python3 hermes-dojo/scripts/skill_crystallization.py
-    python3 hermes-dojo/scripts/skill_crystallization.py --days 3
+    python3 skill_crystallization.py [--days N] [--min-tools N] [--limit N] [--json] [--log]
 """
-
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
-from collections import Counter
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Dict, List
+import sys
+from datetime import datetime, timezone
 
-HERMES_HOME = Path.home() / ".hermes"
-ICHOR_DB = HERMES_HOME / "ichor.db"
-DOJO_DIR = Path.home() / "pantheon" / "hermes-dojo"
-CRYSTALLIZATION_LOG = DOJO_DIR / "logs" / "crystallizations.jsonl"
+STATE_DB = os.environ.get("HERMES_STATE_DB", "/home/konan/.hermes/state.db")
+DOJO_LOG = os.environ.get("DOJO_CRYSTALLIZATION_LOG", "/home/konan/.hermes/dojo/crystallizations.jsonl")
 
-# Event types that signal a completed task worth crystallizing.
-TASK_COMPLETION_TYPES = ("insight", "decision", "commitment", "follow_up")
-
-# Subject prefixes that indicate test data injected by the test suite.
-# These entries pollute the production ichor.db and must be excluded
-# from crystallization candidates. Source: pr35-gitworktree
-# tests/test_ichor_c1_outcome_and_contradiction.py
-EXCLUDED_SUBJECT_PREFIXES = ("test_", "c1_test_")
-
-# Minimum importance for a candidate event.
-MIN_IMPORTANCE: float = 40.0
-
-# How many candidates to surface per run.
-MAX_CANDIDATES: int = 10
+# Cron runs are machine-driven, not human tasks worth crystallizing.
+EXCLUDE_SOURCES = ("cron",)
 
 
-def find_candidates(
-    db_path: str | None = None,
-    days: int = 1,
-    reference_now: datetime | None = None,
-) -> List[Dict[str, Any]]:
-    """Find high-signal events suitable for skill crystallization.
-
-    Args:
-        db_path: Path to ichor.db (default: ~/.hermes/ichor.db).
-        days: Look-back window in days.
-        reference_now: Override "now" for deterministic testing.
-
-    Returns:
-        List of candidate dicts with keys: id, subject, god_name,
-        event_type, importance, raw_text, created_at.
-    """
-    path = Path(db_path or ICHOR_DB)
-    if not path.exists():
+def find_candidates(days: int, min_tools: int, limit: int) -> list[dict]:
+    if not os.path.isfile(STATE_DB):
         return []
-
-    now = reference_now or datetime.now(timezone.utc)
-    # DB stores created_at as 'YYYY-MM-DD HH:MM:SS' with space separator (no timezone).
-    # isoformat() produces 'YYYY-MM-DDTHH:MM:SS+tz' which breaks SQLite string comparison
-    # because 'T' (ASCII 84) > ' ' (ASCII 32). Match the DB format exactly.
-    cutoff = (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-
-    conn = sqlite3.connect(str(path))
-    conn.row_factory = sqlite3.Row
-
-    type_placeholders = ", ".join("?" for _ in TASK_COMPLETION_TYPES)
-    rows = conn.execute(
-        f"SELECT id, subject, raw_text, god_name, event_type, importance, created_at "
-        f"FROM ichor_events "
-        f"WHERE event_type IN ({type_placeholders}) "
-        f"  AND importance >= ? "
-        f"  AND created_at >= ? "
-        f"  AND NOT (god_name = 'default' AND ("
-        f"       subject LIKE 'test_%' "
-        f"    OR subject LIKE 'c1_test_%'"
-        f"  )) "
-        f"ORDER BY importance DESC, created_at DESC "
-        f"LIMIT ?",
-        (*TASK_COMPLETION_TYPES, MIN_IMPORTANCE, cutoff, MAX_CANDIDATES * 3),
-    ).fetchall()
-    conn.close()
-
-    candidates: List[Dict[str, Any]] = []
-    for row in rows:
-        raw = (row["raw_text"] or "")[:300].replace("\n", " ")
-        candidates.append({
-            "id": row["id"],
-            "subject": row["subject"] or "",
-            "god_name": row["god_name"] or "unknown",
-            "event_type": row["event_type"],
-            "importance": round(row["importance"] or 0, 1),
-            "raw_text": raw,
-            "created_at": row["created_at"] or "",
+    con = sqlite3.connect(f"file:{STATE_DB}?mode=ro", uri=True, timeout=20)
+    con.row_factory = sqlite3.Row
+    try:
+        placeholders = ",".join("?" for _ in EXCLUDE_SOURCES)
+        rows = con.execute(
+            f"""
+            SELECT id, source, title, message_count, tool_call_count,
+                   CAST(last_activity_at AS INTEGER) AS last_activity_at
+            FROM sessions
+            WHERE last_activity_at > strftime('%s','now', ?)
+              AND tool_call_count >= ?
+              AND source NOT IN ({placeholders})
+            ORDER BY tool_call_count DESC
+            LIMIT ?
+            """,
+            (f"-{int(days)} day", int(min_tools), *EXCLUDE_SOURCES, int(limit)),
+        ).fetchall()
+    finally:
+        con.close()
+    out = []
+    for r in rows:
+        title = (r["title"] or "").strip() or "(untitled session)"
+        out.append({
+            "id": r["id"],
+            "source": r["source"],
+            "title": title,
+            "message_count": r["message_count"],
+            "tool_call_count": r["tool_call_count"],
         })
-
-    # Deduplicate by subject prefix to avoid near-duplicates
-    seen_subjects: set = set()
-    unique: List[Dict[str, Any]] = []
-    for c in candidates:
-        prefix = c["subject"][:60].lower().strip()
-        if prefix and prefix not in seen_subjects:
-            seen_subjects.add(prefix)
-            unique.append(c)
-            if len(unique) >= MAX_CANDIDATES:
-                break
-
-    return unique
+    return out
 
 
-def log_crystallization(
-    candidate_id: int,
-    skill_name: str,
-    skill_path: str,
-    god_name: str = "",
-) -> None:
-    """Append a crystallization event to the log."""
-    entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "candidate_id": candidate_id,
-        "god_name": god_name,
-        "skill_name": skill_name,
-        "skill_path": skill_path,
-    }
-    CRYSTALLIZATION_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(CRYSTALLIZATION_LOG, "a") as fh:
-        fh.write(json.dumps(entry) + "\n")
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Skill Crystallization Candidate Finder")
-    ap.add_argument("--days", type=int, default=1, help="Look-back window (default: 1)")
-    ap.add_argument("--db", default=str(ICHOR_DB), help="Path to ichor.db")
-    ap.add_argument("--json", action="store_true", help="Output JSON instead of text")
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Hermes Dojo crystallization candidate scanner")
+    ap.add_argument("--days", type=int, default=3)
+    ap.add_argument("--min-tools", type=int, default=15)
+    ap.add_argument("--limit", type=int, default=15)
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--log", action="store_true", help="append a run summary to the crystallization log")
     args = ap.parse_args()
 
-    candidates = find_candidates(db_path=args.db, days=args.days)
+    candidates = find_candidates(args.days, args.min_tools, args.limit)
 
     if args.json:
-        print(json.dumps(candidates, indent=2, default=str))
-        return
+        print(json.dumps({"count": len(candidates), "candidates": candidates}, indent=2))
+    elif not candidates:
+        print(f"CANDIDATES: 0 (no sessions with >= {args.min_tools} tool calls in the last {args.days}d)")
+    else:
+        print(f"CANDIDATES: {len(candidates)}")
+        for c in candidates:
+            print(
+                f"CANDIDATE {c['id']}: {c['title']} "
+                f"({c['source']}, {c['tool_call_count']} tool calls, {c['message_count']} messages)"
+            )
 
-    if not candidates:
-        print("No crystallization candidates found.")
-        return
-
-    print(f"Found {len(candidates)} crystallization candidate(s):\n")
-    for c in candidates:
-        print(
-            f"CANDIDATE id={c['id']} | {c['god_name']} | "
-            f"{c['event_type']} (imp={c['importance']}) | "
-            f"{c['subject'][:60]}"
-        )
-        if c["raw_text"]:
-            print(f"  → {c['raw_text'][:120]}")
-        print()
+    if args.log:
+        try:
+            os.makedirs(os.path.dirname(DOJO_LOG), exist_ok=True)
+            with open(DOJO_LOG, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "kind": "scan",
+                    "days": args.days,
+                    "min_tools": args.min_tools,
+                    "count": len(candidates),
+                    "candidate_ids": [c["id"] for c in candidates],
+                }) + "\n")
+        except OSError as exc:
+            print(f"WARN: could not write crystallization log: {exc}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

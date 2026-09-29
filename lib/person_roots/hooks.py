@@ -27,18 +27,18 @@ from lib.person_roots.schema import DENY, AccessDecision, AccessRequest
 
 _DEFAULT_ALLOWED_FILES = {
     'profile': ('PROFILE.md',),
-    'basic_identity_context_if_owner_authorized': ('PROFILE.md',),
-    'relationship_to_owner': ('RELATIONSHIP_TO_OWNER.md',),
-    'private_family_context_if_explicitly_allowed': ('RELATIONSHIP_TO_OWNER.md', 'NOTES.md'),
+    'basic_identity_context_if_konan_authorized': ('PROFILE.md',),
+    'relationship_to_konan': ('RELATIONSHIP_TO_KONAN.md',),
+    'private_family_context_if_explicitly_allowed': ('RELATIONSHIP_TO_KONAN.md', 'NOTES.md'),
     'permissions': ('PERMISSIONS.md',),
     'memory_policy': ('MEMORY_POLICY.md',),
     'own_profile': ('PROFILE.md', 'ROOT.md', 'PREFERENCES.md'),
     'her_own_profile': ('PROFILE.md', 'ROOT.md', 'PREFERENCES.md'),
     'her_own_pantheon_usage': ('ROOT.md', 'PREFERENCES.md'),
-    'submitted_code': ('ROOT.md', 'PROJECTS/code-review.md'),
-    'project_history': ('PROJECTS/code-review.md',),
-    'general_programming_guidance': ('PROJECTS/code-review.md',),
-    'mentor_review_mode': ('PROJECTS/code-review.md',),
+    'code_submitted_by_xander': ('ROOT.md', 'PROJECTS/code-roast.md'),
+    'xander_project_history': ('PROJECTS/code-roast.md',),
+    'general_programming_guidance': ('PROJECTS/code-roast.md',),
+    'marvin_roast_coach_mode': ('PROJECTS/code-roast.md',),
 }
 
 

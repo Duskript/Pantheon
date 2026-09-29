@@ -1,40 +1,49 @@
 ---
 title: "Quickstart — 5 commands to get started"
-last_verified: 2026-06-19
+last_verified: 2026-09-01
 audience: new operators
 ---
 
 # Quickstart — 5 commands to get started
 
-This page covers the 5 commands you actually need to start. There are dozens more, but these are the ones you'll use on day one.
+This page covers the five operator actions needed to start using Pantheon. The examples below match the current repository layout and MCP server implementation, verified 2026-09-01.
 
 ## 1. Start Pantheon
 
 ```bash
-# Start the MCP server (background, persists across sessions)
-systemctl --user start pantheon-mcp
+# Recommended: start the installed user service
+systemctl --user start pantheon-mcp.service
 
-# Or if you're not using systemd
-python3 ~/pantheon/pantheon-core/mcp_server.py &
+# Or run the server manually from the repository
+cd ~/pantheon/pantheon-core
+python3 mcp_server.py --port 8010
 ```
 
-You should see the MCP server listening on `http://localhost:8010`. If it doesn't, check `~/.local/share/pantheon/logs/mcp_server.log`.
+The HTTP server binds to loopback by default and exposes the Streamable HTTP MCP endpoint at `http://127.0.0.1:8010/mcp`. A bare GET to that endpoint returns a transport hint; MCP clients should use their normal Streamable HTTP negotiation.
+
+The bundled systemd unit sends stdout and stderr to the user journal:
+
+```bash
+journalctl --user -u pantheon-mcp.service -n 50 --no-pager
+```
+
+A manually backgrounded process (`&`) is not a persistent service. Use systemd when the server must survive logout or reboot.
 
 ## 2. Talk to a god
 
-Open any MCP client (Hermes, Claude Code, AionUi) connected to the Pantheon MCP server. Then:
+Pantheon MCP exposes knowledge, memory, messaging, and workflow tools; it does not itself provide a general chat router. Use your MCP client or Hermes profile to talk to a god, then let that client select the Pantheon tools it needs.
+
+For example, in a Hermes session:
 
 ```
 > Talk to Thoth about [your topic]
 ```
 
-The god with the matching capability will respond. If you don't know which god to talk to, say so — Hermes routes by default.
-
-> **Tip:** the god roster is at `gods/gods.yaml`. Each god has a `description` and a list of `capabilities`. Look there first.
+The registered roster is in `~/pantheon/gods/gods.yaml`. It contains each god's display name, role, description, capabilities, and status. The roster is useful for choosing a god, but the MCP server does not automatically route an arbitrary chat message by capability.
 
 ## 3. Check a god's inbox
 
-When another god has something to tell you, they leave a message. Check any god's inbox:
+The legacy inter-god messaging tools use file-backed inboxes under `~/pantheon/gods/messages/<god>/`:
 
 ```
 > Check Thoth's inbox
@@ -43,73 +52,67 @@ When another god has something to tell you, they leave a message. Check any god'
 Or via the MCP tool:
 
 ```python
-messaging_check_inbox(god_name="thoth", mark_read=True)
+messaging_check_inbox(god_name="thoth", mark_read=False)
 ```
 
-Messages include notifications, requests, handoffs, and alerts. The inbox is *pull-based* — a god won't interrupt you, they wait until you ask.
+`mark_read` defaults to `False`. Set it to `True` only after reviewing the returned messages; that changes the message files. The tool returns unread notifications, requests, handoffs, and alerts. Do not poll it in a tight loop—check at session start or when a message is expected.
 
 ## 4. Record a decision
 
-When you make an operator-locked decision (a choice that other operators/gods need to follow), record it:
+When you make an operator-locked decision (a durable choice that other operators or gods must follow), create a decision file in `~/pantheon/shared/decisions/` and append its entry to `INDEX.md`:
 
-```
+```text
 > Record this decision: [your decision text]
 ```
 
-Or via the MCP tool:
+For memory retrieval, you can also record the decision as an Ichor event:
 
 ```python
 ichor_store(
-    key="decision:YYYY-MM-DD--NNN--short-slug",
+    key="decision:2026-09-01-short-slug",
     content="The decision text, with rationale and reversibility.",
     category="decision",
 )
 ```
 
-Decisions are append-only. They live at `~/pantheon/shared/decisions/konan/`. Every operator-locked decision goes there — the cost of recording is 30 seconds, the cost of not recording is re-litigating the same choice in 3 months.
+Important: `ichor_store(category="decision")` writes an event to Ichor's FTS5-backed memory; it does not create the Markdown decision file or update the decisions index. See [Decision Log](08-decision-log.md) for the two records and their roles.
 
 ## 5. Monitor god state
 
-To see what's in flight across all gods:
-
-```
-> What are the gods working on?
-```
-
-Or via the MCP tool:
+To see ranked recent context across the Pantheon:
 
 ```python
-ichor_brief(god_name="hermes", limit=20)
+ichor_brief(god_name="", limit=20)
 ```
 
-This returns a ranked list of recent events for that god, scored by priority, freshness, and confidence. The brief is the canonical "what should I know right now?" query.
+To scope the brief to one god, pass its roster name, for example `god_name="thoth"`. The brief ranks events using priority, freshness, confidence, and repetition. `ichor_ledger` is the alternative when you want a structured state ledger rather than a ranked event list.
 
 ## What you just did
 
-You started the system, talked to a god, checked an inbox, recorded a decision, and surveyed the state. That covers ~80% of what operators do day-to-day.
+You started the MCP server, selected a god through your client, inspected an inbox, recorded a decision in the durable paths, and queried current state. That covers the common operator loop.
 
-The remaining 20% — building skills, spawning new gods, configuring cron, debugging stalls — is in the other pages of this best-practices guide.
+The remaining topics—context management, skills, god creation, workflow operations, and debugging—are covered by the other pages in this guide.
 
 ## When to use which
 
 | You want to... | Use this | Page reference |
 |---|---|---|
-| Ask a question | Talk to a god | [Skills](02-skills.md) |
-| Get a god to remember something | `ichor_store` | [Context Management](01-context-management.md) |
-| Find something you discussed before | `ichor_retrieve` or `session_search` | [Context Management](01-context-management.md) |
+| Ask a question | Talk to a god through your client | [Skills](02-skills.md) |
+| Get a god to remember something | `ichor_store` | [MCP Tools](09-mcp-tools.md) |
+| Find something you discussed before | `ichor_retrieve` or `session_search` | [MCP Tools](09-mcp-tools.md) |
 | Hand off work to another god | `messaging_send` | [MCP Tools](09-mcp-tools.md) |
-| Make a god an offer it can't refuse | `messaging_send` with `priority="urgent"` | [MCP Tools](09-mcp-tools.md) |
-| Lock in a decision | `ichor_store` with `category="decision"` | [Decision Log](08-decision-log.md) |
+| Lock in a decision | Decision Markdown + `INDEX.md`, optionally `ichor_store(category="decision")` | [Decision Log](08-decision-log.md) |
+| Inspect current state | `ichor_brief` or `ichor_ledger` | [MCP Tools](09-mcp-tools.md) |
 
 ## Anti-patterns
 
-- **Don't use `messaging_send` to ask a god a question.** That's what the chat interface is for. `messaging_send` is for *asynchronous handoffs*, not synchronous Q&A.
-- **Don't check inboxes more than once per session.** Inboxes are append-only and notifications are durable. Re-checking doesn't add information.
-- **Don't skip recording decisions.** "I'll write it down later" is how operator-locked decisions get lost.
-- **Don't use `ichor_store` for transient state.** It's for durable knowledge. Use session memory for things that should expire with the conversation.
+- **Don't treat the MCP server as a chat router.** It exposes tools; your client or Hermes profile provides the conversational interface and routing behavior.
+- **Don't use `messaging_send` for synchronous questions.** Use the chat interface for Q&A and messaging for asynchronous handoffs or notifications.
+- **Don't poll `messaging_check_inbox` in a tight loop.** Inboxes are durable; check at session start or when a notification is expected.
+- **Don't confuse Ichor memory with the decision-file audit trail.** Store important decisions in both places when you need searchable recall and a human-readable append-only record.
+- **Don't use `ichor_store` for transient state.** Use session context for information that should expire with the conversation.
 
 ## See also
 
-- [Context Management](01-context-management.md) — what memory, Ichor, and the Athenaeum actually do
-- [MCP Tools](09-mcp-tools.md) — the full operator-facing tool surface
+- [MCP Tools](09-mcp-tools.md) — the current operator-facing tool surface
 - [Decision Log](08-decision-log.md) — how to record decisions well

@@ -54,8 +54,13 @@ NO_CANON_REPORT = Path(
     os.path.expanduser("~/pantheon/shared/active/conductor-step-4.3-no-canon.txt")
 )
 TARGET_PROFILES = (
-    "apollo", "cachyos", "hephaestus", "iris", "marvin", "rheta", "thoth",
+    "apollo", "cachyos", "caduceus", "hephaestus", "iris", "kairos",
+    "marvin", "rheta", "thoth",
 )
+CANARY_PROFILES = (
+    "ichor-canary",
+)
+ALLOWED_PROFILES = TARGET_PROFILES + CANARY_PROFILES
 SKILL_FILENAME = "SKILL.md"
 SKIP_PATH_COMPONENTS = (".archive",)
 DEFAULT_BACKUP_ROOT = PROFILES_ROOT / "_bootstrap-backups"
@@ -315,10 +320,10 @@ def main(argv: list[str] | None = None) -> int:
 
     # Resolve god filter
     if args.gods:
-        unknown = [g for g in args.gods if g not in TARGET_PROFILES]
+        unknown = [g for g in args.gods if g not in ALLOWED_PROFILES]
         if unknown:
             log_err(f"[error] unknown --god value(s): {unknown} "
-                    f"(allowed: {list(TARGET_PROFILES)})")
+                    f"(allowed: {list(ALLOWED_PROFILES)})")
             return 1
         profiles: tuple[str, ...] = tuple(args.gods)
     else:

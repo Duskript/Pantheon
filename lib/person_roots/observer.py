@@ -11,7 +11,7 @@ Supported marker lines::
     PERSON_FACT: <name> | <field> | <value>
     @person-root <name> | <field> | <value>
     @person-fact <name> | <field> | <value>
-    PERSON_ROOT candidate_name="Demo Person" field="profile.known_context" value="..."
+    PERSON_ROOT candidate_name="Sam" field="profile.known_context" value="..."
 
 No name resolution, proposal classification, queue writes, or profile mutation
 happens here. The output is JSONL fuel for ``unattended_ingest_files``.
@@ -38,8 +38,8 @@ def extract_candidates_from_text(
     text: str,
     *,
     source_path: str | None = None,
-    source_person_id: str = 'owner',
-    source_type: str = 'owner_account',
+    source_person_id: str = 'konan',
+    source_type: str = 'konan_account',
     sensitivity: str = 'private',
 ) -> list[dict[str, Any]]:
     """Extract explicit Person Roots candidate marker lines from ``text``.
@@ -93,8 +93,8 @@ def observe_source_files(
     sources: Iterable[str | Path],
     *,
     incoming_dir: str | Path,
-    source_person_id: str = 'owner',
-    source_type: str = 'owner_account',
+    source_person_id: str = 'konan',
+    source_type: str = 'konan_account',
     sensitivity: str = 'private',
     recursive: bool = False,
     today: str | None = None,

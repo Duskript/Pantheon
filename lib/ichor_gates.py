@@ -43,7 +43,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger("ichor_gates")
 
@@ -418,6 +418,12 @@ class LogicGate(BaseGate):
     P2a: 60s dedup window per path — skip re-validation if already checked.
     P2b: 30s write debounce — only validate last write in a burst (3+ writes
          in window → only check the one with highest offset/most recent).
+
+    Instrumentation:
+        Pass ``eval_sink`` to receive a dict for every completed check, pass
+        or fail. The Forge uses those records as the denominator for its
+        block rate; ``all.jsonl`` alone only holds failures, so any rate
+        derived from it alone is 100% by construction.
     """
 
     name = "logic_gate"
@@ -426,8 +432,19 @@ class LogicGate(BaseGate):
     DEBOUNCE_WINDOW = 30  # seconds
     BURST_THRESHOLD = 3   # writes within debounce window to trigger burst mode
 
-    def __init__(self):
+    def __init__(
+        self,
+        eval_sink: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ):
+        # Optional callback fired after every completed check, pass or fail.
+        # This is the Forge's denominator: without it the forge only ever
+        # sees failures and reports a meaningless 100% block rate.
+        self.eval_sink = eval_sink
         self.intervention_count = 0
+        # `checks` counts evaluations actually performed (post dedup and
+        # debounce); `check_failures` is the subset that found issues.
+        self.checks = 0
+        self.check_failures = 0
         # P2a: path → last check timestamp
         self._last_check: Dict[str, float] = {}
         # P2b: path → list of (timestamp, size_hint) for debounce tracking
@@ -614,6 +631,17 @@ class LogicGate(BaseGate):
             return None
 
         errors = check_fn(content)
+
+        # Record the evaluation itself — not only the failures. The forge's
+        # block_rate needs a denominator, and `all.jsonl` only ever holds
+        # failures, so a rate computed from it alone is 100% by
+        # construction. Best-effort: a broken sink must never break a
+        # god's tool loop.
+        self.checks += 1
+        if errors:
+            self.check_failures += 1
+        self._notify_eval(path, lang, errors)
+
         if not errors:
             logger.debug("LogicGate: '%s' passed %s validation", path, lang)
             return None
@@ -642,6 +670,36 @@ class LogicGate(BaseGate):
             ),
             recovery_hint="\n".join(errors),
         )
+
+    def _notify_eval(
+        self, path: str, lang: str, errors: List[str],
+    ) -> None:
+        """Report one completed evaluation to the eval sink (best-effort).
+
+        Fires for passes and failures alike. Errors are swallowed — gate
+        instrumentation must never break the agent's tool loop.
+        """
+        if self.eval_sink is None:
+            return
+        try:
+            self.eval_sink({
+                "gate": self.name,
+                "path": path,
+                "language": lang,
+                "failed": bool(errors),
+                "issues": len(errors),
+                "capped": self.intervention_count > INTERVENTION_CAP,
+            })
+        except Exception as exc:
+            logger.debug("LogicGate: eval sink failed (non-fatal): %s", exc)
+
+    def stats(self) -> Dict[str, int]:
+        """Evaluation counters for this gate instance."""
+        return {
+            "checks": self.checks,
+            "failures": self.check_failures,
+            "interventions": self.intervention_count,
+        }
 
 # ---------------------------------------------------------------------------
 # Gate 3: Intent Injection Gate (Pre-fetching)

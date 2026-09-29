@@ -1,5 +1,6 @@
-"""Single-batch L2 diagnostic.
-
+#!/usr/bin/env python3
+"""
+Single-batch L2 diagnostic.
 Captures the prompt, the raw LLM response, and the parser view for one
 batch of 5 real cold_events from the corpus. Run after the L2 loop has
 been seen to produce 0 yield, to determine which of the 4 failure
@@ -21,20 +22,19 @@ _PANTHEON_ROOT = "/home/konan/pantheon"
 if _PANTHEON_ROOT not in sys.path:
     sys.path.insert(0, _PANTHEON_ROOT)
 
-_REAL_HOME = Path("/home/konan")
-ICHOR_DB = _REAL_HOME / ".hermes" / "ichor.db"
+REAL_HOME = Path("/home/konan")
+ICHOR_DB = REAL_HOME / ".hermes" / "ichor.db"
 
 import sqlite3
 from lib.ichor.entities.l2_llm import build_prompt, parse_extraction
 from lib.ichor.llm import _call_llm
-
 
 def _load_opencode_go_key() -> str:
     """Same priority order as run_l2_full_corpus.py: env > ~/.hermes/.env > profile."""
     key = os.environ.get("OPENCODE_GO_API_KEY", "").strip()
     if key:
         return key
-    global_env = _REAL_HOME / ".hermes" / ".env"
+    global_env = REAL_HOME / ".hermes" / ".env"
     if global_env.is_file():
         for line in global_env.read_text().splitlines():
             line = line.strip()
@@ -43,7 +43,6 @@ def _load_opencode_go_key() -> str:
                 if val:
                     return val
     raise RuntimeError("OPENCODE_GO_API_KEY not found in env or ~/.hermes/.env")
-
 
 def main() -> int:
     print("=" * 70)
@@ -61,7 +60,7 @@ def main() -> int:
           AND length(raw_text) > 500
         ORDER BY id
         LIMIT 5
-        """
+        """.strip()
     ).fetchall()
     conn.close()
 
@@ -71,7 +70,7 @@ def main() -> int:
 
     print(f"\nSampled {len(rows)} events:")
     for r in rows:
-        print(f"  id={r['id']:>5} god={r['god_name']:<12} len={len(r['raw_text']):>5} name={r['name'][:60]}")
+        print(f"  id={r['id']:>5} god={r['god_name']:>12} len={len(r['raw_text']):>5} name={r['name'][:60]}")
 
     # 2. Build the prompt the loop would have sent.
     texts = [r["raw_text"] for r in rows]
@@ -87,15 +86,15 @@ def main() -> int:
 
     provider_cfg = {
         "name": "opencode-go",
-        "api": "https://opencode.ai/zen/go/v1",
+        "api": "https://cachyos-konan.tail164759.ts.net:11435/v1",
         "api_key": api_key,
-        "default_model": "deepseek-v4-flash",
+        "default_model": "Qwen3.5-2B-Q4_K_M.gguf",
     }
 
     print("\n=== LLM CALL ===")
-    print("Calling https://opencode.ai/zen/go/v1/chat/completions ...")
+    print("Calling https://cachyos-konan.tail164759.ts.net:11435/v1/chat/completions ...")
     try:
-        raw = _call_llm(prompt, provider_cfg, model="deepseek-v4-flash", timeout=60.0)
+        raw = _call_llm(prompt, provider_cfg, model="Qwen3.5-2B-Q4_K_M.gguf", timeout=60.0)
         print(f"OK — response length: {len(raw)} chars")
     except Exception as e:
         print(f"FAILED — {type(e).__name__}: {e}")
@@ -141,7 +140,6 @@ def main() -> int:
             print("  If a real L2 run produces 0 yield, the bug is downstream of parse_extraction")
 
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

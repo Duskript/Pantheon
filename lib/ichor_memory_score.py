@@ -10,7 +10,20 @@ These change over time through access, updates, decay, and contradiction.
 import sqlite3
 import logging
 
+from lib.ichor_temporal import older_than_sql
+
 logger = logging.getLogger("ichor_memory_score")
+
+# Decay/maturity maintenance is bounded to L3 (long-term memory, 30d+).
+# Rationale (measured 2026-09-21): apply_decay() + update_maturity() are
+# whole-table UPDATEs, and ichor_tick runs this module every 2 hours, so a
+# 1.82M-row table was being rewritten 12x/day. On a 1.82M-row table that is
+# ~1.2 GiB of page writes per pass, and because ichor_events_au fired on any
+# update it also rewrote every FTS document. The value it computes is
+# degenerate anyway (88% of rows converge on a single importance of 49.0075),
+# so the churn bought nothing. L1/L2 rows now keep the score their access
+# boosts give them; only L3 rows age.
+L3_MIN_AGE_DAYS = 30
 
 DECAY_RATE = 0.995       # Daily importance decay factor
 IMPORTANCE_ACCESS_BOOST = 3
@@ -110,7 +123,13 @@ def apply_decay(conn: sqlite3.Connection) -> int:
     """Apply daily decay to all events. Returns count of events affected."""
     cursor = conn.execute(
         "UPDATE ichor_events SET importance = MAX(0, importance * ?) "
-        "WHERE importance > 0",
+        "WHERE importance > 0 "
+        # Normalised both sides: `created_at` holds four shapes and the
+        # raw column only compares correctly to a same-shaped literal down
+        # to the DAY (see lib/ichor_temporal.CREATED_AT_SHAPES). This gate
+        # decides which rows get REWRITTEN, so an off-by-a-day here is a
+        # silent write to the wrong rows.
+        f"AND {older_than_sql('created_at', days=L3_MIN_AGE_DAYS)}",
         (DECAY_RATE,),
     )
     conn.commit()
@@ -120,11 +139,12 @@ def apply_decay(conn: sqlite3.Connection) -> int:
 def update_maturity(conn: sqlite3.Connection) -> None:
     """Recalculate maturity tier for all events based on importance score."""
     conn.execute(
-        """UPDATE ichor_events SET maturity = CASE
+        f"""UPDATE ichor_events SET maturity = CASE
             WHEN importance < ? THEN 'draft'
             WHEN importance >= ? THEN 'core'
             ELSE 'validated'
-        END""",
+        END
+        WHERE {older_than_sql('created_at', days=L3_MIN_AGE_DAYS)}""",
         (DRAFT_THRESHOLD, CORE_THRESHOLD),
     )
     conn.commit()
@@ -172,7 +192,20 @@ def prune_execute(conn: sqlite3.Connection, dry_run: bool = True) -> int:
         return len(ids)
 
     placeholders = ",".join("?" * len(ids))
+    # Clean the dependants BEFORE the delete. Both FKs declare cascading
+    # behaviour (ichor_event_tags ON DELETE CASCADE, observation_sources
+    # event_id ON DELETE SET NULL) but every live connection runs
+    # foreign_keys=0, so SQLite never enforces them: deleting events alone
+    # leaves orphaned tags and dangling provenance pointers. Measured
+    # 2026-09-21: this function running every 2 hours had produced 121,997
+    # dangling observation_sources.event_id values and orphaned tag rows.
+    conn.execute(
+        f"UPDATE ichor_observation_sources SET event_id = NULL "
+        f"WHERE event_id IN ({placeholders})", ids)
+    conn.execute(
+        f"DELETE FROM ichor_event_tags WHERE event_id IN ({placeholders})", ids)
     conn.execute(f"DELETE FROM ichor_events WHERE id IN ({placeholders})", ids)
     conn.commit()
-    logger.info("Pruned %d low-importance events", len(ids))
+    logger.info("Pruned %d low-importance events (provenance + tags cleaned)",
+                len(ids))
     return len(ids)

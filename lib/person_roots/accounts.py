@@ -3,7 +3,7 @@
 Account links live in ``relationships/INDEX.md`` because account identity is a
 resolver concern, not a private note in an individual profile. This module keeps
 resolution intentionally conservative: pending rows, placeholder IDs, and empty
-IDs never resolve to a person. That enforces Owner's privacy requirement that
+IDs never resolve to a person. That enforces Konan's privacy requirement that
 profile automapping and context sharing only happen from verified accounts.
 """
 

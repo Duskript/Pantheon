@@ -82,38 +82,13 @@ DEFAULT_BATCH_SIZE = 20
 
 
 def _load_api_key() -> str:
-    """Resolve the provider's API key from env or .env files.
+    """Legacy credential fallback: env / .env chain for OPENCODE_GO_API_KEY.
 
-    Order (revised 2026-06-12 after the first L2 run hit a 401):
-      1. $PROVIDER_KEY_ENV env var
-      2. ~/.hermes/.env (GLOBAL, canonical source)
-      3. ~/.hermes/profiles/marvin/.env (profile override)
-      4. ~/.hermes/profiles/hephaestus/.env
-      5. ~/.hermes/profiles/thoth/.env
-      6. ~/.hermes/profiles/iris/.env
-      7. ~/.hermes/profiles/apollo/.env
-
-    The previous order (profile .envs first) picked up a stale key
-    in the profile .envs (sk-7SXlK...) that was unauthorized for
-    opencode-go. The active working key lives in ~/.hermes/.env
-    (sk-Q75TD...). Profile .envs are now treated as overrides that
-    only fire when the global is missing.
+    Retained only as a last resort. The canonical path is now
+    ``_resolve_provider()`` -> ``resolve_provider_credentials()``, which reads the
+    Hermes credential pool. This helper still fires when the pool has no entry
+    for the resolved provider, so the drainer is no worse off than before.
     """
-    # 0. The Hermes credential pool is the canonical source.
-    #    config.yaml provider blocks carry an empty `api_key` by design and the
-    #    real tokens live in ~/.hermes/auth.json, where Hermes rotates them.
-    #    Resolving only from env / .env is what left L2 extraction with no
-    #    credential — 456 silently-skipped ticks including 26 unbroken days
-    #    (see issues #152 and #154). The pool is consulted first so a missing
-    #    env var can no longer disable the drainer.
-    try:
-        from lib.ichor.llm import resolve_provider_credentials
-        _pool_key, _pool_url = resolve_provider_credentials(PROVIDER_NAME)
-        if _pool_key:
-            return _pool_key
-    except Exception:
-        pass
-
     # 1. direct env var
     key = os.environ.get(PROVIDER_KEY_ENV, "").strip()
     if key:
@@ -150,6 +125,61 @@ def _load_api_key() -> str:
             except Exception:
                 pass
     return ""
+
+
+def _resolve_provider() -> dict:
+    """Resolve the L2 extraction provider config, credential, and model.
+
+    Mirrors `lib/ichor_tick.py` so the drainer and the tick can never fight over
+    which provider/model the shared cursor is drained with:
+
+      1. provider  -> Marvin's configured provider (nous), else the named
+                      PROVIDER_NAME fallback;
+      2. credential-> the Hermes credential pool via
+                      resolve_provider_credentials(), which canonicalizes the
+                      block's display name ("Nous Portal") to its pool key
+                      ("nous"); the legacy env/.env chain is the last resort;
+      3. model     -> the shared resolve_l2_model() (a NON-reasoning model id).
+
+    Returns a dict shaped for `_call_llm` (keys: api, name, default_model,
+    api_key) plus a computed `model`. Never raises; a failed import degrades to
+    the hardcoded opencode-go constants so the caller still gets a usable dict.
+    """
+    cfg: dict = {}
+    key = ""
+    model = PROVIDER_DEFAULT_MODEL
+    try:
+        from lib.ichor.llm import (
+            _resolve_llm_provider,
+            _load_provider_config,
+            resolve_provider_credentials,
+            resolve_l2_model,
+        )
+        cfg = _resolve_llm_provider("marvin") or _load_provider_config(PROVIDER_NAME) or {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        name = str(cfg.get("name") or PROVIDER_NAME)
+        key, pool_url = resolve_provider_credentials(name)
+        model = resolve_l2_model(cfg)
+        resolved = {
+            "api": cfg.get("api") or pool_url or PROVIDER_API,
+            "default_model": model,
+            "name": name,
+            "api_key": key,
+            "model": model,
+        }
+    except Exception as exc:
+        _say(f"  WARNING: provider resolution failed ({exc!r}); using opencode-go defaults")
+        resolved = {
+            "api": PROVIDER_API,
+            "default_model": PROVIDER_DEFAULT_MODEL,
+            "name": PROVIDER_NAME,
+            "api_key": "",
+            "model": PROVIDER_DEFAULT_MODEL,
+        }
+    if not resolved.get("api_key"):
+        resolved["api_key"] = _load_api_key()
+    return resolved
 
 
 def _say(msg: str) -> None:
@@ -195,6 +225,7 @@ def _call_extract_incremental(
     batch_size: int,
     provider_cfg: dict,
     api_key: str,
+    model: str | None = None,
     timeout: float = 60.0,
 ) -> dict:
     """One call to extract_incremental, returns the result dict.
@@ -202,6 +233,11 @@ def _call_extract_incremental(
     Direct port of the package's _default_call_llm flow,
     but in-process (no MCP server roundtrip) and with our own
     retry/error handling. urllib is imported at module level.
+
+    `model` is threaded through to `extract_incremental` so the drainer calls
+    the SAME explicitly-chosen model as the Ichor tick (see resolve_l2_model);
+    passing None would fall back to the provider block's `default_model`, which
+    may be a reasoning model that emits no visible content.
     """
     from lib.ichor.entities import extract_incremental
     from lib.ichor.entities.schema import get_conn
@@ -213,6 +249,7 @@ def _call_extract_incremental(
             last_event_id=last_event_id,
             batch_size=batch_size,
             provider_cfg=provider_cfg,
+            model=model,
             session_id=f"l2-full-corpus",
             # Name the producer. extraction_log is multi-writer (2,182 DB rows
             # vs 183 journal batches), so a row's origin has to be recorded or
@@ -290,7 +327,7 @@ def _run_loop(
     batch_size: int,
     max_batches: int | None,
     retry_max: int,
-    api_key: str,
+    provider_cfg: dict,
     restart_from_zero: bool = False,
 ) -> dict:
     """The main loop.
@@ -299,13 +336,13 @@ def _run_loop(
     left off. Pass ``restart_from_zero=True`` (CLI: ``--restart``) to re-run the
     whole corpus from the beginning — that is a full re-extraction of ~76.5k
     events and is therefore opt-in, not the default.
+
+    `provider_cfg` is built by ``_resolve_provider()`` and already carries the
+    resolved api base, credential, and model; the loop no longer hardcodes the
+    provider, so it can never drift from the Ichor tick.
     """
-    provider_cfg = {
-        "api": PROVIDER_API,
-        "default_model": PROVIDER_DEFAULT_MODEL,
-        "name": PROVIDER_NAME,
-        "api_key": api_key,
-    }
+    api_key = str(provider_cfg.get("api_key") or "")
+    model = str(provider_cfg.get("model") or "") or None
 
     # Resume from the SHARED cursor so the drainer continues where the tick
     # left off.
@@ -444,10 +481,15 @@ def _run_loop(
 
 
 def cmd_status() -> int:
-    """Show corpus state and L2 state, no LLM calls."""
+    """Show corpus state, L2 state, and the resolved provider — no LLM calls.
+
+    Prints the provider/model the drainer would actually use (via
+    ``_resolve_provider()``) rather than a hardcoded constant, so `--status`
+    can no longer claim a provider the real run would not call.
+    """
     stats = _current_corpus_stats()
     l2 = _post_run_stats()
-    api_key = _load_api_key()
+    provider = _resolve_provider()
     print(f"\n📊 L2 full-corpus status")
     print(f"{'=' * 50}")
     print(f"   cold_events total: {stats['total']} (max id {stats['max_id']})")
@@ -463,9 +505,13 @@ def cmd_status() -> int:
     print(f"      provisional relationships:      {l2['provisional_relationships']}")
     print(f"      llm extractions logged:         {l2['llm_extractions_logged']}")
     print()
-    print(f"   API key: {'SET (length=' + str(len(api_key)) + ')' if api_key else 'NOT FOUND'}")
-    if not api_key:
-        print("   ⚠️  No credential: add one to the pool (~/.hermes/auth.json) or set OPENCODE_GO_API_KEY")
+    key = str(provider.get("api_key") or "")
+    print(f"   provider: {provider.get('name')}  api: {provider.get('api')}")
+    print(f"   model:    {provider.get('model')}")
+    print(f"   API key: {'SET (length=' + str(len(key)) + ')' if key else 'NOT FOUND'}")
+    if not key:
+        print("   ⚠️  No credential: add one to the pool "
+              "(~/.hermes/auth.json) or set the provider env var")
     return 0
 
 
@@ -506,9 +552,30 @@ def main():
         return cmd_status()
     batch_size = max(1, min(args.batch_size, 200))
 
-    api_key = _load_api_key()
+    # =====================================================================
+    # Provider resolution
+    # =====================================================================
+    # Resolve provider + credential + model exactly the way the Ichor tick does
+    # (see lib/ichor_tick.py and lib/ichor/llm.resolve_l2_model), so the two
+    # writers of the shared L2 cursor can never disagree about which endpoint is
+    # draining the corpus.
+    #
+    # This replaced a hardcoded opencode-go resolution that failed two ways on
+    # 2026-09-29:
+    #   1. the pool's four opencode-go keys were all marked `exhausted`
+    #      (GoUsageLimitError, weekly) and the reset window had already passed,
+    #      so the pool yielded nothing;
+    #   2. the tick passed the provider *display name* ("Nous Portal") to a
+    #      credential lookup keyed by the pool id ("nous"), so it matched nothing
+    #      and exited DEGRADED on every run.
+    provider = _resolve_provider()
+    api_key = str(provider.get("api_key") or "")
     if not api_key:
-        print("ERROR: no opencode-go credential resolvable. Run with --status.", file=sys.stderr)
+        print(
+            f"ERROR: no credential resolvable for provider {provider.get('name')!r} "
+            f"({provider.get('api')}). Run with --status.",
+            file=sys.stderr,
+        )
         return 1
 
     if args.dry_run:
@@ -525,24 +592,34 @@ def main():
         texts = [r["raw_text"] for r in rows]
         prompt = build_prompt(texts)
         print(f"\n=== DRY RUN ===")
-        # Bug fix: provider=minimax was hardcoded here, lying about which
-        # provider the real run would call. Use the module-level
-        # constants so dry-run, status, and the real run all agree.
+        # ------------------------------------------------------------------
+        # Report the RESOLVED provider, not module constants
+        # ------------------------------------------------------------------
+        # Dry-run, --status, and the real run must all assert the same target.
+        # The previous version printed PROVIDER_NAME / PROVIDER_DEFAULT_MODEL /
+        # PROVIDER_API constants, which could disagree with the provider the run
+        # would actually call — the same class of bug as the older hardcoded
+        # `provider=minimax` note that used to sit here.
         print(
-            f"would call: provider={PROVIDER_NAME} "
-            f"model={PROVIDER_DEFAULT_MODEL} api={PROVIDER_API}"
+            f"would call: provider={provider.get('name')} "
+            f"model={provider.get('model')} api={provider.get('api')}"
         )
         print(f"events in first batch: {len(rows)}")
         print(f"prompt chars: {len(prompt)}")
         print(f"prompt preview (first 800 chars):\n{prompt[:800]}")
         return 0
 
+    # =====================================================================
     # Real run
+    # =====================================================================
+    # Echo the RESOLVED provider/model so the journal records exactly which
+    # endpoint drained the corpus (the runner's systemd unit logs this line).
     print(f"\n🚀 Starting L2 full-corpus run")
     print(f"   batch_size: {batch_size}")
     print(f"   max_batches: {args.max_batches or 'unlimited'}")
     print(f"   retry_max: {args.retry_max}")
-    print(f"   provider: {PROVIDER_NAME}, model: {PROVIDER_DEFAULT_MODEL}")
+    print(f"   provider: {provider.get('name')} ({provider.get('api')})")
+    print(f"   model: {provider.get('model')}")
     print()
     # Hold the exclusive run lock for the whole run (the handle must stay
     # referenced; it is released when this process exits).
@@ -552,7 +629,7 @@ def main():
               file=sys.stderr)
         return 0
 
-    summary = _run_loop(batch_size, args.max_batches, args.retry_max, api_key,
+    summary = _run_loop(batch_size, args.max_batches, args.retry_max, provider,
                          restart_from_zero=args.restart)
     print()
     print(f"\n📊 Final summary")

@@ -1,0 +1,970 @@
+{
+  "ok": true,
+  "version": "1.0.0",
+  "updatedAt": "2026-09-28T00:00:44.297443-06:00",
+  "timezone": "America/Boise",
+  "refreshCadence": "daily at midnight America/Boise",
+  "researchContract": {
+    "primarySkill": "last30days",
+    "fitLayer": "agent_reach",
+    "kairosStarRule": "⭐ means Kairos recommends this topic because last30days signal plus Agent Reach fit found a timely posting opportunity.",
+    "personalInterestRule": "Facebook-friendly daily mix includes personal-interest and hybrid topics, with private/family details excluded unless explicitly provided for a specific post."
+  },
+  "sourceStatus": {
+    "ok": false,
+    "returncode": 1,
+    "stderr_preview": "Could not find platform independent libraries <prefix>\nCould not find platform dependent libraries <exec_prefix>\nPython path configuration:\n  PYTHONHOME = (not set)\n  PYTHONPATH = (not set)\n  program name = 'python3.12'\n  isolated = 0\n  environment = 1\n  user site = 1\n  safe_path = 0\n  import site = 1\n  is in build tree = 0\n  stdlib dir = '/install/lib/python3.11'\n  sys._base_executable = '/home/konan/.local/bin/python3.12'\n  sys.base_prefix = '/install'\n  sys.base_exec_prefix = '/install'\n  sys.platlibdir = 'lib'\n  sys.executable = '/home/konan/.local/bin/python3.12'\n  sys.prefix = '/install'\n  sys.exec_prefix = '/install'\n  sys.path = [\n    '/install/lib/python311.zip',\n    '/install/lib/python3.11',\n    '/install/lib/python3.11/lib-dynload',\n  ]\nFatal Python error: init_fs_encoding: failed to get the Python codec of the filesystem encoding\nPython runtime state: core initialized\nModuleNotFoundError: No module named 'encodings'\n\nCurrent thread 0x000071949e35b740 (most recent call first):\n  <no Python frame>\n",
+    "source_status": {},
+    "summary_preview": ""
+  },
+  "topics": [
+    {
+      "id": "topic-business-ai-agents-what-broke-in-agent-wor-d0dcb30c83",
+      "title": "What broke in agent workflows this week",
+      "angleSummary": "AI agents: LinkedIn profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "personal-linkedin",
+        "business-linkedin"
+      ],
+      "suggestedSurface": "LinkedIn profile",
+      "confidence": "degraded",
+      "tags": [
+        "AI agents",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-linkedin",
+        "surface_scores": {
+          "personal-linkedin": 90,
+          "business-linkedin": 90
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use personal linkedin first; adjust tone for AI agents."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-business-mcp-the-mcp-tooling-integration-p-c95eda5c23",
+      "title": "The MCP/tooling integration people are quietly standardizing around",
+      "angleSummary": "MCP: LinkedIn profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "personal-linkedin",
+        "business-linkedin"
+      ],
+      "suggestedSurface": "LinkedIn profile",
+      "confidence": "degraded",
+      "tags": [
+        "MCP",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-linkedin",
+        "surface_scores": {
+          "personal-linkedin": 90,
+          "business-linkedin": 90
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use personal linkedin first; adjust tone for MCP."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-business-android-productivity-why-mobile-f-4fd90d8885",
+      "title": "Why mobile-first operator consoles beat desktop dashboards",
+      "angleSummary": "Android productivity: LinkedIn profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "personal-linkedin"
+      ],
+      "suggestedSurface": "LinkedIn profile",
+      "confidence": "degraded",
+      "tags": [
+        "Android productivity",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-linkedin",
+        "surface_scores": {
+          "personal-linkedin": 90
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use personal linkedin first; adjust tone for Android productivity."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-business-theoforge-a-small-business-workfl-0a7c7072d2",
+      "title": "A small-business workflow that should be a reusable system",
+      "angleSummary": "TheoForge: TheoForge page. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "business-facebook",
+        "business-linkedin"
+      ],
+      "suggestedSurface": "TheoForge page",
+      "confidence": "degraded",
+      "tags": [
+        "TheoForge",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "business-linkedin",
+        "surface_scores": {
+          "business-facebook": 70,
+          "business-linkedin": 90
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use business linkedin first; adjust tone for TheoForge."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-business-free-tools-a-free-tool-workflow-o-a5b35c7ccf",
+      "title": "A free tool/workflow operators can copy this week",
+      "angleSummary": "free tools: TheoForge page. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "business-linkedin",
+        "business-facebook"
+      ],
+      "suggestedSurface": "TheoForge page",
+      "confidence": "degraded",
+      "tags": [
+        "free tools",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "business-linkedin",
+        "surface_scores": {
+          "business-linkedin": 90,
+          "business-facebook": 70
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use business linkedin first; adjust tone for free tools."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-business-privacy-ops-the-privacy-complianc-4d37410378",
+      "title": "The privacy/compliance thing normal businesses are underestimating",
+      "angleSummary": "privacy ops: LinkedIn profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "personal-linkedin",
+        "business-linkedin"
+      ],
+      "suggestedSurface": "LinkedIn profile",
+      "confidence": "degraded",
+      "tags": [
+        "privacy ops",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-linkedin",
+        "surface_scores": {
+          "personal-linkedin": 90,
+          "business-linkedin": 90
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use personal linkedin first; adjust tone for privacy ops."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-business-github-a-useful-open-source-proje-1135478ea4",
+      "title": "A useful open-source project worth turning into an operator workflow",
+      "angleSummary": "GitHub: LinkedIn profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "personal-linkedin",
+        "business-linkedin"
+      ],
+      "suggestedSurface": "LinkedIn profile",
+      "confidence": "degraded",
+      "tags": [
+        "GitHub",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-linkedin",
+        "surface_scores": {
+          "personal-linkedin": 90,
+          "business-linkedin": 90
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use personal linkedin first; adjust tone for GitHub."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-business-agent-memory-the-memory-governanc-8fea210a73",
+      "title": "The memory/governance problem behind multi-agent systems",
+      "angleSummary": "agent memory: LinkedIn profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "business",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "business authority / TheoForge fit",
+      "personalFit": false,
+      "suggestedDestinations": [
+        "personal-linkedin"
+      ],
+      "suggestedSurface": "LinkedIn profile",
+      "confidence": "degraded",
+      "tags": [
+        "agent memory",
+        "business",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-linkedin",
+        "surface_scores": {
+          "personal-linkedin": 90
+        },
+        "audience_fit": "business authority / TheoForge fit",
+        "distribution_note": "Use personal linkedin first; adjust tone for agent memory."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-music-a-music-habit-or-t-761d184b86",
+      "title": "A music habit or trend people are talking about now",
+      "angleSummary": "music: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "music",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for music."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-retro-gaming-retro-handh-0fbbef21cb",
+      "title": "Retro handhelds are not as outside the tech economy as they feel",
+      "angleSummary": "retro gaming: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "retro gaming",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for retro gaming."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-youtube-learning-the-rab-a986e56278",
+      "title": "The rabbit hole people are using to learn something weirdly useful",
+      "angleSummary": "YouTube learning: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "YouTube learning",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for YouTube learning."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-mythology-sci-fi-the-old-1058077613",
+      "title": "The old story pattern showing up in current internet culture",
+      "angleSummary": "mythology/sci-fi: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "mythology/sci-fi",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for mythology/sci-fi."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-boise-local-life-a-local-c4a37b6aab",
+      "title": "A local-life observation that feels human, not promotional",
+      "angleSummary": "Boise/local life: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "Boise/local life",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for Boise/local life."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-home-systems-a-tiny-ever-e5fab28b60",
+      "title": "A tiny everyday system that makes life less chaotic",
+      "angleSummary": "home systems: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "home systems",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for home systems."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-privacy-for-normal-peopl-79c31a32ed",
+      "title": "A privacy/security thing normal people should understand without jargon",
+      "angleSummary": "privacy for normal people: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook",
+        "personal-linkedin"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "privacy for normal people",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95,
+          "personal-linkedin": 70
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for privacy for normal people."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-personal-interest-internet-culture-the-int-53ffaee6ec",
+      "title": "The internet behavior shift that says something about people",
+      "angleSummary": "internet culture: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "personal_interest",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "personal interest / relationship texture",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "internet culture",
+        "personal-interest",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 95
+        },
+        "audience_fit": "personal interest / relationship texture",
+        "distribution_note": "Use personal facebook first; adjust tone for internet culture."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-hybrid-open-source-tools-a-tool-that-is-ne-7008f03d80",
+      "title": "A tool that is nerdy enough for builders but useful enough for Facebook",
+      "angleSummary": "open-source tools: Facebook or LinkedIn. Research-first prompt should pull dated proof before drafting.",
+      "lane": "hybrid",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "hybrid personal + operator fit",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook",
+        "personal-linkedin"
+      ],
+      "suggestedSurface": "Facebook or LinkedIn",
+      "confidence": "degraded",
+      "tags": [
+        "open-source tools",
+        "hybrid",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 86,
+          "personal-linkedin": 86
+        },
+        "audience_fit": "hybrid personal + operator fit",
+        "distribution_note": "Use personal facebook first; adjust tone for open-source tools."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-hybrid-creativity-the-practical-creativity-0c1c731192",
+      "title": "The practical creativity lesson inside a current tool/trend",
+      "angleSummary": "creativity: Facebook or LinkedIn. Research-first prompt should pull dated proof before drafting.",
+      "lane": "hybrid",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "hybrid personal + operator fit",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook",
+        "personal-linkedin"
+      ],
+      "suggestedSurface": "Facebook or LinkedIn",
+      "confidence": "degraded",
+      "tags": [
+        "creativity",
+        "hybrid",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 86,
+          "personal-linkedin": 86
+        },
+        "audience_fit": "hybrid personal + operator fit",
+        "distribution_note": "Use personal facebook first; adjust tone for creativity."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-hybrid-learning-one-random-thing-worth-lea-1547afc3aa",
+      "title": "One random thing worth learning and why it matters",
+      "angleSummary": "learning: Facebook or LinkedIn. Research-first prompt should pull dated proof before drafting.",
+      "lane": "hybrid",
+      "source": "daily-refresh",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": false,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "hybrid personal + operator fit",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook",
+        "personal-linkedin"
+      ],
+      "suggestedSurface": "Facebook or LinkedIn",
+      "confidence": "degraded",
+      "tags": [
+        "learning",
+        "hybrid",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 86,
+          "personal-linkedin": 86
+        },
+        "audience_fit": "hybrid personal + operator fit",
+        "distribution_note": "Use personal facebook first; adjust tone for learning."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    },
+    {
+      "id": "topic-hybrid-business-adjacent-personal-a-person-1c61229243",
+      "title": "A personal operator lesson without turning into a pitch",
+      "angleSummary": "business-adjacent personal: Facebook profile. Research-first prompt should pull dated proof before drafting.",
+      "lane": "hybrid",
+      "source": "kairos",
+      "researchSources": [
+        "last30days",
+        "agent_reach"
+      ],
+      "isKairosRecommended": true,
+      "whyNow": "Daily refresh ran, but live source coverage was degraded; keep as a draftable fallback until next refresh.",
+      "audienceFit": "hybrid personal + operator fit",
+      "personalFit": true,
+      "suggestedDestinations": [
+        "personal-facebook",
+        "personal-linkedin"
+      ],
+      "suggestedSurface": "Facebook profile",
+      "confidence": "degraded",
+      "tags": [
+        "business-adjacent personal",
+        "hybrid",
+        "last30days",
+        "agent-reach"
+      ],
+      "status": "unused",
+      "createdAt": "2026-09-28T00:00:44.297448-06:00",
+      "refreshedAt": "2026-09-28T00:00:44.297448-06:00",
+      "agentReach": {
+        "model": "agent_reach_local_fit_v1",
+        "primary_destination": "personal-facebook",
+        "surface_scores": {
+          "personal-facebook": 86,
+          "personal-linkedin": 86
+        },
+        "audience_fit": "hybrid personal + operator fit",
+        "distribution_note": "Use personal facebook first; adjust tone for business-adjacent personal."
+      },
+      "evidence": [
+        {
+          "source": "last30days",
+          "summary": "last30days ran with no compact synthesis payload",
+          "date": "2026-09-28T00:00:44.297448-06:00",
+          "source_status": {}
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "total": 20,
+    "kairosRecommended": 8,
+    "personalOrHybrid": 12,
+    "business": 8
+  }
+}

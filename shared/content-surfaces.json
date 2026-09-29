@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0",
+  "status": "design-locked",
+  "updated": "2026-09-24T21:17:52Z",
+  "locked_by": "konan",
+  "source": "Discord #hermes-ops / thread 'Content creation pipelines - design' (1552754178315517982)",
+  "description": "Canonical content-surface registry for the Pantheon content pipelines. Maps each publish destination (the operator-facing 'surface') to the Discord channel where its pipeline cards, topic picks, drafts, and publish results land. Any god running content work reads this file instead of hardcoding channel IDs.",
+  "guild_id": "1499851384814702783",
+  "discord_category": {
+    "id": "1524552198011486300",
+    "name": "Pipelines"
+  },
+  "surfaces": {
+    "konan-linkedin": {
+      "label": "Konan LinkedIn (personal profile)",
+      "platform": "linkedin",
+      "account": "Konan personal",
+      "scope": "personal",
+      "discord_channel_id": "1522304130406809642",
+      "discord_channel_name": "linkedin-personal-content-pipeline",
+      "posting_method": "phone",
+      "phone_package": "com.linkedin.android",
+      "cadence_cap": "2-3 posts/day combined with konan-facebook",
+      "cadence_confirmed": false,
+      "channel_pre_existing": true
+    },
+    "konan-facebook": {
+      "label": "Konan Facebook (personal profile)",
+      "platform": "facebook",
+      "account": "Konan personal",
+      "scope": "personal",
+      "discord_channel_id": "1552753456681455736",
+      "discord_channel_name": "facebook-personal-content-pipeline",
+      "posting_method": "phone",
+      "phone_package": "com.facebook.katana",
+      "cadence_cap": "2-3 posts/day combined with konan-linkedin",
+      "cadence_confirmed": false,
+      "channel_pre_existing": false
+    },
+    "theoforge-linkedin": {
+      "label": "TheoForge Solutions LinkedIn (company page)",
+      "platform": "linkedin",
+      "account": "TheoForge Solutions",
+      "scope": "business",
+      "discord_channel_id": "1552756224032907394",
+      "discord_channel_name": "linkedin-business-content-pipeline",
+      "posting_method": "phone",
+      "phone_package": "com.linkedin.android",
+      "requires_page_context": true,
+      "cadence_cap": "max 1 post/day",
+      "cadence_confirmed": false,
+      "channel_pre_existing": false
+    },
+    "theoforge-facebook": {
+      "label": "TheoForge Solutions Facebook (Page)",
+      "platform": "facebook",
+      "account": "TheoForge Solutions",
+      "scope": "business",
+      "discord_channel_id": "1522304678061277295",
+      "discord_channel_name": "facebook-business-content-pipeline",
+      "posting_method": "phone",
+      "phone_package": "com.facebook.katana",
+      "requires_page_context": true,
+      "cadence_cap": "max 1 post/day",
+      "cadence_confirmed": false,
+      "channel_pre_existing": true
+    },
+    "theoforge-blog": {
+      "label": "TheoForgeSolutions Blog",
+      "platform": "ghost",
+      "account": "TheoForgeSolutions",
+      "scope": "business",
+      "discord_channel_id": "1552756651612966912",
+      "discord_channel_name": "theoforge-blog-content-pipeline",
+      "posting_method": "ghost",
+      "phone_package": null,
+      "cadence_cap": null,
+      "cadence_confirmed": false,
+      "channel_pre_existing": false
+    }
+  },
+  "open_questions": [
+    "Per-surface approval-gate shape inside each channel (flat channel vs. one thread per content piece).",
+    "Cadence caps per surface are carried over from the retired v2 policy as a proposal only - not yet confirmed.",
+    "Whether the retired Content Topic Bank stays the day-slate source or live last30days runs replace it."
+  ],
+  "naming_convention": {
+    "pattern": "<brand|platform>-<scope|surface>-content-pipeline",
+    "normalized_at": "2026-09-24T21:17:52Z",
+    "renamed": {
+      "1552756224032907394": {
+        "from": "linkedin-business-content",
+        "to": "linkedin-business-content-pipeline"
+      },
+      "1552756651612966912": {
+        "from": "theoforge-blog-content",
+        "to": "theoforge-blog-content-pipeline"
+      }
+    }
+  }
+}

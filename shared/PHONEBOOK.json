@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "description": "Pantheon messenger phonebook — directory of gods, their Discord home channels, roles, and the shared free-response channels. Any god may read this file to route a handoff reply back to the sender's channel. Kept in ~/pantheon/shared/ so it is readable by every god profile.",
-  "updated": "2026-07-11",
+  "description": "Pantheon messenger phonebook \u2014 directory of gods, their Discord home channels, roles, and the shared free-response channels. Any god may read this file to route a handoff reply back to the sender's channel. Kept in ~/pantheon/shared/ so it is readable by every god profile.",
+  "updated": "2026-09-17",
   "gods": {
     "hermes": {
       "role": "Operations Manager / messenger of the gods (main agent, this session)",
@@ -89,6 +89,145 @@
     ]
   },
   "constraints": {
-    "guild_membership": "A god's Discord bot can only post to channels in the guild(s) its token was invited to. Cross-guild posting requires the bot to be invited to the target guild. VERIFY each god's bot is in the guild hosting the shared channels before relying on cross-channel replies. This could not be verified from filesystem alone — confirm live once bots restart + opencode-go recovers."
+    "guild_membership": "A god's Discord bot can only post to channels in the guild(s) its token was invited to. Cross-guild posting requires the bot to be invited to the target guild. VERIFY each god's bot is in the guild hosting the shared channels before relying on cross-channel replies. This could not be verified from filesystem alone \u2014 confirm live once bots restart + opencode-go recovers."
+  },
+  "buzz": {
+    "relay_url": "wss://pantheon-laptop.tail164759.ts.net:8443",
+    "http_url": "https://pantheon-laptop.tail164759.ts.net:8443",
+    "media_url": "https://pantheon-laptop.tail164759.ts.net:8443/media",
+    "pairing_endpoint": "https://pantheon-laptop.tail164759.ts.net:8443/pair",
+    "access": "PARKED \u2014 relay not running (tailnet serve entry kept on :8443 so revival needs no ingress work)",
+    "cli": "(parked \u2014 unavailable)",
+    "cli_read": "(parked \u2014 unavailable)",
+    "runbook": "/home/konan/buzz-relay/RUNBOOK.md",
+    "note": "Self-hosted Buzz relay (Block, Nostr/NIP-29 wire format). Every god has its own keypair and signs its own events, carrying a NIP-OA `auth` tag attesting that Konan owns it. Channel names mirror the Discord home channels.",
+    "owner_npub": "npub1mu2ldayjh0gjnwknzjxgju33pxj0dywf8f246f8e7dtdu485lm2saxdp70",
+    "channels": {
+      "apollo-muse": {
+        "h": "9eec5fe5-11e6-4180-852b-79e2a818e150",
+        "name": "apollo-muse",
+        "visibility": "open"
+      },
+      "caduceus-health": {
+        "h": "8136ecb1-7644-4c49-a5db-ed22dc9a6151",
+        "name": "caduceus-health",
+        "visibility": "open"
+      },
+      "general": {
+        "h": "b5d6942d-01d9-4290-9c0c-d1a83111fb33",
+        "name": "general",
+        "visibility": "open"
+      },
+      "hephaestus-forge": {
+        "h": "a1bc44ea-a9c6-4311-9a8e-e487d95435a9",
+        "name": "hephaestus-forge",
+        "visibility": "open"
+      },
+      "hermes-ops": {
+        "h": "3d4e12a3-6e1a-40b4-b11b-2cfd0b6b06ae",
+        "name": "hermes-ops",
+        "visibility": "open"
+      },
+      "iris-studio": {
+        "h": "fc6ddd40-bdbf-44ee-9c8f-328022d27279",
+        "name": "iris-studio",
+        "visibility": "open"
+      },
+      "kairos-social": {
+        "h": "4b135b8d-640c-49d2-a5fc-7605cdd74db8",
+        "name": "kairos-social",
+        "visibility": "open"
+      },
+      "marvin": {
+        "h": "30ada0a3-633a-42cb-a3e5-e2a16017d9f7",
+        "name": "marvin",
+        "visibility": "open"
+      },
+      "mercer": {
+        "h": "ab9ae02c-6f8c-436a-a438-325adb50942b",
+        "name": "mercer",
+        "visibility": "open"
+      },
+      "pantheon": {
+        "h": "2c7c6367-79dd-4c65-abc6-6733a8ce5093",
+        "name": "pantheon",
+        "visibility": "open"
+      },
+      "rheta-copy": {
+        "h": "a12e0cbc-eddf-438a-878b-d890c2fe3894",
+        "name": "rheta-copy",
+        "visibility": "open"
+      },
+      "thoth-library": {
+        "h": "d15b5659-5f88-4827-ab9e-28f0b875541d",
+        "name": "thoth-library",
+        "visibility": "open"
+      }
+    },
+    "gods": {
+      "apollo": {
+        "channel": "apollo-muse",
+        "npub": "npub1zqvfd0khvm97526kgl5vujsx8w3mkpyx4w5ysf5krw8gtncrrazqdhlmte",
+        "pubkey_hex": "101896bed766cbea2b5647e8ce4a063ba3bb0486aba84826961b8e85cf031f44",
+        "owner_attested": true
+      },
+      "caduceus": {
+        "channel": "caduceus-health",
+        "npub": "npub1hf7gmpagxs782r9j7zd79kznwgky2vnw8ka5g39qnz4mv25d39gsn5rldj",
+        "pubkey_hex": "ba7c8d87a8343c750cb2f09be2d853722c45326e3dbb4444a098abb62a8d8951",
+        "owner_attested": true
+      },
+      "hephaestus": {
+        "channel": "hephaestus-forge",
+        "npub": "npub1kna2uqml4dxr20nwt8hxffm320nxtpegdc3u04z6a4jjcdvp56gqyl9tk8",
+        "pubkey_hex": "b4faae037fab4c353e6e59ee64a77153e66587286e23c7d45aed652c3581a690",
+        "owner_attested": true
+      },
+      "hermes": {
+        "channel": "hermes-ops",
+        "npub": "npub1wwqmqr6vsczgfqf6dfafnft6fxgxfup45rvuqjyaxhyccu2tcfkqm5q27g",
+        "pubkey_hex": "7381b00f4c860484813a6a7a99a57a499064f035a0d9c0489d35c98c714bc26c",
+        "owner_attested": true
+      },
+      "iris": {
+        "channel": "iris-studio",
+        "npub": "npub137t6pedgtvdfhf9g3rwj5fldvjrjdadlytcyucl8g6lt2eles55swrr6qz",
+        "pubkey_hex": "8f97a0e5a85b1a9ba4a888dd2a27ed648726f5bf22f04e63e746beb567f98529",
+        "owner_attested": true
+      },
+      "kairos": {
+        "channel": "kairos-social",
+        "npub": "npub17zrwxkapn6zxmcsjzyxjvehd5tvu6jp2dqdlc7k386992vnfleuq2rphdg",
+        "pubkey_hex": "f086e35ba19e846de212110d2666eda2d9cd482a681bfc7ad13e8a553269fe78",
+        "owner_attested": true
+      },
+      "marvin": {
+        "channel": "marvin",
+        "npub": "npub1a0ufekjv00vy5nvyhwawmrt9wqa7yshymymtfrng3wcamaepdz7q8x9k8m",
+        "pubkey_hex": "ebf89cda4c7bd84a4d84bbbaed8d65703be242e4d936b48e688bb1ddf72168bc",
+        "owner_attested": true
+      },
+      "mercer": {
+        "channel": "mercer",
+        "npub": "npub1lg30l5cgfk7hqjts2nstawwe2qm8uvzme5a6p2xefvz37xtvj0wqq58s6g",
+        "pubkey_hex": "fa22ffd3084dbd70497054e0beb9d950367e305bcd3ba0a8d94b051f196c93dc",
+        "owner_attested": true
+      },
+      "rheta": {
+        "channel": "rheta-copy",
+        "npub": "npub17k7lrjca4hmumwd4gzm6ewn9qxtc7thvws4clw4yr8ahr7uraevqnpjn04",
+        "pubkey_hex": "f5bdf1cb1dadf7cdb9b540b7acba6501978f2eec742b8fbaa419fb71fb83ee58",
+        "owner_attested": true
+      },
+      "thoth": {
+        "channel": "thoth-library",
+        "npub": "npub1mpf7ladmf4hamx8u6kdxqnynqnvvac94qreqwzn2c84vfwhdjksq5cfm5z",
+        "pubkey_hex": "d853eff5bb4d6fdd98fcd59a604c9304d8cee0b500f2070a6ac1eac4baed95a0",
+        "owner_attested": true
+      }
+    },
+    "updated": "2026-09-17T18:58:46Z",
+    "status": "PARKED 2026-09-18 \u2014 relay containers stopped and the buzz platform disabled in all profiles. `pantheon-buzz` will fail with a connection error; this is expected. Do not try to revive it or restart god gateways. Revive steps: /home/konan/buzz-relay/RUNBOOK.md",
+    "h": ""
   }
 }

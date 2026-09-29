@@ -1,0 +1,72 @@
+# Ichor Hindsight memory upgrade — deterministic fixture events.
+# Content dictated by plans/ichor-hindsight-inspired-memory-upgrades-build-spec-v1.md
+# (lines 206-268). Covers: repeated-preference consolidation, other-user leak
+# guard, stale/superseding temporal facts.
+#
+# NOTE (MVP threshold interaction): the two preference events below use distinct
+# phrasings on purpose (spec fixture). Observation clustering requires token
+# Jaccard similarity >= 0.45 (lib/ichor_observations.TEXT_SIMILARITY_THRESHOLD),
+# so this exact pair does NOT consolidate in the MVP — consolidation tests seed
+# higher-similarity variants and document that behavior.
+
+- id: repeated_preference_1
+  session_id: s1
+  event_type: preference
+  subject: Konan
+  predicate: prefers
+  object: event-driven over polling
+  confidence: 0.9
+  raw_text: "Konan prefers event-driven over polling. LLMs should only fire when a reply is needed."
+  god_name: thoth
+  tags: ["user:konan", "scope:pantheon", "topic:architecture"]
+  created_at: "2026-08-01T00:00:00Z"
+
+- id: repeated_preference_2
+  session_id: s2
+  event_type: preference
+  subject: Konan
+  predicate: prefers
+  object: event-driven triggers instead of polling loops
+  confidence: 0.85
+  raw_text: "The preference is event-driven over polling: no babysitting loops."
+  god_name: hermes
+  tags: ["user:konan", "scope:pantheon", "topic:architecture"]
+  created_at: "2026-08-02T00:00:00Z"
+
+- id: other_user_leak_guard
+  session_id: s3
+  event_type: preference
+  subject: OtherUser
+  predicate: prefers
+  object: polling loops
+  confidence: 0.9
+  raw_text: "OtherUser prefers polling loops."
+  god_name: thoth
+  tags: ["user:other", "scope:pantheon"]
+  created_at: "2026-08-02T00:00:00Z"
+
+- id: stale_fact
+  session_id: s4
+  event_type: fact
+  subject: Suno cookie
+  predicate: status
+  object: stale
+  confidence: 0.8
+  raw_text: "The Suno cookie is stale."
+  god_name: hermes
+  tags: ["user:konan", "project:suno"]
+  created_at: "2026-08-01T00:00:00Z"
+  valid_until: "2026-08-01T12:00:00Z"
+
+- id: superseding_fact
+  session_id: s5
+  event_type: fact
+  subject: Suno cookie
+  predicate: status
+  object: refreshed
+  confidence: 0.8
+  raw_text: "The Suno cookie was refreshed via in-app login."
+  god_name: hermes
+  tags: ["user:konan", "project:suno"]
+  created_at: "2026-08-02T00:00:00Z"
+  valid_from: "2026-08-02T00:00:00Z"

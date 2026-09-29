@@ -7,8 +7,8 @@ This command is the safe bridge between human/god-authored source artifacts and
 the already-live Person Roots background ingest watcher. It scans source files
 for explicit marker lines such as::
 
-    PERSON_ROOT: Demo Person | profile.known_context | Demo context marker.
-    @person-fact Sample Work Contact | notes.work | Retiring in Dec 2026.
+    PERSON_ROOT: Sam | profile.known_context | Sam is coming over later.
+    @person-fact Jesus Morales | notes.work | Retiring in Dec 2026.
 
 It does **not** run an LLM, scrape Discord, infer facts from free prose, write
 person-root markdown files, create people, link accounts, or update Ichor. It
@@ -18,14 +18,13 @@ under the privacy rules.
 
 Default live output
 -------------------
-~/.pantheon/person-roots/relationships/_incoming/
+/home/konan/athenaeum/Codex-User/relationships/_incoming/
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -35,7 +34,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from lib.person_roots.observer import observe_source_files
 
-DEFAULT_ROOT = Path(os.environ.get('PERSON_ROOTS_ROOT', str(Path.home() / '.pantheon' / 'person-roots' / 'relationships')))
+DEFAULT_ROOT = Path('/home/konan/athenaeum/Codex-User/relationships')
 DEFAULT_INCOMING = DEFAULT_ROOT / '_incoming'
 
 
@@ -45,8 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--incoming', default=str(DEFAULT_INCOMING), help='Incoming candidate directory.')
     parser.add_argument('--root', default=str(DEFAULT_ROOT), help='Relationship root; used to derive incoming when custom root is set.')
     parser.add_argument('--recursive', action='store_true', help='Recurse source directories.')
-    parser.add_argument('--source-person-id', default='owner')
-    parser.add_argument('--source-type', default='owner_account')
+    parser.add_argument('--source-person-id', default='konan')
+    parser.add_argument('--source-type', default='konan_account')
     parser.add_argument('--sensitivity', default='private')
     parser.add_argument('--json', action='store_true', dest='as_json')
     args = parser.parse_args(argv)

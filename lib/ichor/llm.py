@@ -165,6 +165,93 @@ def _pool_credentials(auth: Dict[str, Any], provider: str) -> List[Dict[str, Any
     return []
 
 
+def _canonical_provider_id(provider: str, auth: Dict[str, Any]) -> str:
+    """Map a provider's display name or alias to its credential-pool key.
+
+    Provider blocks in ``config.yaml`` carry a human-readable ``name`` that is
+    distinct from the key the credential pool is indexed by — e.g. the block
+    ``providers.nous`` has ``name: "Nous Portal"`` while ``auth.json`` stores
+    the tokens under ``credential_pool.nous``. Callers pass whichever string
+    they hold (``_call_llm`` and the Ichor tick both pass the display name), so
+    translate a display name back to its key before any pool lookup. Without
+    this, ``resolve_provider_credentials("Nous Portal")`` never matches the
+    pool and every L2 extraction tick exits DEGRADED with
+    ``no_credential_for_Nous Portal`` while the unit still reports "running".
+    """
+    if not provider:
+        return provider
+    pool = auth.get("credential_pool") if isinstance(auth, dict) else None
+    low = str(provider).lower()
+    if isinstance(pool, dict) and any(str(k).lower() == low for k in pool):
+        return provider  # already a pool key — nothing to translate
+    try:
+        import yaml  # type: ignore
+        cfg = yaml.safe_load((_HOME / ".hermes" / "config.yaml").read_text()) or {}
+        providers = cfg.get("providers") if isinstance(cfg, dict) else None
+        if isinstance(providers, dict):
+            for key, block in providers.items():
+                if str(key).lower() == low:
+                    return str(key)
+                if isinstance(block, dict) and str(block.get("name") or "").lower() == low:
+                    return str(key)
+    except Exception as e:
+        logger.debug("could not canonicalize provider %r: %s", provider, e)
+    return provider
+
+
+def _load_auth() -> Dict[str, Any]:
+    """Read ~/.hermes/auth.json (the Hermes credential pool). {} if unreadable."""
+    try:
+        return json.loads((_HOME / ".hermes" / "auth.json").read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        logger.debug("credential pool unreadable: %s", e)
+        return {}
+
+
+# ---------------------------------------------------------------------------
+# L2 entity-extraction model selection
+# ---------------------------------------------------------------------------
+# The two writers of the L2 graph — the Ichor tick and the l2-drainer — must
+# call the SAME model, and it must be a NON-reasoning model. Model ids are
+# provider-scoped ("deepseek-v4-flash" on opencode-go vs
+# "deepseek/deepseek-v4-flash" on nous), so the id is keyed by the canonical
+# provider id, not by the display name.
+#
+# Regression fixed 2026-09-29: Marvin's provider moved to `nous`, whose
+# configured `default_model` (`stepfun/step-3.7-flash:free`) is a reasoning
+# model that returns `content: null` and puts everything in a `reasoning`
+# field. `_call_llm` sends `thinking: disabled`, but that free endpoint ignores
+# it — so every extraction call returned an empty string and the pipeline
+# silently produced zero entities while the units reported "running".
+_L2_MODEL_BY_PROVIDER = {
+    "nous": "deepseek/deepseek-v4-flash",
+    "opencode-go": "deepseek-v4-flash",
+    "opencode-zen": "deepseek-v4-flash",
+}
+_L2_MODEL_DEFAULT = "deepseek/deepseek-v4-flash"
+
+
+def resolve_l2_model(provider_cfg: Optional[Dict[str, Any]] = None) -> str:
+    """Return the model id the L2 extraction pipeline should call.
+
+    Resolution order:
+      1. ``$ICHOR_L2_MODEL`` — explicit operator override (wins everywhere).
+      2. ``_L2_MODEL_BY_PROVIDER`` keyed by the provider's canonical id.
+      3. the provider block's own ``default_model``.
+      4. ``_L2_MODEL_DEFAULT``.
+    """
+    override = os.environ.get("ICHOR_L2_MODEL", "").strip()
+    if override:
+        return override
+    cfg = provider_cfg if isinstance(provider_cfg, dict) else {}
+    auth = _load_auth()
+    canonical = _canonical_provider_id(str(cfg.get("name") or ""), auth)
+    for key, model in _L2_MODEL_BY_PROVIDER.items():
+        if key.lower() == str(canonical).lower():
+            return model
+    return str(cfg.get("default_model") or "") or _L2_MODEL_DEFAULT
+
+
 def resolve_provider_credentials(provider: str) -> tuple:
     """Resolve (api_key, base_url) for `provider`, preferring the Hermes
     credential pool over a single derived environment variable.
@@ -180,9 +267,15 @@ def resolve_provider_credentials(provider: str) -> tuple:
     Selection: lowest `priority` first, skipping credentials with an unreadable
     token and those marked `exhausted`. A credential with **no recorded status
     is accepted** — `last_status` is a cached guess, and requiring
-    `status == "ok"` skips healthy credentials. Verified on this host: the
-    priority-0 opencode-go key reports `last_status=None` and answers
-    HTTP 200 with 33 models.
+    `status == "ok"` skips healthy credentials.
+
+    The `provider` argument may be either the credential-pool key (`nous`) or
+    the provider block's display `name` (`Nous Portal`); it is canonicalized to
+    the pool key first, because the pool is indexed by the key and a display
+    name never matches it. (Regression fixed 2026-09-29: the Ichor tick's L2
+    extraction resolved `provider_cfg["name"]` = "Nous Portal", never matched
+    the pool, and exited DEGRADED with `no_credential_for_Nous Portal` on every
+    run while the unit still reported "running".)
 
     Returns ``("", "")`` when nothing usable is found.
     """
@@ -196,7 +289,11 @@ def resolve_provider_credentials(provider: str) -> tuple:
         p = cred.get("priority")
         return p if isinstance(p, int) else 999
 
-    for cred in sorted(_pool_credentials(auth, provider), key=_priority):
+    # Translate a display name ("Nous Portal") to the pool key ("nous") before
+    # any lookup; the pool is keyed by the canonical id, not the human label.
+    canonical = _canonical_provider_id(provider, auth)
+
+    for cred in sorted(_pool_credentials(auth, canonical), key=_priority):
         token = cred.get("access_token") or cred.get("api_key") or ""
         if len(str(token)) <= 10:
             continue
@@ -204,8 +301,10 @@ def resolve_provider_credentials(provider: str) -> tuple:
             continue
         return str(token), str(cred.get("base_url") or "")
 
-    # Fallback: the derived environment variable.
-    env_name = str(provider).upper().replace("-", "_").replace(" ", "_") + "_API_KEY"
+    # Fallback: the derived environment variable, built from the CANONICAL id so
+    # "Nous Portal" looks up NOUS_API_KEY rather than a variable that cannot
+    # exist (NOUS_PORTAL_API_KEY).
+    env_name = str(canonical).upper().replace("-", "_").replace(" ", "_") + "_API_KEY"
     return os.environ.get(env_name, ""), ""
 
 

@@ -1,198 +1,149 @@
 ---
 title: "Decision Log — how Pantheon records operator-locked decisions"
-last_verified: 2026-06-19
+last_verified: 2026-09-01
 ---
 
 # Decision Log — how Pantheon records operator-locked decisions
 
-Decisions are how Pantheon remembers *why* the system is the way it is. Without the decision log, every operator re-litigates every choice. With it, the system compounds.
+Decisions preserve why Pantheon is the way it is. This page describes the current human-readable audit trail in `~/pantheon/shared/decisions/` and its optional Ichor-memory companion, verified 2026-09-01.
 
-## What an "operator-locked decision" is
+## What an operator-locked decision is
 
 An operator-locked decision is a choice that:
 
-1. Was made by the human operator (Konan), not by a god
-2. Other operators and gods need to follow
-3. Is durable (won't change in a week)
-4. Has a rationale that should outlive the conversation
+1. Was made or explicitly approved by the human operator
+2. Other operators or gods need to follow
+3. Is durable enough to outlive the current conversation
+4. Has rationale that should remain discoverable
 
-**If a decision meets all four criteria, it goes in the log. If it meets three, it goes in the log. If it meets two, it depends on reversibility cost.**
+If the choice is still only a proposal, task, or experiment, keep it in the relevant plan or session context until it is approved.
 
-Examples of operator-locked decisions:
+Examples:
 
-- "Hephaestus absorbs PM as a sub-domain of plan_authoring." *(Meets 4/4.)*
-- "Use ChromaDB for semantic memory, not Pinecone." *(Meets 4/4.)*
-- "Conductor UI is themeable; theme lives in `~/pantheon/conductor/theme/`." *(Meets 3/4 — second operator may override.)*
-- "We use lowercase-with-hyphens for all file names." *(Meets 4/4 — codified convention.)*
+- choosing a repository or build-path convention
+- setting a QA or approval gate that other workers must obey
+- selecting a primary integration path
+- reversing an earlier architecture or operations decision
 
-Examples of things that are NOT operator-locked decisions:
+Not decisions:
 
-- "Tomorrow's standup is at 10am." *(Transient, no rationale to record.)*
-- "I think we should try Postgres for the new table." *(Speculative, not yet a decision.)*
-- "Marvin should refactor the auth module." *(Task, not decision.)*
+- a transient meeting time
+- an unapproved suggestion
+- a task assignment such as “refactor the auth module”
+
+## Two records, two jobs
+
+Pantheon currently has two complementary ways to preserve a decision:
+
+1. **Decision Markdown** in `~/pantheon/shared/decisions/` — the human-readable, append-only audit trail. Add the decision to `INDEX.md` so operators can find it.
+2. **Ichor event** with `category="decision"` — searchable FTS5-backed memory for retrieval and ranked context.
+
+These are not the same write. The current `ichor_store` implementation routes `decision` to the `ichor_events` table; it does not create a Markdown file or maintain `shared/decisions/INDEX.md`. For important decisions, write both records.
 
 ## How to record a decision
 
-### Method 1 — Via chat (easiest)
+### Method 1 — Via chat
 
 ```
-> Record this decision: [your decision text]
+> Record this decision: [decision text]
 ```
 
-The active god (usually Thoth) will:
+The active agent can draft the Markdown entry, append the index, and optionally call `ichor_store`. Review the resulting file and index entry; chat text alone is not the audit trail.
 
-1. Draft a structured decision entry
-2. Save it to `~/pantheon/shared/decisions/konan/`
-3. Notify relevant gods via god-notify
-4. Add it to the Ichor memory store (so the next session can recall it)
+### Method 2 — Write the Markdown record
 
-The decision file follows a standard YAML-frontmatter + markdown shape (see below).
+Create a file in the shared decisions directory using a date-and-slug filename:
 
-### Method 2 — Via the MCP tool
+```text
+~/pantheon/shared/decisions/YYYY-MM-DD-short-slug.md
+```
+
+Then append a row to:
+
+```text
+~/pantheon/shared/decisions/INDEX.md
+```
+
+The repository contains both daily aggregate logs and more focused decision files. Do not assume a per-user subdirectory or a global numeric sequence; neither is enforced by the current Pantheon code or directory convention.
+
+### Method 3 — Add searchable Ichor memory
 
 ```python
 ichor_store(
-    key="decision:2026-06-19--032--short-slug",
-    content="The decision text, with rationale and reversibility.",
+    key="decision:2026-09-01-short-slug",
+    content="Decision: ...\nRationale: ...\nReversibility: ...",
     category="decision",
+    session_id="optional-source-session-id",
+    god_name="optional-source-god",
 )
 ```
 
-This is for programmatic recording (e.g., from a build plan executor). The chat method is preferred for human-initiated decisions.
+Use a stable, descriptive key. The returned backend should be `fts5` for the current implementation. If `contradiction_warning` is returned, review the decision against recent high-importance memory rather than silently ignoring it.
 
-## The decision file shape
+## Recommended decision file shape
 
-Every decision is a single markdown file at:
-
-```
-~/pantheon/shared/decisions/konan/YYYY-MM-DD--NNN--short-slug.md
-```
-
-- `YYYY-MM-DD` — date the decision was made
-- `NNN` — sequence number for that day (zero-padded, e.g., `001`, `002`)
-- `short-slug` — kebab-case summary of the decision
-
-### Frontmatter
-
-```yaml
----
-date: 2026-06-19T16:21:58-06:00
-domain: development
-priority: 7
-source: chat
-tags: [assistant, infrastructure]
-operator: konan
-summary: "One-line summary of the decision."
-sequence: 032
----
-```
-
-The fields:
-
-- `date` — ISO timestamp
-- `domain` — free-form area tag (development, design, operations, etc.)
-- `priority` — 1-10 scale; 10 is critical
-- `source` — where the decision came from (chat, plan, build, etc.)
-- `tags` — searchable labels
-- `operator` — who made the decision
-- `summary` — one-line summary, shown in INDEX.md
-- `sequence` — the global sequence number across all decisions
-
-### Body
-
-The body follows a soft template:
+There is no runtime-enforced schema, but this compact shape is easy to review:
 
 ```markdown
-# [Decision title]
+# 2026-09-01 — [Decision title]
 
-## Context
-What was the situation? What was at stake?
+**Decision:** [What was decided, precisely.]
 
-## Decision
-What did we decide? Be specific.
+**Rationale:** [Why this option was selected.]
 
-## Rationale
-Why this and not the alternatives?
+**Alternatives considered:**
+- [Alternative] — [why not]
 
-## Alternatives considered
-What were the other options and why were they rejected?
+**Evidence:** [Plans, tests, source files, or operator instruction.]
 
-## Reversibility
-How do we undo this if it turns out wrong? What's the cost?
+**Reversibility:** [How to undo it and what the cost is.]
 
-## Cross-references
-Links to other decisions, plans, or codex entries this relates to.
+**Decided by:** [operator]
 ```
 
-**You don't have to follow this template strictly.** The most important thing is that a future operator (or future you) can read the file and understand:
-
-1. What was decided
-2. Why
-3. What to do if it turns out wrong
+Use YAML frontmatter only when the surrounding codex convention requires it. Do not invent fields such as a global sequence number and present them as system-generated metadata.
 
 ## How decisions are looked up
 
-### Method 1 — Search by topic
-
-```
-> Find the decision about [topic]
-```
-
-The active god will search the decisions directory and the Ichor memory store.
-
-### Method 2 — The INDEX
-
-Every decisions directory has an `INDEX.md` that's auto-maintained. It lists the most recent decisions with summaries.
+### Search the human-readable index
 
 ```bash
-cat ~/pantheon/shared/decisions/konan/INDEX.md
+# Read the index with your normal file viewer
+$PANTHEON_ROOT/shared/decisions/INDEX.md
 ```
 
-### Method 3 — By sequence number
+For a normal installation, `PANTHEON_ROOT` is `~/pantheon`. Search the directory by topic with your file-search tool or an MCP client.
 
-Decisions have a global sequence number. If someone references "decision 031," you can find it:
+### Search Ichor
 
-```bash
-ls ~/pantheon/shared/decisions/konan/2026-06-19--031--*
+```python
+ichor_retrieve(query="topic or decision phrase", limit=10)
+ichor_brief(god_name="", limit=20)
 ```
+
+Use `pantheon_search` or `pantheon_locate` when you are unsure whether the artifact is a decision file, plan, skill, or another Pantheon component.
 
 ## Reversing a decision
 
-Decisions are append-only. You don't edit or delete a decision. To reverse one:
+The log is append-only:
 
-1. **Make a new decision** that explicitly reverses or supersedes the old one
-2. The new decision's `## Reversibility` section explains the reversal
-3. Optionally, mark the old file as superseded with a header
+1. Make a new decision file that explicitly reverses or supersedes the old one.
+2. Link the old file in the new entry.
+3. Explain why the reversal happened and what changes operationally.
+4. Append the new entry to `INDEX.md`.
+5. Store a corresponding Ichor decision event if future retrieval needs to distinguish the current choice.
 
-Example reversal:
-
-```markdown
-# Reverse: Hephaestus absorbs PM as sub-domain of plan_authoring
-
-## Reverses
-- `2026-06-19--031--pm-skills-installation-and-hephaestus-absorption.md`
-
-## Why reversed
-[reason]
-
-## What changes
-[concrete changes to god.json, SOUL.md, etc.]
-
-## Status
-[reverted / in-progress / partial]
-```
-
-The history of decisions is the *evolution* of the system. Erasing history is how systems lose the ability to learn.
+Do not rewrite history to make the old decision disappear. If an index summary becomes stale, append the superseding decision and preserve the prior row unless the repository's index-maintenance convention explicitly says otherwise.
 
 ## Anti-patterns
 
-- **Don't record a decision in chat only.** "I'll write it down later" is how decisions get lost. The cost of recording is 30 seconds.
-- **Don't record a decision that doesn't meet the operator-locked criteria.** Cluttering the log with tasks and speculations makes the signal-to-noise ratio worse.
-- **Don't reverse a decision by editing the file.** Always append a new decision that reverses the old one. The history matters.
-- **Don't skip the rationale.** "We decided X" without "because Y" is useless in 3 months.
+- **Don't record a decision in chat only.** Put durable choices in the shared decision trail.
+- **Don't claim `ichor_store` updates the Markdown log.** It currently writes the Ichor event backend only.
+- **Don't use a per-user `decisions/konan/` path as if it were canonical.** The current tree uses `shared/decisions/` and `shared/decisions/INDEX.md`.
+- **Don't assume a global sequence number or auto-maintained index.** The current convention is date-and-slug files plus an append-only index.
+- **Don't reverse a decision by deleting or editing the original.** Add a new superseding record.
+- **Don't skip rationale and reversibility.** A bare “we chose X” will not help the next operator.
 
 ## See also
 
-- [MCP Tools](09-mcp-tools.md) — `ichor_store` and the decision workflow
-- [Context Management](01-context-management.md) — how decisions fit into the broader memory system
-- [Common Pitfalls](07-common-pitfalls.md) — what goes wrong with decision discipline
+- [MCP Tools](09-mcp-tools.md) — memory, retrieval, and Pantheon index tools

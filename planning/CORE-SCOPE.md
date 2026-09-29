@@ -91,11 +91,19 @@ Shared Brain Protocol template for every new god:
 - `journal/TEMPLATE.md` — Daily journal structure
 - `SHARED_BRAIN_PROTOCOL.md` — Protocol spec for copy-paste into harness
 
-### plugins/pantheon/
-Hermes Agent plugin that connects the agent runtime to Pantheon:
-- Demeter watcher + classifier + ingest pipeline
-- Graph client for Athenaeum knowledge graph
-- `plugin.yaml` — Plugin manifest
+### plugins/
+Pantheon-owned Hermes plugins are in scope when they extend the reusable Pantheon runtime rather than a one-off workflow:
+- `plugins/pantheon/` — Demeter watcher/classifier/ingest, Athenaeum graph client, shared facts, and Pantheon runtime hooks
+- `plugins/ichor-gates/` — Ichor guardrail/context integration hooks
+- `plugins/stream-retrieval/` — streaming retrieval tool hooks
+- `plugins/tokenjuice/` — compression/token-usage helper plugin
+
+### hermes-agent/plugins/
+Bundled Hermes Agent plugin infrastructure is in scope as part of the current Pantheon base because Pantheon relies on it for provider, platform, dashboard, MCP-adjacent, and memory extension points:
+- `plugins/memory/` — pluggable memory providers (`byterover`, `hindsight`, `holographic`, `honcho`, `mem0`, `openviking`, `retaindb`, `supermemory`)
+- `plugins/model-providers/`, `plugins/web/`, `plugins/browser/`, `plugins/image_gen/`, `plugins/video_gen/` — provider plugin catalogs
+- `plugins/context_engine/`, `plugins/cron/`, `plugins/dashboard_auth/`, `plugins/platforms/`, `plugins/observability/` — runtime extension families
+- NOT included: profile-local credentials, provider tokens, plugin runtime databases, or app-specific workflow payloads
 
 ### planning/
 Architecture and reference documents:

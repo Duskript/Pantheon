@@ -1,0 +1,2 @@
+# Content asset intake v1
+date,pipeline,client_or_job,audience,asset_type,moment_of_use,desired_action,source_material,success_metric,distribution_plan,refresh_trigger,status

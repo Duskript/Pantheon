@@ -1,11 +1,11 @@
 ---
 title: "Using a Skill — frontmatter best practices"
-last_verified: 2026-06-19
+last_verified: 2026-09-01
 ---
 
 # Using a Skill — frontmatter best practices
 
-This page covers the frontmatter fields you'll touch most often: `name`, `description`, `metadata.version`, and `metadata.tags`. The frontmatter is the part of a skill that's *always* loaded — the body is lazy. Get the frontmatter right and the skill works; get it wrong and the skill never triggers.
+This page covers the frontmatter fields used by the current Hermes skill scanner and loader, verified 2026-09-01. Frontmatter is indexed before the full body is loaded, so it controls discoverability, filtering, and metadata—not an automatic semantic execution trigger.
 
 ## Required frontmatter
 
@@ -16,54 +16,51 @@ description: What this skill does and when to use it.
 ---
 ```
 
-That's the minimum. Two fields, both required.
+`name` and `description` are the minimum useful fields. Keep the YAML valid and quote descriptions containing punctuation that could be interpreted as YAML syntax.
 
 ## The `name` field
 
-Rules from the Agent Skills spec:
+Use the Agent Skills naming convention:
 
-- 1-64 characters
-- Lowercase letters (`a-z`), numbers (`0-9`), hyphens (`-`)
-- Cannot start or end with a hyphen
-- No consecutive hyphens (`--`)
-- **Must match the parent directory name exactly**
+- 1–64 characters
+- lowercase letters (`a-z`), numbers (`0-9`), and hyphens (`-`)
+- no leading or trailing hyphen
+- no consecutive hyphens
+- keep the frontmatter name identical to the skill directory name
 
 Valid: `cro`, `emails`, `ab-testing`, `pm-product-strategy`
+
 Invalid: `Page-CRO`, `-page`, `page--cro`, `skill_name`
 
-**Why strict?** The directory name *is* the skill name. Mismatch = the god can't find it.
+The scanner builds the `/skill-name` command from the directory name and uses the package directory when resolving a skill. Matching the frontmatter and directory names prevents confusing display and lookup behavior, especially for categorized skills such as `category/skill-name/SKILL.md`.
 
 ## The `description` field
 
-This is the most important field in the entire skill. It's the *only* thing the god sees in its system prompt. The body is lazy-loaded.
+The description is the main discovery signal. Hermes renders skill names and descriptions in the compact skills index so the model can decide which skills are relevant. The model then explicitly loads the body with `skill_view`, a slash command, or `--skills`.
 
-**The description is the trigger mechanism.** The god looks at the user's request and the description of every available skill. If the description contains trigger phrases that match the request, the god loads the body.
+There is no evidence in the current runtime of a separate phrase-matching engine that automatically loads a skill body. Write descriptions as clear selection guidance, not as a promise that a substring will execute the skill.
 
 ### What a good description contains
 
-1. **What the skill does** — one sentence, plain language
-2. **When to use it** — explicit trigger phrases the user might say
-3. **What it does NOT cover** — scope boundaries, with cross-references to other skills
+1. **What the skill does** — one plain-language sentence
+2. **When to use it** — likely user requests and trigger phrases
+3. **Scope boundaries** — what it does not cover, with natural-language cross-references where useful
 
 ### Example — good
 
 ```yaml
-description: "When the user wants to optimize conversions on any marketing page. Use when the user says 'CRO,' 'conversion rate optimization,' 'this page isn't converting.' For signup flows, see signup."
+description: "Optimize conversions on marketing pages. Use when the user asks about CRO, conversion rate optimization, or a page that is not converting. For signup-flow diagnosis, see signup."
 ```
 
-Three things in one line:
-
-1. What it does (optimize conversions)
-2. When to use it (3 trigger phrases)
-3. What it doesn't cover (signup flows → different skill)
-
-### Example — bad
+### Example — weak
 
 ```yaml
 description: "Helps with CRO."
 ```
 
-Too vague. "CRO" is the only trigger phrase, and "helps with" tells the god nothing about *what* it does.
+This is too vague: it gives the model little information about the task, when to load it, or where its boundary lies.
+
+Keep descriptions concise because they are included in the session's prompt index. Do not put the full procedure in frontmatter.
 
 ## Optional frontmatter
 
@@ -79,89 +76,70 @@ metadata:
 ---
 ```
 
-- `license` — defaults to MIT if omitted
-- `metadata.version` — semver, useful for tracking changes
-- `metadata.author` — who maintains the skill
-- `metadata.tags` — free-form tags for organization
+Useful optional fields include:
+
+- `license` — licensing information for shared skills
+- `metadata.version` — recommended semver for tracking changes; it is metadata, not the loading mechanism
+- `metadata.author` — maintainer identity
+- `metadata.tags` — organization and catalog labels
+- `platforms` — OS compatibility, for example `[linux, macos]`
+- `environments` — relevance filters such as `[kanban]` or `[docker]`
+- `metadata.hermes` — Hermes-specific conditions and configuration declarations when needed
+
+Platform and environment fields affect offer/index surfaces. Explicit `skill_view` and `--skills` loads are intentionally not blocked by environment relevance filters; command-level compatibility still remains the skill author's responsibility.
 
 ## Optional skill subdirectories
 
-A skill can have more than just `SKILL.md`:
+A skill can have progressive-disclosure support files:
 
 ```
 skills/lean-canvas/
-├── SKILL.md           # Required - main instructions (<500 lines)
-├── references/        # Optional - detailed docs loaded on demand
-├── scripts/           # Optional - executable code
-└── assets/            # Optional - templates, data files
+├── SKILL.md           # Required main instructions
+├── references/        # Detailed material loaded on demand
+├── templates/         # Reusable templates
+├── scripts/           # Executable helpers
+└── assets/            # Data or other support files
 ```
 
-- `references/` is for *deep-dive* content. The skill body links to it ("see references/lean-canvas-deep-dive.md") and the god loads it only when the user needs the depth.
-- `scripts/` is for executable code. Use sparingly — most skills don't need them.
-- `assets/` is for templates and data files (CSV headers, JSON schemas, etc.).
+Reference files are not independent skills. Link them from `SKILL.md` and load them explicitly, for example:
 
-## The 500-line rule
+```text
+skill_view(name="lean-canvas", file_path="references/examples.md")
+```
 
-`SKILL.md` should be **under 500 lines**. The Agent Skills spec enforces this as a soft ceiling.
+## Size and structure
 
-If your skill is over 500 lines, you're doing one of two things wrong:
-
-1. **Too much detail in the body.** Move the deep content to `references/` and link to it.
-2. **Too many topics in one skill.** Split it into multiple skills. Use the `related_skills` cross-reference to tie them together.
+Keep `SKILL.md` focused and reasonably small. The commonly used **500-line limit is a house guideline, not a runtime enforcement found in the current Hermes tree**. If a skill grows beyond that size, move deep reference material into `references/` or split unrelated responsibilities into separate skills.
 
 ## Cross-referencing skills
 
-You can mention other skills in your description. This helps the agent pick the right one.
+Mention related skills in natural language rather than relying on hard links between independently installed packages:
 
 ```yaml
-description: "When the user wants a PRD. Use when the user says 'PRD,' 'product requirements document,' 'write a spec.' For OKRs, see okrs. For roadmaps, see roadmap. For PR FAQs, see pr-faq."
+description: "Write a PRD when the user asks for product requirements or a spec. For OKRs, see okrs; for roadmaps, see roadmap."
 ```
 
-Three scope boundaries in one description. The agent will pick the right skill based on the prompt.
-
-**Note from the Agent Skills spec:** cross-references in `description` are *natural language*, not hard links. Plugins install independently, so hard-linking another plugin's skill can break. Always say "see [skill-name]" in plain text.
-
-## The trigger phrase technique
-
-The description is the trigger. To make the trigger reliable, list the *exact phrases* the user is likely to say.
-
-```yaml
-description: "When the user wants to write a SWOT analysis. Use when the user says 'SWOT,' 'strengths weaknesses opportunities threats,' 'do a strategic analysis,' 'where do we stand.'"
-```
-
-Four trigger phrases. The agent will recognize any of them.
-
-**Don't:**
-
-```yaml
-description: "A comprehensive framework for evaluating strategic position."
-```
-
-That's a description of what the framework *is*, not what the user will *say*. The agent won't trigger on it.
+This gives the model scope boundaries without assuming that another plugin or external directory is installed.
 
 ## Versioning skills
 
-When you change a skill, bump the `metadata.version` field. This is critical for:
+When you change a skill, bump `metadata.version` when the skill has a version field. Use semver as a human-maintained convention:
 
-- Detecting when an update is available
-- Tracking what changed (the version + CHANGELOG)
-- Rolling back if a change breaks
+- **Major** — breaking behavior or renamed/removed capability
+- **Minor** — new backward-compatible content
+- **Patch** — typo or clarification without behavior change
 
-The convention is semver:
-
-- **Major** (1.0.0 → 2.0.0) — breaking change (renamed, removed functionality, behavior change)
-- **Minor** (1.0.0 → 1.1.0) — new content, no breaking change
-- **Patch** (1.0.0 → 1.0.1) — typo fix, clarification, no content change
+The runtime does not require a version field, but versioning plus a changelog makes shared skill updates auditable and reversible.
 
 ## Anti-patterns
 
-- **Description that paraphrases the title.** "Helps with X" when the title already says "X" — wastes the trigger surface.
-- **Description without trigger phrases.** The agent can read it, but won't know when to load it.
-- **Description that's too long.** The god sees it in every prompt. Keep it under 1024 chars.
-- **No `metadata.version`.** You will lose track of what's current.
+- **Description that merely paraphrases the title.** Add task scope and likely requests.
+- **Description without trigger guidance.** The model may not select it when needed.
+- **Description that is too long.** It appears in every relevant prompt index.
+- **Procedure hidden only in frontmatter.** Put instructions in the Markdown body and link deep material from support files.
+- **Name mismatch.** Keep directory and frontmatter names aligned.
+- **Secrets in frontmatter or the body.** Use environment variables or a secrets manager.
 
 ## See also
 
-- [Making a Skill](04-making-a-skill.md) — the full authoring workflow
-- [Skills](02-skills.md) — what skills are
-- [Common Pitfalls](07-common-pitfalls.md) — what goes wrong with skill authoring
+- [Skills](02-skills.md) — skill discovery and invocation

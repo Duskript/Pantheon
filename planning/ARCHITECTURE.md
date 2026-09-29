@@ -318,17 +318,20 @@ Ichor Memory — Multi-Backend Fused Search
 
 ### 2.7 Gateway Plugins
 
-**Location:** `~/.hermes/plugins/`
+**Pantheon plugin location:** `~/pantheon/plugins/` (versioned source) and profile-installed plugin paths at runtime.
 
 | Plugin | Files | What it does |
 |---|---|---|
-| `ichor-gates/` | `__init__.py` (9KB), `plugin.yaml` | Intercepts gateway message flow, injects Ichor context per message |
-| `pantheon/` | `__init__.py` (33KB), `plugin.yaml` | Pantheon-specific gateway hooks (routing, multi-god) |
-| `pantheon-shared-facts/` | `__init__.py` (14KB), `plugin.yaml` | Tracks shared facts across gods |
-| `hermes-achievements/` | (binary plugin) | Achievement/trophy system |
-| `rtk-rewrite/` | (binary plugin) | RTK prompt rewriting |
+| `ichor-gates/` | `__init__.py`, `plugin.yaml` | Intercepts gateway message flow, injects Ichor context per message |
+| `pantheon/` | `__init__.py`, `plugin.yaml`, Demeter/graph/shared-facts modules | Pantheon-specific gateway hooks (routing, multi-god, graph/shared-facts integration) |
+| `stream-retrieval/` | `__init__.py`, `tools.py`, `plugin.yaml` | Streaming retrieval tools |
+| `tokenjuice/` | `__init__.py`, `compress.py`, `plugin.yaml` | Compression/token-usage helper plugin |
 
-**Plugin loading:** Gateway loads plugins from `~/.hermes/plugins/` at startup. Each must have `plugin.yaml` + `__init__.py` with `setup()` hook.
+**Hermes Agent plugin catalog:** `~/pantheon/hermes-agent/plugins/` ships the reusable plugin families used by Pantheon: memory providers, model providers, web/browser providers, image/video generation providers, dashboard auth providers, platform adapters, cron extensions, context engines, observability integrations, and utility plugins.
+
+**Pluggable memory providers:** `~/pantheon/hermes-agent/plugins/memory/` includes `byterover`, `hindsight`, `holographic`, `honcho`, `mem0`, `openviking`, `retaindb`, and `supermemory`. Hermes activates one external provider via `memory.provider` while keeping built-in profile memory active. Runtime data, credentials, and provider-local databases stay out of git.
+
+**Plugin loading:** Hermes loads bundled and profile-installed plugins at startup from configured plugin discovery paths. Each plugin must include `plugin.yaml` plus Python registration code.
 
 ### 2.8 WebUI / Frontend
 

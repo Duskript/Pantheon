@@ -10,12 +10,11 @@ human/operator or a future dashboard process.
 from __future__ import annotations
 
 import argparse
-import os
 import json
 import sys
 from pathlib import Path
 
-PANTHEON_ROOT = Path(__file__).resolve().parents[1]
+PANTHEON_ROOT = Path('/home/konan/pantheon')
 if str(PANTHEON_ROOT) not in sys.path:
     sys.path.insert(0, str(PANTHEON_ROOT))
 
@@ -26,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Print Person Roots admin status.')
     parser.add_argument(
         '--root',
-        default=os.environ.get('PERSON_ROOTS_ROOT', str(Path.home() / '.pantheon' / 'person-roots' / 'relationships')),
+        default='/home/konan/athenaeum/Codex-User/relationships',
         help='Path to the Person Roots relationship tree.',
     )
     parser.add_argument('--format', choices=['json', 'text'], default='json')

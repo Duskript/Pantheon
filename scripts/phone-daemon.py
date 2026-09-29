@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
 Pantheon Phone Notification Daemon
-Polls the Pixel 7 via ADB every 10 seconds, routes notifications by app.
+Polls the gateway phone via ADB every 10 seconds, routes notifications by app.
 No LLM calls — just pure Python routing.
 
+The device address and the adb binary are RESOLVED, never hardcoded. The phone's
+LAN IP drifted .18 -> .19 -> .11 within a single month (each one "correct" when
+written), and adb is not on PATH on this host — so a bare `subprocess(["adb", ...])`
+raised FileNotFoundError and the daemon died at startup before polling anything.
+
 Usage:
-  python3 phone-daemon.py              # run foreground
-  python3 phone-daemon.py --daemon     # run as background process
+  python3 phone-daemon.py                  # run foreground
+  python3 phone-daemon.py --daemon         # run as background process
+  python3 phone-daemon.py --backend-check  # report screen-backend health and exit
 """
 
 import sys
@@ -23,10 +29,28 @@ from pathlib import Path
 # ── PYTHONPATH fix: Strip Hermes vendor (PIL conflict) ────────────────
 _HERMES_VENDOR = str(Path.home() / ".hermes" / "vendor")
 sys.path = [p for p in sys.path if _HERMES_VENDOR not in p]
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # for phone_screen
+
+from phone_screen import PhoneScreen, resolve_adb, resolve_device  # noqa: E402
 
 # ── Config ──────────────────────────────────────────────────────────────
-PHONE_ADB = os.environ.get("PANTHEON_PHONE_ADB_ADDR", "192.168.1.18:5555")
+# Device + tooling are resolved, not constants. See phone_screen.resolve_device
+# for the order (env override -> Tailscale -> a known adb transport -> last-known LAN).
+ADB_BIN = resolve_adb()
+PHONE_ADB = resolve_device(ADB_BIN)
 POLL_INTERVAL = int(os.environ.get("PANTHEON_PHONE_POLL_INTERVAL", "10"))  # seconds between polls
+
+#: When on, reply-worthy notifications are annotated with the foreground app, read
+#: through the screen backend (ARTEMIS helper first, uiautomator2 fallback).
+#: Off by default: it costs a screen read per event, and the helper is silent while
+#: a god is driving the phone via uiautomator2 (UiAutomation suppresses it).
+SCREEN_CONTEXT = os.environ.get("PANTHEON_PHONE_SCREEN_CONTEXT", "0").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+    "",
+)
 LOG_DIR = Path(os.environ.get("PANTHEON_PHONE_DAEMON_DIR", str(Path.home() / "pantheon" / "phone-daemon")))
 LOG_FILE = LOG_DIR / "notifications.jsonl"
 STATE_FILE = LOG_DIR / "seen_notifications.json"
@@ -90,10 +114,15 @@ log = logging.getLogger("phone-daemon")
 
 
 def adb_shell(command: str) -> tuple[str, bool]:
-    """Run an ADB shell command, return (output, success)."""
+    """Run an ADB shell command, return (output, success).
+
+    Uses the resolved ADB_BIN rather than a bare "adb": adb is not on PATH on this
+    host, so the literal string raised FileNotFoundError and killed the daemon at
+    startup with "ADB not found" before it ever polled a phone.
+    """
     try:
         result = subprocess.run(
-            ["adb", "-s", PHONE_ADB, "shell", command],
+            [ADB_BIN, "-s", PHONE_ADB, "shell", command],
             capture_output=True,
             text=True,
             timeout=30,
@@ -102,8 +131,25 @@ def adb_shell(command: str) -> tuple[str, bool]:
     except subprocess.TimeoutExpired:
         return "", False
     except FileNotFoundError:
-        log.error("ADB not found. Make sure it's installed and in PATH.")
+        log.error(f"adb not found at {ADB_BIN!r}. Set PANTHEON_ADB_BIN to its full path.")
         sys.exit(1)
+
+
+def backend_check() -> int:
+    """Report screen-backend health and exit.
+
+    Run this before blaming the daemon for anything: it shows which phone was
+    resolved, whether the ARTEMIS helper is answering, and whether a UiAutomation
+    holder is currently suppressing it. Note the daemon itself reads *notifications*
+    via `dumpsys`, which is not a UiAutomation call — the screen backend is used
+    only for the optional foreground-app annotation.
+    """
+    log.info(f"Gateway resolution: {PHONE_ADB}  (adb: {ADB_BIN})")
+    report = PhoneScreen(device=PHONE_ADB).probe()
+    for key, value in report.items():
+        log.info(f"  {key}: {value}")
+    log.info(f"  screen context enrichment: {'ON' if SCREEN_CONTEXT else 'off'}")
+    return 0
 
 
 def get_raw_notifications() -> str:
@@ -215,23 +261,36 @@ def log_notification(entry: dict):
 
 
 def dispatch_reply_queue(entry: dict):
-    """For high-priority notifications, write to a reply queue file.
+    """For reply-worthy notifications, write to a reply queue file.
 
     The reply queue is consumed by the LLM when it's active — not polled.
     """
-    if entry["needs_reply"]:
-        reply_queue = LOG_DIR / "reply_queue.jsonl"
-        with open(reply_queue, "a") as f:
-            f.write(json.dumps(entry) + "\n")
-        log.info(f"📩 Queued for reply: {entry['label']} — {entry['text'][:80]}")
+    if not entry["needs_reply"]:
+        return
+
+    # Optional enrichment: what app is on screen right now, read through the
+    # screen backend. This is the only place the daemon uses the ARTEMIS helper.
+    if SCREEN_CONTEXT:
+        try:
+            entry["screen"] = PhoneScreen(device=PHONE_ADB).foreground_app()
+        except RuntimeError as exc:
+            # A failed read must never drop the notification — record why instead.
+            entry["screen"] = {"error": str(exc)}
+
+    reply_queue = LOG_DIR / "reply_queue.jsonl"
+    with open(reply_queue, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    log.info(f"📩 Queued for reply: {entry['label']} — {entry['text'][:80]}")
 
 
 def main():
     log.info("=" * 60)
     log.info("Pantheon Phone Notification Daemon starting...")
-    log.info(f"Phone: {PHONE_ADB}")
+    log.info(f"Phone: {PHONE_ADB}   (resolved, not hardcoded)")
+    log.info(f"ADB binary: {ADB_BIN}")
     log.info(f"Poll interval: {POLL_INTERVAL}s")
     log.info(f"Log file: {LOG_FILE}")
+    log.info(f"Screen context: {'ON' if SCREEN_CONTEXT else 'off'}")
     log.info("=" * 60)
 
     # Verify ADB connection
@@ -285,6 +344,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--backend-check" in sys.argv:
+        sys.exit(backend_check())
     if "--daemon" in sys.argv:
         # Fork to background
         pid = os.fork()

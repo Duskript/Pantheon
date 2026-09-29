@@ -17,6 +17,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.ichor_forge import (
     MIN_INTERVENTIONS_FOR_ADJUSTMENT,
+    EVAL_RETENTION_DAYS,
+    EvalCounts,
+    EvalRecorder,
     ForgeAdjustment,
     ForgeAnalyzer,
     ForgeFindings,
@@ -24,6 +27,9 @@ from lib.ichor_forge import (
     ForgeSmith,
     InterventionRecord,
     GateMetrics,
+    load_eval_counts,
+    load_model_counts,
+    prune_evals,
 )
 
 
@@ -66,6 +72,109 @@ def _make_intervention(
         "session_id": "test-session",
         "user_intent": user_intent,
     }
+
+
+def _write_evals(log_dir: str, entries: List[Dict[str, Any]]) -> str:
+    """Write eval records (the forge's denominator) to evals.jsonl."""
+    path = os.path.join(log_dir, "evals.jsonl")
+    with open(path, "w") as f:
+        for entry in entries:
+            f.write(json.dumps(entry) + "\n")
+    return path
+
+
+def _make_eval(
+    gate: str = "logic_gate",
+    failed: bool = False,
+    age_days: float = 0,
+) -> Dict[str, Any]:
+    return {
+        "t": time.time() - age_days * 86400,
+        "g": gate,
+        "f": 1 if failed else 0,
+        "god": "hermes",
+    }
+
+
+# ===========================================================================
+# Eval Records — the denominator behind block_rate
+# ===========================================================================
+# `all.jsonl` is append-only for *failures*, so `blocked / total` over it is
+# always 1.0. Eval records capture every check a gate performed, pass or
+# fail, which is what makes a real block rate computable.
+
+
+class TestEvalRecorder:
+    def test_record_appends_one_line(self, log_dir: str) -> None:
+        recorder = EvalRecorder(path=os.path.join(log_dir, "evals.jsonl"))
+        assert recorder.record(gate="logic_gate", failed=False, god="hermes")
+        assert recorder.record(gate="logic_gate", failed=True, god="hermes")
+
+        lines = Path(recorder.path).read_text().strip().split("\n")
+        assert len(lines) == 2
+        first = json.loads(lines[0])
+        assert first["g"] == "logic_gate"
+        assert first["f"] == 0
+        assert first["god"] == "hermes"
+        assert json.loads(lines[1])["f"] == 1
+
+    def test_record_failure_is_swallowed(self) -> None:
+        """A bad path must return False, never raise into a god's tool loop."""
+        recorder = EvalRecorder(path="/dev/null/nope/evals.jsonl")
+        assert recorder.record(gate="logic_gate", failed=False) is False
+
+    def test_load_aggregates_pass_and_fail(self, log_dir: str) -> None:
+        _write_evals(log_dir, [
+            _make_eval(failed=False),
+            _make_eval(failed=False),
+            _make_eval(failed=False),
+            _make_eval(failed=True),
+            _make_eval(gate="state_gate", failed=True),
+        ])
+        counts = load_eval_counts(os.path.join(log_dir, "evals.jsonl"))
+
+        assert counts["logic_gate"].checked == 4
+        assert counts["logic_gate"].failed == 1
+        assert counts["logic_gate"].passed == 3
+        assert counts["logic_gate"].block_rate == pytest.approx(0.25)
+        assert counts["logic_gate"].has_denominator is True
+        assert counts["state_gate"].checked == 1
+
+    def test_load_skips_malformed_lines(self, log_dir: str) -> None:
+        path = os.path.join(log_dir, "evals.jsonl")
+        Path(path).write_text(
+            "not json at all\n"
+            "\n"
+            "[1, 2, 3]\n"
+            '{"no_gate": true}\n'
+            '{"g": "logic_gate", "f": 0, "t": 1}\n'
+        )
+        counts = load_eval_counts(path)
+        assert list(counts) == ["logic_gate"]
+        assert counts["logic_gate"].checked == 1
+
+    def test_load_respects_lookback(self, log_dir: str) -> None:
+        _write_evals(log_dir, [
+            _make_eval(failed=False, age_days=1),
+            _make_eval(failed=False, age_days=30),
+        ])
+        path = os.path.join(log_dir, "evals.jsonl")
+        assert load_eval_counts(path, days=7)["logic_gate"].checked == 1
+        assert load_eval_counts(path)["logic_gate"].checked == 2
+
+    def test_load_missing_file_is_empty(self, log_dir: str) -> None:
+        assert load_eval_counts(os.path.join(log_dir, "absent.jsonl")) == {}
+
+    def test_prune_drops_only_old_records(self, log_dir: str) -> None:
+        path = os.path.join(log_dir, "evals.jsonl")
+        _write_evals(log_dir, [
+            _make_eval(failed=False, age_days=1),
+            _make_eval(failed=True, age_days=2),
+            _make_eval(failed=False, age_days=EVAL_RETENTION_DAYS + 10),
+        ])
+        assert prune_evals(path, max_age_days=EVAL_RETENTION_DAYS) == 1
+        assert len(Path(path).read_text().strip().split("\n")) == 2
+        assert prune_evals(path, max_age_days=EVAL_RETENTION_DAYS) == 0
 
 
 # ===========================================================================
@@ -150,17 +259,6 @@ class TestForgeAnalyzer:
         assert metrics["logic_gate"].total == 2
         assert metrics["logic_gate"].blocked == 0
 
-    def test_detect_overblocking(self, log_dir: str) -> None:
-        _write_log(log_dir, [
-            _make_intervention(gate="state_gate", passed=False) for _ in range(10)
-        ])
-        analyzer = ForgeAnalyzer(log_dir=log_dir)
-        records = analyzer.load_records(days=7)
-        metrics = analyzer.compute_metrics(records)
-        patterns = analyzer.detect_patterns(records, metrics)
-
-        assert any("over-blocking" in p for p in patterns)
-
     def test_detect_repeated_path_blocks(self, log_dir: str) -> None:
         _write_log(log_dir, [
             _make_intervention(
@@ -177,19 +275,30 @@ class TestForgeAnalyzer:
         assert any("config.yaml" in p for p in patterns)
 
     def test_detect_model_pattern(self, log_dir: str) -> None:
+        """A per-model rate needs eval records, not just failures.
+
+        Historically this test injected `passed=True` intervention records to
+        give the ratio a denominator — records that never occur in
+        production, where all.jsonl only receives failures. The denominator
+        now comes from eval records, so the test supplies them.
+        """
         _write_log(log_dir, [
             _make_intervention(gate="state_gate", passed=False, model="llama-3-8b")
             for _ in range(10)
-        ] + [
-            _make_intervention(gate="state_gate", passed=True, model="llama-3-8b")
-            for _ in range(2)
         ])
         analyzer = ForgeAnalyzer(log_dir=log_dir)
         records = analyzer.load_records(days=7)
         metrics = analyzer.compute_metrics(records)
-        patterns = analyzer.detect_patterns(records, metrics)
 
+        assert not any("llama-3-8b" in p for p in
+                       analyzer.detect_patterns(records, metrics))
+
+        patterns = analyzer.detect_patterns(
+            records, metrics,
+            {"llama-3-8b": EvalCounts(gate="llama-3-8b", checked=12, failed=10)},
+        )
         assert any("llama-3-8b" in p for p in patterns)
+        assert any("10/12 checks" in p for p in patterns)
 
     def test_full_analyze_pipeline(self, log_dir: str) -> None:
         _write_log(log_dir, [
@@ -220,11 +329,19 @@ class TestForgeAnalyzer:
 
 
 class TestGateMetrics:
+    """Rate-based alerts must be backed by a denominator.
+
+    `rate_reliable` is True only when eval records supplied the number of
+    checks performed. Without it the old code reported a 100% block rate
+    for any gate that had ever fired once, and flagged it as over-blocking.
+    """
+
     def test_over_blocking_threshold(self) -> None:
         gm = GateMetrics(
             gate_name="test", total=10, passed=2, blocked=8,
             block_rate=0.8, top_block_messages={},
             top_recovery_hints={}, top_models={}, top_intents={},
+            checked=10, rate_reliable=True,
         )
         assert gm.is_over_blocking is True
         assert gm.is_under_blocking is False
@@ -234,6 +351,7 @@ class TestGateMetrics:
             gate_name="test", total=30, passed=29, blocked=1,
             block_rate=0.03, top_block_messages={},
             top_recovery_hints={}, top_models={}, top_intents={},
+            checked=30, rate_reliable=True,
         )
         assert gm.is_over_blocking is False
         assert gm.is_under_blocking is True
@@ -243,9 +361,213 @@ class TestGateMetrics:
             gate_name="test", total=10, passed=7, blocked=3,
             block_rate=0.3, top_block_messages={},
             top_recovery_hints={}, top_models={}, top_intents={},
+            checked=10, rate_reliable=True,
         )
         assert gm.is_over_blocking is False
         assert gm.is_under_blocking is False
+
+    def test_unreliable_rate_raises_no_alert(self) -> None:
+        """Interventions-only metrics never alert, whatever the ratio."""
+        gm = GateMetrics(
+            gate_name="logic_gate", total=198, passed=0, blocked=198,
+            block_rate=1.0, top_block_messages={},
+            top_recovery_hints={}, top_models={}, top_intents={},
+        )
+        assert gm.rate_reliable is False
+        assert gm.checked == 0
+        assert gm.is_over_blocking is False
+        assert gm.is_under_blocking is False
+
+
+# ===========================================================================
+# Eval-backed metrics — totals come from checks, not from failures
+# ===========================================================================
+# `all.jsonl` records failures only, so any rate derived from it alone reads
+# 100% by construction. These tests pin the denominator semantics: with eval
+# records the rate is real; without them no over-blocking alert is raised.
+
+
+class TestEvalBackedMetrics:
+    def test_compute_metrics_uses_eval_denominator(
+        self, log_dir: str,
+    ) -> None:
+        """Two failures out of ten checks is a 20% rate, not 100%."""
+        _write_log(log_dir, [
+            _make_intervention(gate="logic_gate", passed=False),
+            _make_intervention(gate="logic_gate", passed=False),
+        ])
+        evals = [_make_eval(failed=True) for _ in range(2)]
+        evals += [_make_eval(failed=False) for _ in range(8)]
+        _write_evals(log_dir, evals)
+
+        analyzer = ForgeAnalyzer(log_dir=log_dir)
+        counts = load_eval_counts(
+            os.path.join(log_dir, "evals.jsonl"), days=7,
+        )
+        metrics = analyzer.compute_metrics(
+            analyzer.load_records(days=7), counts,
+        )["logic_gate"]
+
+        assert (metrics.checked, metrics.total, metrics.blocked) == (10, 10, 2)
+        assert metrics.block_rate == pytest.approx(0.2)
+        assert metrics.rate_reliable is True
+        assert metrics.is_over_blocking is False
+
+    def test_compute_metrics_without_evals_is_unreliable(
+        self, log_dir: str,
+    ) -> None:
+        _write_log(log_dir, [
+            _make_intervention(gate="logic_gate", passed=False),
+        ])
+        analyzer = ForgeAnalyzer(log_dir=log_dir)
+        metrics = analyzer.compute_metrics(analyzer.load_records(days=7))
+
+        assert metrics["logic_gate"].rate_reliable is False
+        assert metrics["logic_gate"].checked == 0
+        assert metrics["logic_gate"].is_over_blocking is False
+
+    def test_overblocking_alert_requires_evals(self, log_dir: str) -> None:
+        _write_log(log_dir, [
+            _make_intervention(gate="state_gate", passed=False)
+            for _ in range(10)
+        ])
+        _write_evals(log_dir, [
+            _make_eval(gate="state_gate", failed=True) for _ in range(10)
+        ])
+        analyzer = ForgeAnalyzer(log_dir=log_dir)
+        records = analyzer.load_records(days=7)
+        metrics = analyzer.compute_metrics(
+            records,
+            load_eval_counts(os.path.join(log_dir, "evals.jsonl")),
+        )
+        patterns = analyzer.detect_patterns(records, metrics)
+
+        assert any("over-blocking" in p for p in patterns)
+        assert any("10 checks" in p for p in patterns)
+
+    def test_failures_without_evals_raise_no_false_alarm(
+        self, log_dir: str,
+    ) -> None:
+        """The original bug: failures-only data claimed a 100% block rate."""
+        _write_log(log_dir, [
+            _make_intervention(gate="logic_gate", passed=False)
+            for _ in range(10)
+        ])
+        analyzer = ForgeAnalyzer(log_dir=log_dir)
+        records = analyzer.load_records(days=7)
+        metrics = analyzer.compute_metrics(records)
+        patterns = analyzer.detect_patterns(records, metrics)
+
+        assert not any("over-blocking" in p for p in patterns)
+        assert any("block rate unavailable" in p for p in patterns)
+
+    def test_analyze_reports_real_rate_with_evals(self, log_dir: str) -> None:
+        _write_log(log_dir, [
+            _make_intervention(gate="logic_gate", passed=False),
+        ])
+        evals = [_make_eval(failed=True)]
+        evals += [_make_eval(failed=False) for _ in range(3)]
+        _write_evals(log_dir, evals)
+
+        findings = ForgeAnalyzer(log_dir=log_dir).analyze(days=7)
+
+        assert findings.checks_total == 4
+        assert findings.rate_reliable is True
+        assert findings.overall_block_rate == pytest.approx(0.25)
+
+    def test_analyze_without_evals_reports_no_rate(self, log_dir: str) -> None:
+        _write_log(log_dir, [
+            _make_intervention(gate="logic_gate", passed=False),
+        ])
+        findings = ForgeAnalyzer(log_dir=log_dir).analyze(days=7)
+
+        assert findings.checks_total == 0
+        assert findings.rate_reliable is False
+
+        report = ForgeReport.text(findings)
+        assert "n/a" in report
+        assert "100%" not in report
+
+
+# ===========================================================================
+# Per-model rates — same denominator rule, joined on the model name
+# ===========================================================================
+# Interventions carry a model; without eval records the per-model ratio is
+# failures / failures. These tests pin that a model claim — and the threshold
+# change it stages — requires real checks.
+
+
+class TestEvalModelDenominator:
+    def test_record_carries_the_model(self, log_dir: str) -> None:
+        recorder = EvalRecorder(path=os.path.join(log_dir, "evals.jsonl"))
+        recorder.record(
+            gate="logic_gate", failed=False, god="hermes",
+            model="deepseek-v4.1-flash",
+        )
+        recorder.record(gate="logic_gate", failed=True, god="hermes")
+
+        raw = Path(recorder.path).read_text().strip().split("\n")
+        entries = [json.loads(line) for line in raw]
+        assert entries[0]["m"] == "deepseek-v4.1-flash"
+        assert "m" not in entries[1]
+
+    def test_load_model_counts_ignores_records_without_a_model(
+        self, log_dir: str,
+    ) -> None:
+        path = os.path.join(log_dir, "evals.jsonl")
+        now = time.time()
+        Path(path).write_text(
+            json.dumps({"t": now, "g": "logic_gate", "f": 0, "m": "mini"}) + "\n"
+            + json.dumps({"t": now, "g": "logic_gate", "f": 1, "m": "mini"}) + "\n"
+            + json.dumps({"t": now, "g": "logic_gate", "f": 1}) + "\n"
+        )
+        counts = load_model_counts(path)
+
+        assert list(counts) == ["mini"]
+        assert counts["mini"].checked == 2
+        assert counts["mini"].failed == 1
+        assert counts["mini"].block_rate == pytest.approx(0.5)
+
+    def test_model_pattern_requires_checks(self, log_dir: str) -> None:
+        _write_log(log_dir, [
+            _make_intervention(gate="logic_gate", passed=False, model="mini")
+            for _ in range(10)
+        ])
+        analyzer = ForgeAnalyzer(log_dir=log_dir)
+        records = analyzer.load_records(days=7)
+        metrics = analyzer.compute_metrics(records)
+
+        without_evals = analyzer.detect_patterns(records, metrics)
+        assert not any("Model '" in p for p in without_evals)
+
+        with_evals = analyzer.detect_patterns(
+            records, metrics,
+            {"mini": EvalCounts(gate="mini", checked=10, failed=10)},
+        )
+        assert any("Model 'mini'" in p and "10 checks" in p for p in with_evals)
+
+    def test_model_threshold_change_requires_checks(
+        self, log_dir: str,
+    ) -> None:
+        _write_log(log_dir, [
+            _make_intervention(gate="logic_gate", passed=False, model="mini")
+            for _ in range(12)
+        ])
+        analyzer = ForgeAnalyzer(log_dir=log_dir)
+        records = analyzer.load_records(days=7)
+        metrics = analyzer.compute_metrics(records)
+        patterns = analyzer.detect_patterns(records, metrics)
+
+        without_evals = analyzer.suggest_adjustments(records, patterns)
+        assert not any(a.target == "model_thresholds" for a in without_evals)
+
+        with_evals = analyzer.suggest_adjustments(
+            records, patterns,
+            {"mini": EvalCounts(gate="mini", checked=12, failed=9)},
+        )
+        staged = [a for a in with_evals if a.target == "model_thresholds"]
+        assert len(staged) == 1
+        assert "9/12 checks blocked" in staged[0].reason
 
 
 # ===========================================================================
@@ -354,11 +676,14 @@ class TestForgeReport:
             timespan_days=3.0,
             models_seen=["deepseek-v4-flash"],
             gates_seen=["state_gate"],
+            checks_total=10,
+            rate_reliable=True,
             per_gate={
                 "state_gate": GateMetrics(
                     gate_name="state_gate", total=10, passed=5, blocked=5,
                     block_rate=0.5, top_block_messages={},
                     top_recovery_hints={}, top_models={}, top_intents={},
+                    checked=10, rate_reliable=True,
                 ),
             },
             overall_block_rate=0.5,
@@ -410,6 +735,8 @@ class TestForgeReport:
             models_seen=["deepseek-v4-flash"],
             gates_seen=["state_gate", "logic_gate"],
             per_gate={},
+            checks_total=100,
+            rate_reliable=True,
             overall_block_rate=0.25,
             detected_patterns=["pattern 1"],
             suggested_adjustments=["adj 1"],

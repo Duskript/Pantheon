@@ -8,7 +8,15 @@
  *   POST /mercer/chat          → spawn hermes chat with Mercer profile
  *   POST /mercer/reset         → clear session from the map
  *   GET  /mercer/health        → { sessions, uptime_s }
- *   POST /resend/send          → send email via Resend (key from ~/.hermes/profiles/theoforge/.env)
+ *   POST /resend/send          → legacy scheduled touch sender
+ *   POST /outreach/drafts      → create a pending outbound draft
+ *   POST /outreach/approve     → record explicit human approval metadata
+ *   POST /outreach/reject      → record explicit human rejection metadata
+ *   POST /outreach/send        → send only an approved, unsuppressed draft
+ *   POST /inbound/reply        → record an inbound email reply (Resend or normalized)
+ *   GET  /outreach/drafts?email=*** → list a lead's outbound drafts
+ *   GET  /outreach/queue?status=***&limit=** → operator pending/failed queue
+ *   GET  /operator, /operator/ → tailnet-only operator approval console
  *   GET  /scout/due-touches    → list leads needing day_before or morning_of touch
  *   GET  /scout/silent-leads   → list leads silent for N+ days (no-show follow-up)
  *   GET  /lead/lookup?email=***  → fetch one lead file by email
@@ -18,7 +26,8 @@
  * Architecture:
  *   - relay7 v9 server → POST /ingest/lead     (capture)
  *   - relay7 v9 server → POST /mercer/chat     (chat widget)
- *   - relay7 v9 server → POST /resend/send     (confirmation email)
+ *   - relay7 v9 server → POST /ingest/prospect (capture + pending draft)
+ *   - operator          → POST /outreach/approve → POST /outreach/send
  *   - n8n touch-seq   → GET  /scout/due-touches → POST /resend/send → POST /lead/append-touch
  *   - n8n no-show     → GET  /scout/silent-leads → POST /resend/send → POST /lead/append-touch
  *   - n8n inbound     → POST /lead/lookup?email=*** → POST /mercer/chat → POST /resend/send
@@ -46,6 +55,20 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import {
+  approveDraftRecord,
+  createDraftRecord,
+  prepareSend,
+  recordSendResult,
+  rejectDraftRecord,
+} from "./outreach.mjs";
+// Pure inbound email-reply state machine (Fusion Phase A). Wired read-only:
+// this server adapts HTTP payloads, delegates classification + mutation to
+// the pure module, and atomically persists the returned lead clone.
+import {
+  applyInboundReply,
+  classifyInboundReply,
+} from "./inbound.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -219,66 +242,27 @@ TheoForge`;
   return { from, subject, text, reply_to: REPLY_TO };
 }
 
-// Send form-intake email and append conversation entry. Async fire-and-forget
-// (the HTTP response has already returned to the caller by the time this runs,
-// since handleIngestLead is synchronous and the caller is the v9 server).
-//
-// Errors are logged + appended to the lead's conversation so the v9 server
-// can see the failure when it polls /lead/lookup.
-function sendFormIntakeEmail({ lead_file_path, lead_email, lead_name, challenge, alias, resend_id_field }) {
+// Create a pending form-intake draft. Sending is a separate, explicit
+// approval-gated operation; this function must never call Resend.
+function createFormIntakeDraft({ lead_email, lead_name, challenge }) {
+  const email = normalizeEmail(lead_email);
+  const current = readLeadFile(email);
+  if (!current) return { ok: false, error: "lead_not_found" };
+
   const persona = pickPersona();
-  const { from, subject, text, reply_to } = buildFormIntakeEmail({ persona, lead_name, lead_email, challenge });
-  const key = getResendKey();
-  if (!key) {
-    console.error(`[form-intake] resend key missing — cannot send intro for ${lead_email}`);
-    return;
+  const content = buildFormIntakeEmail({ persona, lead_name, lead_email: email, challenge });
+  const result = createDraftRecord(current, {
+    ...content,
+    to: email,
+    created_by: `system:form-intake:${persona.name}`,
+    idempotency_key: `form-intake:${email}`,
+  });
+  if (!result.ok) return result;
+  if (!result.idempotent) {
+    atomicWriteJSON(leadFilePath(email), result.lead);
+    console.log(`[form-intake] draft created to=${email} draft_id=${result.draft.draft_id}`);
   }
-  fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) TheoForge-Bridge/1.0",
-    },
-    body: JSON.stringify({ from, to: [lead_email], reply_to, subject, text, tags: [{ name: "channel", value: "form_intake" }] }),
-  })
-    .then((r) => r.json().then((j) => ({ status: r.status, body: j })))
-    .then((res) => {
-      if (res.status >= 200 && res.status < 300) {
-        const resendId = res.body?.id || null;
-        console.log(`[form-intake] sent from=${from} to=${lead_email} resend_id=${resendId}`);
-        // Append conversation entry to the lead file (best-effort, may have been re-written since).
-        try {
-          const cur = readLeadFile(lead_email) || {};
-          const conv = Array.isArray(cur.conversation) ? cur.conversation : [];
-          conv.push({
-            channel: "email_out",
-            direction: "out",
-            subject,
-            text: text.slice(0, 1000),
-            alias: persona.name,
-            session_id: null,
-            at: nowIso(),
-          });
-          const updated = {
-            ...cur,
-            alias: cur.alias || persona.name,
-            pipeline_stage: cur.pipeline_stage === "prospect" ? "engaged" : cur.pipeline_stage,
-            channel: cur.channel || "form",
-            last_contact_at: nowIso(),
-            last_contact_channel: "email_out",
-            conversation: conv,
-            updated_at: nowIso(),
-          };
-          atomicWriteJSON(leadFilePath(lead_email), updated);
-        } catch (e) {
-          console.error(`[form-intake] post-send lead update failed: ${e.message}`);
-        }
-      } else {
-        console.error(`[form-intake] resend send failed: ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
-      }
-    })
-    .catch((err) => console.error(`[form-intake] fetch failed: ${err.message}`));
+  return result;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────
@@ -670,17 +654,17 @@ function handleIngestLead(body) {
     updated_at: nowIso(),
   };
   atomicWriteJSON(fp, updated);
-  // Fire persona-voiced intro email. Async, fire-and-forget — the HTTP
-  // response goes back to the caller (v9 server) immediately. The email
-  // send is logged + a conversation entry is appended on success.
-  sendFormIntakeEmail({
-    lead_file_path: fp,
-    lead_email: email,
-    lead_name: name,
-    challenge,
+  const draft = createFormIntakeDraft({ lead_email: email, lead_name: name, challenge });
+  return {
+    ok: true,
+    leadId,
+    pipeline_stage: updated.pipeline_stage,
     alias: updated.alias,
-  });
-  return { ok: true, leadId, pipeline_stage: updated.pipeline_stage, alias: updated.alias };
+    emailQueued: false,
+    draft_created: draft.ok === true,
+    draft_id: draft.draft?.draft_id || null,
+    draft_error: draft.ok === false ? draft.error : null,
+  };
 }
 
 function handleIngestProspect(body) {
@@ -724,16 +708,24 @@ function handleIngestProspect(body) {
   // do NOT fire — the chat widget hits /ingest/prospect on every turn for
   // prospect bookkeeping, and we don't want to spam the prospect.
   const isFormIntake = (body?.channel === "form" || (Array.isArray(body?.tags) && body.tags.includes("form-capture"))) && body?.pipeline_stage !== "engaged" && body?.pipeline_stage !== "appointment" && body?.pipeline_stage !== "close";
+  let draft = null;
   if (isFormIntake) {
-    sendFormIntakeEmail({
-      lead_file_path: fp,
+    draft = createFormIntakeDraft({
       lead_email: email,
       lead_name: updated.lead_name || "",
       challenge: body?.challenge || "",
-      alias: updated.alias,
     });
   }
-  return { ok: true, leadId, pipeline_stage: updated.pipeline_stage, lead_file: fp, email_intake_fired: isFormIntake };
+  return {
+    ok: true,
+    leadId,
+    pipeline_stage: updated.pipeline_stage,
+    lead_file: fp,
+    email_intake_fired: false,
+    draft_created: draft ? draft.ok === true : false,
+    draft_id: draft?.draft?.draft_id || null,
+    draft_error: draft?.ok === false ? draft.error : null,
+  };
 }
 
 // ─── Scout endpoints (for n8n workflows) ───────────────────────────
@@ -852,6 +844,437 @@ function formatTouch(body) {
   return { ok: true, subject, text, formatted_time: formattedTime };
 }
 
+// ─── Approval-gated outreach routes ───────────────────────────────
+async function parseJsonRequest(req, res) {
+  try {
+    const raw = await readBody(req);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: "invalid_json" });
+    return null;
+  }
+}
+
+function outreachLeadEmail(body) {
+  return normalizeEmail(body?.lead_email || body?.email);
+}
+
+async function routeOutreachDraft(req, res, providedBody = null) {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  const body = providedBody || await parseJsonRequest(req, res);
+  if (!body) return;
+  const email = outreachLeadEmail(body);
+  if (!email) {
+    sendJson(res, 400, { ok: false, error: "lead_email_required" });
+    return;
+  }
+  const lead = readLeadFile(email);
+  if (!lead) {
+    sendJson(res, 404, { ok: false, error: "lead_not_found", lead_email: email });
+    return;
+  }
+  const result = createDraftRecord(lead, { ...body, to: body.to || email });
+  if (!result.ok) {
+    sendJson(res, 400, result);
+    return;
+  }
+  if (!result.idempotent) atomicWriteJSON(leadFilePath(email), result.lead);
+  sendJson(res, 200, {
+    ok: true,
+    idempotent: result.idempotent === true,
+    leadId: lead.leadId,
+    draft: result.draft,
+  });
+}
+
+async function routeOutreachApprove(req, res, providedBody = null) {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  const body = providedBody || await parseJsonRequest(req, res);
+  if (!body) return;
+  const email = outreachLeadEmail(body);
+  if (!email) {
+    sendJson(res, 400, { ok: false, error: "lead_email_required" });
+    return;
+  }
+  const lead = readLeadFile(email);
+  if (!lead) {
+    sendJson(res, 404, { ok: false, error: "lead_not_found", lead_email: email });
+    return;
+  }
+  const result = approveDraftRecord(lead, body);
+  if (!result.ok) {
+    sendJson(res, result.error === "draft_not_found" ? 404 : 400, result);
+    return;
+  }
+  if (!result.idempotent) atomicWriteJSON(leadFilePath(email), result.lead);
+  sendJson(res, 200, {
+    ok: true,
+    idempotent: result.idempotent === true,
+    leadId: lead.leadId,
+    draft: result.draft,
+  });
+}
+
+async function routeOutreachSend(req, res, providedBody = null) {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  const body = providedBody || await parseJsonRequest(req, res);
+  if (!body) return;
+  const email = outreachLeadEmail(body);
+  if (!email) {
+    sendJson(res, 400, { ok: false, error: "lead_email_required" });
+    return;
+  }
+  const lead = readLeadFile(email);
+  if (!lead) {
+    sendJson(res, 404, { ok: false, error: "lead_not_found", lead_email: email });
+    return;
+  }
+  const prepared = prepareSend(lead, body.draft_id);
+  if (!prepared.ok) {
+    const status = ["draft_not_found"].includes(prepared.error) ? 404 : 409;
+    sendJson(res, status, prepared);
+    return;
+  }
+  if (prepared.idempotent) {
+    sendJson(res, 200, {
+      ok: true,
+      idempotent: true,
+      draft_id: body.draft_id,
+      resend_id: prepared.resend_id,
+    });
+    return;
+  }
+
+  const provider = await resendSend(prepared.payload);
+  const recorded = recordSendResult(lead, body.draft_id, provider);
+  if (recorded.lead) atomicWriteJSON(leadFilePath(email), recorded.lead);
+  if (!recorded.ok) {
+    sendJson(res, 502, {
+      ok: false,
+      error: recorded.error,
+      draft_id: body.draft_id,
+      provider_status: provider.status || null,
+    });
+    return;
+  }
+  sendJson(res, 200, {
+    ok: true,
+    draft_id: body.draft_id,
+    resend_id: recorded.resend_id,
+    status: recorded.draft.status,
+  });
+}
+
+async function routeOutreachList(req, res, url) {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  const email = normalizeEmail(url.searchParams.get("email"));
+  if (!email) {
+    sendJson(res, 400, { ok: false, error: "lead_email_required" });
+    return;
+  }
+  const lead = readLeadFile(email);
+  if (!lead) {
+    sendJson(res, 404, { ok: false, error: "lead_not_found", lead_email: email });
+    return;
+  }
+  const drafts = Array.isArray(lead.outreach?.drafts) ? lead.outreach.drafts : [];
+  sendJson(res, 200, { ok: true, leadId: lead.leadId, lead_email: email, drafts });
+}
+
+// ─── Outreach queue + rejection (Fusion Phase B) ───────────────────
+//
+// GET /outreach/queue — operator-facing view of pending/failed drafts
+// across the canonical leads directory. Returns the complete current draft
+// fields (operator-visible surface; no redaction) plus lead identity and the
+// latest inbound conversation entry for context.
+//
+// POST /outreach/reject — records an explicit human rejection using the same
+// lead lookup + atomic persistence pattern as /outreach/approve. The pure
+// state machine lives in the outreach module; this handler only adapts HTTP.
+//
+// Both routes are tailnet-internal like every other bridge endpoint; the
+// loopback/Tailscale binding is the access boundary.
+
+const OUTREACH_STATUSES = new Set(["draft", "approved", "send_failed", "sent", "rejected"]);
+const QUEUE_DEFAULT_STATUSES = ["draft", "send_failed"];
+const QUEUE_DEFAULT_LIMIT = 100;
+const QUEUE_MAX_LIMIT = 500;
+
+// Latest conversation entry where channel === "email_in", by ts desc.
+// Returns {} when the lead has no inbound email context yet.
+function latestEmailIn(lead) {
+  const entries = (Array.isArray(lead?.conversation) ? lead.conversation : [])
+    .filter((entry) => entry && entry.channel === "email_in")
+    .slice()
+    .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+  return entries[0] || {};
+}
+
+function parseQueueQuery(url) {
+  const rawStatus = url.searchParams.get("status");
+  let requested;
+  if (rawStatus === null) {
+    // Param absent → documented default of pending + failed drafts.
+    requested = QUEUE_DEFAULT_STATUSES;
+  } else {
+    // Param present but empty, or containing unknown/empty statuses → 400.
+    requested = rawStatus.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (requested.length === 0 || requested.some((s) => !OUTREACH_STATUSES.has(s))) {
+    return { error: "invalid_status" };
+  }
+  const rawLimit = url.searchParams.get("limit");
+  let limit = QUEUE_DEFAULT_LIMIT;
+  if (rawLimit !== null && rawLimit.trim() !== "") {
+    limit = Number(rawLimit);
+    if (!Number.isInteger(limit) || limit <= 0 || limit > QUEUE_MAX_LIMIT) {
+      return { error: "invalid_limit" };
+    }
+  }
+  return { statuses: requested, limit };
+}
+
+function routeOutreachQueue(req, res, url) {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  const query = parseQueueQuery(url);
+  if (query.error) {
+    const isStatus = query.error === "invalid_status";
+    sendJson(res, 400, {
+      ok: false,
+      error: query.error,
+      [isStatus ? "status" : "limit"]: url.searchParams.get(isStatus ? "status" : "limit") || "",
+    });
+    return;
+  }
+  const wanted = new Set(query.statuses);
+  const limit = query.limit;
+
+  // Scan only the configured canonical leads directory. Malformed/non-JSON
+  // files are skipped without failing the request; only valid matching drafts
+  // are counted.
+  ensureLeadsDir();
+  const items = [];
+  for (const f of fs.readdirSync(LEADS_DIR)) {
+    if (!f.endsWith(".json")) continue;
+    const fp = path.join(LEADS_DIR, f);
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(fp, "utf8"));
+    } catch (_) {
+      continue;
+    }
+    if (!data || typeof data !== "object") continue;
+    const drafts = Array.isArray(data.outreach?.drafts) ? data.outreach.drafts : [];
+    for (const draft of drafts) {
+      if (!draft || typeof draft !== "object" || !wanted.has(draft.status)) continue;
+      items.push({
+        lead_email: data.lead_email || null,
+        lead_name: data.lead_name || null,
+        leadId: data.leadId || null,
+        pipeline_stage: data.pipeline_stage || null,
+        latest_inbound: latestEmailIn(data),
+        draft,
+      });
+    }
+  }
+
+  // Newest draft first by created_at, then stable lead_email, then draft_id.
+  items.sort((a, b) => {
+    const byCreated = String(b.draft.created_at || "").localeCompare(String(a.draft.created_at || ""));
+    if (byCreated !== 0) return byCreated;
+    const byEmail = String(a.lead_email || "").localeCompare(String(b.lead_email || ""));
+    if (byEmail !== 0) return byEmail;
+    return String(a.draft.draft_id || "").localeCompare(String(b.draft.draft_id || ""));
+  });
+
+  const sliced = items.slice(0, limit);
+  sendJson(res, 200, { ok: true, count: sliced.length, items: sliced });
+}
+
+async function routeOutreachReject(req, res, providedBody = null) {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  const body = providedBody || await parseJsonRequest(req, res);
+  if (!body) return;
+  const email = outreachLeadEmail(body);
+  if (!email) {
+    sendJson(res, 400, { ok: false, error: "lead_email_required" });
+    return;
+  }
+  const lead = readLeadFile(email);
+  if (!lead) {
+    sendJson(res, 404, { ok: false, error: "lead_not_found", lead_email: email });
+    return;
+  }
+  const result = rejectDraftRecord(lead, body);
+  if (!result.ok) {
+    sendJson(res, result.error === "draft_not_found" ? 404 : 400, result);
+    return;
+  }
+  if (!result.idempotent) atomicWriteJSON(leadFilePath(email), result.lead);
+  sendJson(res, 200, {
+    ok: true,
+    idempotent: result.idempotent === true,
+    leadId: lead.leadId,
+    draft: result.draft,
+  });
+}
+
+// ─── Operator console (Fusion Phase B) ────────────────────────────
+//
+// GET /operator and GET /operator/ serve the single-file approval console
+// rooted at services/theoforge-bridge/operator/index.html. The page is an
+// internal operations tool: same-origin fetch only, never exposed through
+// relay-7 Caddy, and the loopback/Tailscale binding stays the access
+// boundary. Serves exactly this one static file — no directory listing,
+// no traversal, no other assets.
+
+const OPERATOR_INDEX = path.join(__dirname, "operator", "index.html");
+
+function routeOperator(req, res) {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  if (!fs.existsSync(OPERATOR_INDEX)) {
+    sendJson(res, 404, { ok: false, error: "not_found", path: "/operator" });
+    return;
+  }
+  const html = fs.readFileSync(OPERATOR_INDEX);
+  res.writeHead(200, {
+    "Content-Type": MIME[".html"],
+    "Content-Length": html.length,
+    "Cache-Control": "no-store",
+  });
+  res.end(html);
+}
+
+// ─── Inbound reply route (Fusion Phase A.1) ───────────────────────
+//
+// POST /inbound/reply accepts the Resend webhook shape
+//   { type: "email.received", data: { email_id, from, to, subject, text, ... } }
+// and the already-normalized shape
+//   { from, to, subject, text, message_id, in_reply_to, references }.
+// This route is tailnet-internal (same loopback/tailnet binding as the rest
+// of the bridge); no public Caddy route exposes it.
+//
+// Fail-closed guarantees:
+//   - unknown senders return 404 lead_not_found and nothing is written
+//   - malformed input returns 400 validation_failed with structured fields
+//   - the route NEVER calls Resend or sends an email; actionable replies
+//     create a pending approval-gated draft only
+//   - repeated events are idempotent via the pure module's event_key dedup
+
+// Extract a bare address from "Display Name <addr@example.com>" or return
+// the trimmed input as-is. Resend webhooks carry display names in from/to.
+function extractInboundAddress(raw) {
+  const s = String(raw || "").trim();
+  const m = s.match(/<([^<>@\s]+@[^<>@\s]+)>/);
+  return (m ? m[1] : s).trim().toLowerCase();
+}
+
+// Adapt an HTTP body to the pure module's inbound shape:
+//   - unwind the Resend { type, data } envelope when present
+//   - map data.email_id → message_id, accepting message_id as a fallback
+//   - accept `to` as string or array, using the first recipient
+function normalizeInboundPayload(body) {
+  const data = body && body.type && body.data && typeof body.data === "object"
+    ? body.data
+    : (body || {});
+  let to = data.to;
+  if (Array.isArray(to)) to = to[0];
+  const messageId = String(data.email_id || data.message_id || "").trim();
+  return {
+    from: extractInboundAddress(data.from),
+    to: to == null || String(to).trim() === "" ? undefined : extractInboundAddress(to),
+    subject: data.subject,
+    text: data.text,
+    message_id: messageId || undefined,
+    in_reply_to: data.in_reply_to,
+    references: data.references,
+  };
+}
+
+async function routeInboundReply(req, res, providedBody = null) {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+  const body = providedBody || await parseJsonRequest(req, res);
+  if (!body) return;
+
+  const inbound = normalizeInboundPayload(body);
+
+  // Require a valid sender and non-empty text before any lookup or write.
+  const classified = classifyInboundReply(inbound);
+  if (!classified.ok) {
+    sendJson(res, 400, {
+      ok: false,
+      error: classified.error,
+      fields: classified.fields,
+      source: "inbound-reply",
+    });
+    return;
+  }
+
+  // Look up the canonical lead by sender email. Unknown senders are reported
+  // without creating a phantom lead and without writing anything.
+  const email = classified.normalized.from;
+  const lead = readLeadFile(email);
+  if (!lead) {
+    sendJson(res, 404, {
+      ok: false,
+      error: "lead_not_found",
+      sender: email,
+      source: "inbound-reply",
+    });
+    return;
+  }
+
+  // Apply the pure state transition (classification, suppression, draft) and
+  // atomically persist the returned lead only when new state was produced.
+  const result = applyInboundReply(lead, inbound);
+  if (!result.ok) {
+    sendJson(res, 400, {
+      ok: false,
+      error: result.error,
+      cause: result.cause || undefined,
+      fields: result.fields || undefined,
+      classification: result.classification || null,
+      source: "inbound-reply",
+    });
+    return;
+  }
+  if (!result.idempotent) atomicWriteJSON(leadFilePath(email), result.lead);
+  sendJson(res, 200, {
+    ok: true,
+    idempotent: result.idempotent === true,
+    classification: result.classification,
+    suppressed: result.suppressed === true,
+    draft_created: !result.idempotent && result.draft != null,
+    draft: result.draft,
+    leadId: lead.leadId,
+    source: "inbound-reply",
+  });
+}
+
 // ─── randomBytes helper ───────────────────────────────────────────
 import { randomBytes } from "node:crypto";
 
@@ -892,6 +1315,11 @@ const server = http.createServer(async (req, res) => {
       if (pathname === "/ingest/prospect")    return sendJson(res, 200, handleIngestProspect(body));
       if (pathname === "/mercer/chat")        return sendJson(res, 200, await handleMercerChat(body));
       if (pathname === "/mercer/reset")       return sendJson(res, 200, handleMercerReset(body));
+      if (pathname === "/outreach/drafts")    return routeOutreachDraft(req, res, body);
+      if (pathname === "/outreach/approve")   return routeOutreachApprove(req, res, body);
+      if (pathname === "/outreach/reject")    return routeOutreachReject(req, res, body);
+      if (pathname === "/outreach/send")     return routeOutreachSend(req, res, body);
+      if (pathname === "/inbound/reply")      return routeInboundReply(req, res, body);
       if (pathname === "/resend/send")        return sendJson(res, 200, await resendSend(body));
       if (pathname === "/resend/send-and-log") return sendJson(res, 200, await resendSend(body));
       if (pathname === "/lead/append-touch")  return sendJson(res, 200, handleAppendTouch(body));
@@ -907,6 +1335,11 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { ok: true, items: scoutSilentLeads({ silentDays: days }) });
       }
       if (pathname === "/lead/lookup")        return sendJson(res, 200, handleLeadLookup(url));
+      if (pathname === "/outreach/drafts")    return routeOutreachList(req, res, url);
+      if (pathname === "/outreach/queue")     return routeOutreachQueue(req, res, url);
+      if (pathname === "/operator" || pathname === "/operator/") {
+        return routeOperator(req, res);
+      }
     }
 
     return sendJson(res, 404, { ok: false, error: "not_found", path: pathname });
@@ -932,6 +1365,10 @@ server.listen(PORT, HOST, () => {
   console.log(`    POST /ingest/lead, /ingest/prospect`);
   console.log(`    POST /mercer/chat, /mercer/reset, GET /mercer/health`);
   console.log(`    POST /resend/send`);
+  console.log(`    POST /outreach/drafts, /outreach/approve, /outreach/reject, /outreach/send`);
+  console.log(`    GET  /outreach/queue?status=***&limit=**`);
+  console.log(`    GET  /operator (tailnet-only approval console)`);
+  console.log(`    POST /inbound/reply`);
   console.log(`    GET  /scout/due-touches, /scout/silent-leads`);
   console.log(`    GET  /lead/lookup?email=***`);
   console.log(`    POST /lead/append-touch`);

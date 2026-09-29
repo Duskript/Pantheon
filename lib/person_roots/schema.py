@@ -20,13 +20,13 @@ from typing import Any, Optional
 
 ALLOW = "allow"
 DENY = "deny"
-NEEDS_OWNER_APPROVAL = "needs_owner_approval"
+NEEDS_KONAN_APPROVAL = "needs_konan_approval"
 
-DECISIONS = frozenset({ALLOW, DENY, NEEDS_OWNER_APPROVAL})
+DECISIONS = frozenset({ALLOW, DENY, NEEDS_KONAN_APPROVAL})
 DOCUMENT_TYPES = frozenset({
     "index",
     "profile",
-    "relationship_to_owner",
+    "relationship_to_konan",
     "aliases",
     "permissions",
     "memory_policy",
@@ -46,7 +46,7 @@ TRUST_TIERS = frozenset({
     "tier_4_owner_admin",
 })
 SOURCE_TYPES = frozenset({
-    "owner_account",
+    "konan_account",
     "direct_user_account",
     "trusted_contact_account",
     "god_subagent",

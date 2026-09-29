@@ -21,10 +21,13 @@ def load_module(home_dir: str):
 class TestIchorMCP(unittest.TestCase):
     def test_tool_registry_has_expected_phase_a_tools(self) -> None:
         mod = load_module(tempfile.mkdtemp(prefix='ichor-mcp-tools-', dir='/home/konan'))
-        self.assertEqual(len(mod.list_tools()), 9)
+        self.assertEqual(len(mod.list_tools()), 11)
         self.assertEqual(mod.list_tools(), mod.REGISTERED_TOOL_NAMES)
         self.assertIn('ichor_store', mod.list_tools())
         self.assertIn('ichor_compare', mod.list_tools())
+        # Phase 2D / 3D additions
+        self.assertIn('ichor_entity_resolve', mod.list_tools())
+        self.assertIn('ichor_recall_stats', mod.list_tools())
 
     def test_store_reconcile_supersedes_old_memory(self) -> None:
         with tempfile.TemporaryDirectory(dir='/home/konan') as td:
@@ -57,6 +60,11 @@ class TestIchorMCP(unittest.TestCase):
             rows = retrieve['results']
             self.assertTrue(any(item.get('title') == 'user.job' and 'Relay 7' in item.get('snippet', '') for item in rows))
             self.assertFalse(any(item.get('title') == 'user.job' and 'I work at Acme' in item.get('snippet', '') for item in rows))
+            # Drain the async recall_log writer before the temp DB dir is
+            # removed — a still-running thread re-creates -wal/-shm files
+            # inside the dir mid-rmtree and fails cleanup (order-dependent
+            # flake seen when this test runs after the gap-closure suite).
+            mod._drain_recall_log_writes()
 
     def test_store_retrieve_and_audit(self) -> None:
         with tempfile.TemporaryDirectory(dir='/home/konan') as td:
@@ -118,6 +126,32 @@ class TestIchorMCP(unittest.TestCase):
             self.assertEqual(result['gate'], 'state_gate')
             self.assertIn('read_file', result['recovery_hint'])
 
+    def test_audit_reader_survives_large_tool_outputs(self) -> None:
+        with tempfile.TemporaryDirectory(dir='/home/konan') as td:
+            mod = load_module(td)
+
+            class FatTrait:
+                def retrieve(self, **kwargs):
+                    return {
+                        'results': [
+                            {'id': 'fat', 'backend': 'fts5', 'score': 1.0, 'snippet': 'x' * 12000}
+                        ],
+                        'backends_used': ['fts5'],
+                        'total': 1,
+                        'returned': 1,
+                        'warnings': [],
+                    }
+
+            with patch.object(mod, '_memory_trait', return_value=FatTrait()):
+                retrieve = json.loads(mod.ichor_retrieve('fat payload', limit=1))
+            self.assertEqual(retrieve['total'], 1)
+            audit = json.loads(mod.ichor_audit(10))
+            self.assertGreaterEqual(audit['count'], 1)
+            retrieve_rows = [row for row in audit['entries'] if row['tool_name'] == 'ichor_retrieve']
+            self.assertTrue(retrieve_rows)
+            self.assertTrue(retrieve_rows[0]['output']['_truncated'])
+            mod._drain_recall_log_writes()
+
     def test_compare_reports_legacy_and_tiered(self) -> None:
         with tempfile.TemporaryDirectory(dir='/home/konan') as td:
             mod = load_module(td)
@@ -145,6 +179,109 @@ class TestIchorMCP(unittest.TestCase):
             self.assertEqual(result['diff']['legacy_only'], ['a'])
             self.assertEqual(result['diff']['tiered_only'], ['b'])
             self.assertEqual(result['diff']['shared'], ['shared'])
+
+
+class TestIchorMCPWire(unittest.TestCase):
+    """End-to-end proof that the module is a working MCP server, not just importable.
+
+    Import-level green is not evidence: the module imported fine for months
+    while ``mcp.server.fastmcp`` had been removed from the SDK, and every test
+    in this file failed with ModuleNotFoundError. These tests speak real MCP
+    over stdio to a real subprocess.
+    """
+
+    def _run_handshake(self, temp_home: str) -> list[str]:
+        """Spawn the server on stdio, initialize, and list its tools."""
+        try:
+            from mcp import ClientSession, StdioServerParameters, stdio_client
+        except Exception as exc:  # pragma: no cover - SDK absent
+            self.skipTest(f'mcp client unavailable: {exc}')
+
+        import asyncio
+        import sys
+
+        env = dict(os.environ)
+        env['HOME'] = temp_home
+
+        async def handshake() -> list[str]:
+            params = StdioServerParameters(
+                command=sys.executable,
+                args=[str(MODULE_PATH), '--stdio'],
+                env=env,
+            )
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    listed = await session.list_tools()
+                    return [tool.name for tool in listed.tools]
+
+        return asyncio.run(asyncio.wait_for(handshake(), timeout=90))
+
+    def test_stdio_server_lists_every_registered_tool(self) -> None:
+        with tempfile.TemporaryDirectory(dir='/home/konan') as td:
+            names = self._run_handshake(td)
+
+        # The wire surface must match the manifest the module advertises -- a
+        # tool in TOOL_NAMES that the server never registers is a dead promise.
+        self.assertEqual(sorted(names), sorted(load_module(td).REGISTERED_TOOL_NAMES))
+        self.assertEqual(len(names), 11)
+
+    def test_stdio_server_calls_a_tool_end_to_end(self) -> None:
+        """A tool call must return real data over the wire, not just be listed.
+
+        Listing tools proves the server booted and registered its decorators;
+        it does not prove the handlers are reachable or that their arguments
+        survive the JSON-RPC round trip. This test stores a memory and reads it
+        back through the real stdio transport, against a temp ``HOME`` so it
+        cannot touch the live Ichor DB.
+        """
+        try:
+            from mcp import ClientSession, StdioServerParameters, stdio_client
+        except Exception as exc:  # pragma: no cover - SDK absent
+            self.skipTest(f'mcp client unavailable: {exc}')
+
+        import asyncio
+        import sys
+
+        def _text(result: object) -> str:
+            """Return the text payload of a CallToolResult (these tools return JSON text)."""
+            for block in getattr(result, 'content', []) or []:
+                text = getattr(block, 'text', None)
+                if text is not None:
+                    return text
+            raise AssertionError(f'tool result carried no text content: {result!r}')
+
+        with tempfile.TemporaryDirectory(dir='/home/konan') as td:
+            env = dict(os.environ)
+            env['HOME'] = td
+
+            async def call() -> dict:
+                params = StdioServerParameters(
+                    command=sys.executable,
+                    args=[str(MODULE_PATH), '--stdio'],
+                    env=env,
+                )
+                async with stdio_client(params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        stored = await session.call_tool('ichor_store', {
+                            'key': 'wire.probe',
+                            'content': 'stdio round trip proof for the wire test',
+                            'category': 'fact',
+                        })
+                        retrieved = await session.call_tool('ichor_retrieve', {
+                            'query': 'stdio round trip',
+                            'limit': 5,
+                        })
+                        return {
+                            'stored': json.loads(_text(stored)),
+                            'retrieved': json.loads(_text(retrieved)),
+                        }
+
+            payload = asyncio.run(asyncio.wait_for(call(), timeout=90))
+
+        self.assertTrue(payload['stored']['stored'])
+        self.assertTrue(payload['retrieved']['results'])
 
 
 if __name__ == '__main__':

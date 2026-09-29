@@ -12,12 +12,12 @@ write files, call Discord, call Ichor, or mutate profile roots.
 
 Important invariants:
 
-1. Owner is owner-admin, but admin override logging can still be requested.
+1. Konan is owner-admin, but admin override logging can still be requested.
 2. Unknown users receive public/basic help only.
 3. Direct users can access their own explicitly allowed self context.
-4. Owner-perspective relationship notes are not shared with non-Owner accounts.
+4. Konan-perspective relationship notes are not shared with non-Konan accounts.
 5. Denied domains beat actor-god presence; handoffs cannot broaden access.
-6. Public-brand use of sensitive family/person context requires owner approval.
+6. Public-brand use of sensitive family/person context requires Konan approval.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from __future__ import annotations
 from lib.person_roots.schema import (
     ALLOW,
     DENY,
-    NEEDS_OWNER_APPROVAL,
+    NEEDS_KONAN_APPROVAL,
     PRIVATE_FACT_TYPES,
     PUBLIC_FACT_TYPES,
     AccessDecision,
@@ -35,7 +35,7 @@ from lib.person_roots.schema import (
 
 _PUBLIC_BRAND_PURPOSES = {'public_brand', 'public_brand_post', 'public_content', 'social_post'}
 _PUBLIC_BRAND_GODS = {'kairos', 'rheta', 'iris'}
-_OWNER_PRIVATE_DOMAINS = {'relationship_to_owner', 'owner_private_relationship_notes'}
+_KONAN_PRIVATE_DOMAINS = {'relationship_to_konan', 'konan_private_relationship_notes'}
 _SELF_PROFILE_DOMAINS = {'own_profile', 'her_own_profile', 'self_profile', 'preferences', 'her_own_pantheon_usage'}
 
 
@@ -48,17 +48,17 @@ def evaluate_access(request: AccessRequest, target: PersonRecord) -> AccessDecis
     purpose = request.purpose
     actor_god = (request.actor_god or '').casefold()
 
-    if requester in {'owner', 'sample-owner'}:
+    if requester == 'konan':
         return AccessDecision(
             ALLOW,
-            'Owner-admin access is allowed.',
+            'Konan owner-admin access is allowed.',
             log_required=domain == 'admin_override',
         )
 
     if _public_brand_sensitive_use(purpose, actor_god, fact_type):
         return AccessDecision(
-            NEEDS_OWNER_APPROVAL,
-            'Public-brand use of sensitive person/family context requires owner approval.',
+            NEEDS_KONAN_APPROVAL,
+            'Public-brand use of sensitive person/family context requires Konan approval.',
             redacted_domains=(domain,),
             log_required=True,
         )
@@ -79,10 +79,10 @@ def evaluate_access(request: AccessRequest, target: PersonRecord) -> AccessDecis
             redacted_domains=(domain,),
         )
 
-    if domain in _OWNER_PRIVATE_DOMAINS and requester not in {'owner', 'sample-owner'}:
+    if domain in _KONAN_PRIVATE_DOMAINS and requester != 'konan':
         return AccessDecision(
             DENY,
-            'Owner-perspective private relationship notes are not shared by default.',
+            'Konan-perspective private relationship notes are not shared by default.',
             redacted_domains=(domain,),
         )
 
@@ -100,8 +100,8 @@ def evaluate_access(request: AccessRequest, target: PersonRecord) -> AccessDecis
 
     if fact_type in PRIVATE_FACT_TYPES:
         return AccessDecision(
-            NEEDS_OWNER_APPROVAL,
-            'Private/sensitive cross-person context requires owner approval.',
+            NEEDS_KONAN_APPROVAL,
+            'Private/sensitive cross-person context requires Konan approval.',
             redacted_domains=(domain,),
             log_required=True,
         )

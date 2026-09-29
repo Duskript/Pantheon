@@ -12,6 +12,19 @@ Usage:
     python3 scripts/ichor_overnight_phase4.py --decay-only
     python3 scripts/ichor_overnight_phase4.py --evict-only
     python3 scripts/ichor_overnight_phase4.py --forge-only
+
+    # Apply exactly one step, leaving the others report-only:
+    python3 scripts/ichor_overnight_phase4.py --apply-step evict
+
+WHY `--apply-step` EXISTS
+    The cron job schema has a `script` field and NO args field, so this script
+    is invoked with an empty argv by its wrapper -- and `dry_run = not
+    args.apply` then made every archived run a dry run, forever. The wrapper
+    ~/.hermes/scripts/ichor-phase4-evict-apply.py now passes
+    `--apply-step evict`, which applies eviction while decay and forge keep
+    reporting. Applying decay is deliberately NOT wired: it rewrites importance
+    in place for ~39.8k rows with no backup column, which is not recoverable the
+    way archive-then-delete is.
 """
 
 from __future__ import annotations
@@ -25,6 +38,14 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
+
+# The orchestrator is launched from ~/.hermes/scripts/ wrappers that set
+# PYTHONPATH to the repo root; make a bare `python3 scripts/...` invocation work
+# too, so the manual dry-run path and the cron path resolve identically.
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from lib.ichor_temporal import normalize_timestamp  # noqa: E402
 
 logger = logging.getLogger("ichor_phase4")
 
@@ -76,7 +97,12 @@ def run_forge_step(
         return {"patterns_found": 0, "error": "db not found"}
 
     now = reference_now or datetime.now(timezone.utc)
-    cutoff = (now - timedelta(days=FORGE_WINDOW_DAYS)).isoformat()
+    # Both sides normalised: `created_at` holds four shapes and the raw column
+    # only compares correctly to a same-shaped literal down to the DAY (see
+    # lib/ichor_temporal.CREATED_AT_SHAPES). With a raw comparison, every
+    # space-shaped event written after the boundary on the boundary day was
+    # invisible to this window.
+    cutoff = normalize_timestamp(now - timedelta(days=FORGE_WINDOW_DAYS))
 
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
@@ -85,7 +111,8 @@ def run_forge_step(
         rows = conn.execute(
             "SELECT subject, session_id, god_name, event_type, id "
             "FROM ichor_events "
-            "WHERE created_at >= ? AND subject IS NOT NULL AND subject != '' "
+            "WHERE datetime(created_at) >= datetime(?) "
+            "AND subject IS NOT NULL AND subject != '' "
             "ORDER BY created_at DESC",
             (cutoff,),
         ).fetchall()
@@ -180,10 +207,21 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Ichor Phase 4 Overnight Forge")
     ap.add_argument("--db", default=str(DEFAULT_DB), help="Path to ichor.db")
     ap.add_argument("--apply", action="store_true", help="Actually apply (default: dry-run)")
+    ap.add_argument("--apply-step", action="append", default=[], metavar="STEP",
+                    choices=("decay", "evict", "forge"),
+                    help="Apply ONLY this step (decay|evict|forge); repeatable. "
+                         "Steps not named stay gated as dry-runs -- this is how "
+                         "the nightly cron applies eviction while decay and forge "
+                         "remain report-only.")
     ap.add_argument("--decay-only", action="store_true")
     ap.add_argument("--evict-only", action="store_true")
     ap.add_argument("--forge-only", action="store_true")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--result-json", default=str(
+        Path.home() / ".hermes" / "cron" / "output" / "ichor_phase4.json"),
+        help="Where to write the machine-readable run result (the cron capture "
+             "file). Tests point this at a temp path so they never clobber the "
+             "live artifact.")
     args = ap.parse_args()
 
     logging.basicConfig(
@@ -191,40 +229,74 @@ def main() -> None:
         format="%(asctime)s [%(name)s] %(message)s",
     )
 
-    dry_run = not args.apply
     run_all = not (args.decay_only or args.evict_only or args.forge_only)
 
-    results: Dict[str, Any] = {"timestamp": datetime.now(timezone.utc).isoformat()}
+    # Per-step gating. `--apply` applies every step that runs; `--apply-step X`
+    # applies exactly X and leaves the rest reporting. Keeping the mode per step
+    # (rather than one global flag) is what lets the nightly job apply the
+    # recoverable half -- eviction copies to cold storage before deleting --
+    # while the irreversible half (decay rewrites importance in place) stays off.
+    applied = set(args.apply_step or [])
+    if args.apply:
+        applied.update(("decay", "evict", "forge"))
+
+    def step_dry_run(step: str) -> bool:
+        return step not in applied
+
+    def label(step: str) -> str:
+        return "APPLIED" if step in applied else "dry-run"
+
+    results: Dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "steps": {},
+    }
 
     if run_all or args.decay_only:
         print("── Decay ──")
-        r = run_decay_step(args.db, dry_run)
+        dry = step_dry_run("decay")
+        r = run_decay_step(args.db, dry)
         results["decay"] = r
-        print(f"  {r['decayed']} decayed, {r['skipped']} skipped")
+        results["steps"]["decay"] = label("decay")
+        print(f"  {r['decayed']} decayed, {r['skipped']} skipped [{label('decay')}]")
 
     if run_all or args.evict_only:
         print("── Eviction ──")
-        r = run_eviction_step(args.db, dry_run)
+        dry = step_dry_run("evict")
+        r = run_eviction_step(args.db, dry)
         results["eviction"] = r
+        results["steps"]["eviction"] = label("evict")
         n = r.get("archived", 0)
         cand = len(r.get("candidates", []))
-        print(f"  {n} archived, {cand} candidates")
+        print(f"  {n} archived, {cand} candidates [{label('evict')}]")
+        if not dry:
+            print(f"  {r.get('tags_removed', 0)} tag rows deleted, "
+                  f"{r.get('evidence_unlinked', 0)} evidence rows unlinked")
 
     if run_all or args.forge_only:
         print("── Forge (cross-session patterns) ──")
-        r = run_forge_step(args.db, dry_run)
+        dry = step_dry_run("forge")
+        r = run_forge_step(args.db, dry)
         results["forge"] = r
+        results["steps"]["forge"] = label("forge")
         n = r.get("patterns_found", 0)
-        print(f"  {n} patterns found")
+        print(f"  {n} patterns found [{label('forge')}]")
         for p in r.get("patterns", [])[:3]:
             print(f"    • {p['topic'][:60]} — {p['session_count']} sessions, {p['event_count']} events")
 
-    mode = "DRY-RUN" if dry_run else "APPLIED"
-    print(f"\nPhase 4 {mode} complete.")
-    results["dry_run"] = dry_run
+    # The overall word stays first so the artifact is still greppable, and the
+    # per-step modes follow: a run that applied eviction must not read as a
+    # dry-run, and a run that applied nothing must not read as APPLIED.
+    overall = "APPLIED" if applied else "DRY-RUN"
+    modes = " ".join(
+        f"{step}={'APPLIED' if mode == 'APPLIED' else 'dry-run'}"
+        for step, mode in results["steps"].items()
+    )
+    print(f"\nPhase 4 {overall} complete — {modes}")
+    results["dry_run"] = not applied
+    results["applied_steps"] = sorted(applied)
 
     # Write result JSON for cron capture
-    log_path = Path.home() / ".hermes" / "cron" / "output" / "ichor_phase4.json"
+    log_path = Path(args.result_json)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(json.dumps(results, indent=2, default=str) + "\n")
 

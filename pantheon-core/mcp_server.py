@@ -20,7 +20,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from mcp.server.fastmcp import FastMCP
+# FastMCP moved out of the MCP SDK in ``mcp`` 2.0. On 2026-09-17 that upgrade
+# removed ``mcp.server.fastmcp`` and this import took the whole server down: the
+# unit restart-looped 15,690 times and port 8010 (every god's ``pantheon`` MCP
+# server) went with it. The deployment-layer fix was a systemd drop-in that
+# shadows the venv's mcp 2.0.0 with a vendored mcp 1.28.1 -- but that only
+# covers the one process the drop-in is attached to, so any other invocation
+# (``python3 mcp_server.py --stdio``, a new unit, a god subprocess) still
+# ``lib.mcp_compat`` resolves whichever SDK generation is installed, so
+# this module works with the drop-in and without it.
+from lib.mcp_compat import create_server, describe_server_class
+
+# Which class resolved (``mcp.server.fastmcp.FastMCP`` under the vendored 1.x
+# drop-in, ``mcp.server.MCPServer`` under the venv's 2.x). Recorded so a health
+# endpoint or probe can report the live generation instead of guessing.
+MCP_SERVER_SOURCE = describe_server_class()
 
 # Pantheon standard path resolver
 from lib.pantheon_path import resolve_path
@@ -273,9 +287,16 @@ def _list_codexes() -> List[str]:
 
 # ---------------------------------------------------------------------------
 # MCP server definition
+#
+# ``create_server`` returns whichever FastMCP-compatible class the installed SDK
+# generation provides (see the import block at the top) and adapts the
+# constructor: 1.x accepted ``host``/``port`` there, 2.x takes them per
+# transport. This module binds HTTP itself (uvicorn below), so those two
+# keywords are inert either way -- ``MCP_SERVER_SOURCE`` records which class
+# resolved, and the dropped kwargs are kept on the instance for inspection.
 # ---------------------------------------------------------------------------
 
-mcp = FastMCP(
+mcp = create_server(
     "Pantheon",
     instructions="""Pantheon knowledge and messaging system for the multi-agent AI Pantheon.
 
@@ -2828,6 +2849,88 @@ def pantheon_path(
                       category=category, date=date, create=create),
         indent=2,
     )
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tools: Pantheon System Index
+# ═══════════════════════════════════════════════════════════════════════════
+
+import json as _pindex_json
+
+def _pindex_import():
+    """Lazy import of pantheon_index module."""
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path.home() / "pantheon" / "pantheon-core"))
+        from gods.pantheon_index import refresh_index, search, locate, list_by_category, status
+        # Success path returns 6 elements to match the failure path shape below:
+        # (refresh, search, locate, list, status, exc). The trailing None keeps
+        # every caller's `..., exc = _pindex_import()` unpack working.
+        return refresh_index, search, locate, list_by_category, status, None
+    except Exception as exc:
+        # Failure path: same 6-element shape, exc populated.
+        return None, None, None, None, None, exc
+
+
+@mcp.tool(
+    description="Refresh the Pantheon System Index. Walks all Pantheon source directories (files, MCP tools, skills, cron jobs, gods, workflows) and rebuilds the FTS5 index. Run this after adding new files, tools, skills, or cron jobs so the index stays current.",
+)
+def pantheon_index_refresh() -> str:
+    """Refresh the Pantheon System Index."""
+    refresh_fn, _search, _locate, _list, _status, exc = _pindex_import()
+    if refresh_fn is None:
+        return _pindex_json.dumps({"error": f"pantheon_index module not available: {exc}"}, indent=2)
+    result = refresh_fn()
+    return _pindex_json.dumps(result, indent=2)
+
+
+@mcp.tool(
+    description="Search the Pantheon System Index for anything. Full-text search across all indexed components: files, MCP tools, skills, cron jobs, gods, and workflows. Use this when you need to find something but aren't sure what it's called or where it lives.",
+)
+def pantheon_search(query: str, limit: int = 20) -> str:
+    """Search the Pantheon index by full-text query."""
+    _refresh, search_fn, _locate, _list, _status, exc = _pindex_import()
+    if search_fn is None:
+        return _pindex_json.dumps({"error": f"pantheon_index module not available: {exc}"}, indent=2)
+    results = search_fn(query, limit=limit)
+    return _pindex_json.dumps(results, indent=2)
+
+
+@mcp.tool(
+    description="Locate a specific component in the Pantheon filesystem. Exact match on name or path. Returns file paths and metadata. Use this when you know the name of something (a file, a tool, a skill) and need to find exactly where it is.",
+)
+def pantheon_locate(query: str, limit: int = 10) -> str:
+    """Find where something lives in the Pantheon."""
+    _refresh, _search, locate_fn, _list, _status, exc = _pindex_import()
+    if locate_fn is None:
+        return _pindex_json.dumps({"error": f"pantheon_index module not available: {exc}"}, indent=2)
+    results = locate_fn(query, limit=limit)
+    return _pindex_json.dumps(results, indent=2)
+
+
+@mcp.tool(
+    description="List indexed Pantheon components by category. Categories: tool, skill, cron, god, workflow, file (all file subtypes), all (category summary counts). Use this to discover what exists in the Pantheon — e.g. 'what skills do we have' or 'what cron jobs run'.",
+)
+def pantheon_list(category: str = "all") -> str:
+    """List indexed components by category."""
+    _refresh, _search, _locate, list_fn, _status, exc = _pindex_import()
+    if list_fn is None:
+        return _pindex_json.dumps({"error": f"pantheon_index module not available: {exc}"}, indent=2)
+    results = list_fn(category)
+    return _pindex_json.dumps(results, indent=2)
+
+@mcp.tool(
+    description="Show Pantheon System Index status: database location, size, last indexed timestamp, and per-category entry counts.",
+)
+def pantheon_index_status() -> str:
+    """Show index status."""
+    _refresh, _search, _locate, _list, status_fn, exc = _pindex_import()
+    if status_fn is None:
+        return _pindex_json.dumps({"error": f"pantheon_index module not available: {exc}"}, indent=2)
+    result = status_fn()
+    return _pindex_json.dumps(result, indent=2)
+
 
 
 # Entry point

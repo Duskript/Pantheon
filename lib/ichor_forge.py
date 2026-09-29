@@ -35,7 +35,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Counter, Dict, List
+from typing import Any, Counter, Dict, List, Optional
 
 logger = logging.getLogger("ichor_forge")
 
@@ -54,6 +54,16 @@ def _pending_recommendation_path() -> Path:
 
 FORGE_LOG_DIR = os.path.expanduser("~/.hermes/ichor/forge/")
 COMBINED_LOG = os.path.join(FORGE_LOG_DIR, "all.jsonl")
+
+# Every gate evaluation — passes included — lands here. `all.jsonl` only
+# ever holds failures, so `blocked / total` over it is 1.0 by construction;
+# this file supplies the missing denominator. Append-only, one compact
+# JSON line per completed check.
+EVALS_LOG = os.path.join(FORGE_LOG_DIR, "evals.jsonl")
+
+# Eval records are pruned past this age (they are volume, not evidence —
+# the interventions themselves stay in all.jsonl forever).
+EVAL_RETENTION_DAYS = 30
 
 # How far back to analyze (default: 7 days)
 DEFAULT_LOOKBACK_DAYS = 7
@@ -112,6 +122,194 @@ PROMPT_RULES: Dict[str, Dict[str, Any]] = {
         "affects": ["thoth", "hermes", "marvin", "hephaestus"],
     },
 }
+
+
+@dataclass
+class EvalCounts:
+    """Aggregated gate evaluations — the denominator for block_rate."""
+
+    gate: str
+    checked: int = 0
+    failed: int = 0
+
+    @property
+    def passed(self) -> int:
+        return max(self.checked - self.failed, 0)
+
+    @property
+    def block_rate(self) -> float:
+        return self.failed / self.checked if self.checked else 0.0
+
+    @property
+    def has_denominator(self) -> bool:
+        return self.checked > 0
+
+
+class EvalRecorder:
+    """Append-only record of gate evaluations, passes included.
+
+    Why: `all.jsonl` is written only when a gate *fails*, so the forge's
+    `block_rate = blocked / total` had no denominator and always read 100%.
+    Gate implementations call `record()` for every check they actually
+    perform, pass or fail.
+
+    One compact line per check: ``{"t": ts, "g": gate, "f": 0|1, "god": x}``.
+    ``O_APPEND`` writes keep concurrent gods from clobbering each other, and
+    every failure path is swallowed — instrumentation must never break a
+    god's tool loop.
+    """
+
+    def __init__(self, path: str = EVALS_LOG):
+        self.path = path
+
+    def record(
+        self,
+        gate: str,
+        failed: bool,
+        god: str = "",
+        model: str = "",
+    ) -> bool:
+        """Append one evaluation. Returns False if the write failed.
+
+        `model` enables per-model block rates; omit it and the record still
+        counts toward the per-gate denominator.
+        """
+        entry: Dict[str, Any] = {
+            "t": round(time.time(), 3),
+            "g": gate,
+            "f": 1 if failed else 0,
+            "god": god,
+        }
+        if model:
+            entry["m"] = model
+        line = json.dumps(entry, separators=(",", ":")) + "\n"
+        try:
+            directory = os.path.dirname(self.path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+            fd = os.open(
+                self.path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644,
+            )
+            try:
+                os.write(fd, line.encode("utf-8"))
+            finally:
+                os.close(fd)
+            return True
+        except OSError as exc:
+            logger.debug("EvalRecorder: append failed (non-fatal): %s", exc)
+            return False
+
+
+def _iter_eval_entries(path: str, days: Optional[int] = None):
+    """Yield parsed eval entries inside the lookback window.
+
+    Blank, malformed, and non-dict lines are skipped rather than raising —
+    a corrupt line must not blind the forge to the rest of the file.
+    """
+    cutoff = time.time() - days * 86400 if days else None
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                ts = entry.get("t")
+                if cutoff is not None and isinstance(ts, (int, float)):
+                    if ts < cutoff:
+                        continue
+                yield entry
+    except (FileNotFoundError, OSError):
+        return
+
+
+def _tally(entries, key_names) -> Dict[str, EvalCounts]:
+    """Bucket eval entries by the first present key in `key_names`."""
+    counts: Dict[str, EvalCounts] = {}
+    for entry in entries:
+        name = ""
+        for key in key_names:
+            name = str(entry.get(key) or "")
+            if name:
+                break
+        if not name:
+            continue
+        bucket = counts.setdefault(name, EvalCounts(gate=name))
+        bucket.checked += 1
+        if entry.get("f", entry.get("failed", 0)):
+            bucket.failed += 1
+    return counts
+
+
+def load_eval_counts(
+    path: str = EVALS_LOG,
+    days: Optional[int] = None,
+) -> Dict[str, EvalCounts]:
+    """Aggregate eval records per gate.
+
+    Args:
+        path: evals.jsonl location.
+        days: Optional lookback window; None means everything.
+    """
+    return _tally(_iter_eval_entries(path, days), ("g", "gate"))
+
+
+def load_model_counts(
+    path: str = EVALS_LOG,
+    days: Optional[int] = None,
+) -> Dict[str, EvalCounts]:
+    """Aggregate eval records per model — the per-model denominator.
+
+    Per-model block rates need the same denominator per-gate rates do;
+    intervention records alone are all failures. Records written without a
+    model are ignored here (they still count per gate).
+    """
+    return _tally(_iter_eval_entries(path, days), ("m", "model"))
+
+
+def prune_evals(
+    path: str = EVALS_LOG,
+    max_age_days: int = EVAL_RETENTION_DAYS,
+) -> int:
+    """Drop eval records older than `max_age_days`. Returns lines removed."""
+    cutoff = time.time() - max_age_days * 86400
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except (FileNotFoundError, OSError):
+        return 0
+
+    kept: List[str] = []
+    removed = 0
+    for line in lines:
+        try:
+            entry = json.loads(line)
+            ts = float(entry.get("t", 0))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            removed += 1
+            continue
+        if ts and ts < cutoff:
+            removed += 1
+            continue
+        kept.append(line if line.endswith("\n") else line + "\n")
+
+    if not removed:
+        return 0
+
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+        os.replace(tmp, path)
+    except OSError as exc:
+        logger.debug("prune_evals: rewrite failed (non-fatal): %s", exc)
+        return 0
+    return removed
 
 
 def _hint_kind(hint: str) -> str:
@@ -192,7 +390,14 @@ class InterventionRecord:
 
 @dataclass
 class GateMetrics:
-    """Metrics for a single gate over the analysis period."""
+    """Metrics for a single gate over the analysis period.
+
+    `total`/`passed`/`blocked`/`block_rate` count *checks* once eval records
+    exist for this gate (`checked` > 0). Without a denominator they fall back
+    to counting intervention records only — in which case every record is a
+    failure and the rate reads 100% by construction, so consumers must branch
+    on `rate_reliable` before quoting it.
+    """
     gate_name: str
     total: int
     passed: int
@@ -202,16 +407,28 @@ class GateMetrics:
     top_recovery_hints: Counter[str]
     top_models: Counter[str]
     top_intents: Counter[str]
+    # Evaluations actually performed (0 when only interventions are known).
+    checked: int = 0
+    rate_reliable: bool = False
 
     @property
     def is_over_blocking(self) -> bool:
-        """Gate may be too aggressive if block rate > 60%."""
-        return self.block_rate > 0.6
+        """Gate may be too aggressive if >60% of real checks failed.
+
+        Requires a denominator: with interventions alone there is nothing to
+        divide by, and the old behavior reported a 100% block rate for every
+        gate that had ever fired once.
+        """
+        return self.rate_reliable and self.block_rate > 0.6
 
     @property
     def is_under_blocking(self) -> bool:
-        """Gate may be too lenient if block rate < 5%."""
-        return self.block_rate < 0.05 and self.total > 20
+        """Gate may be too lenient if <5% of real checks failed."""
+        return (
+            self.rate_reliable
+            and self.block_rate < 0.05
+            and self.total > 20
+        )
 
 
 @dataclass
@@ -224,6 +441,10 @@ class ForgeFindings:
     gates_seen: List[str]
     per_gate: Dict[str, GateMetrics]
     overall_block_rate: float
+    # Denominator from eval records: how many checks the gates actually
+    # performed in the window. 0 means the rate above is not trustworthy.
+    checks_total: int = 0
+    rate_reliable: bool = False
     detected_patterns: List[str] = field(default_factory=list)
     suggested_adjustments: List[str] = field(default_factory=list)
     # Source records (private to forge; lets ForgeSmith re-derive
@@ -316,19 +537,31 @@ class ForgeAnalyzer:
         return records
 
     def compute_metrics(
-        self, records: List[InterventionRecord],
+        self,
+        records: List[InterventionRecord],
+        evals: Optional[Dict[str, EvalCounts]] = None,
     ) -> Dict[str, GateMetrics]:
-        """Compute per-gate metrics from intervention records."""
+        """Compute per-gate metrics.
+
+        Args:
+            records: Intervention records (failures) for the window.
+            evals: Per-gate evaluation counts from `load_eval_counts`. This
+                supplies the denominator: when present, block_rate is
+                failures / checks and `rate_reliable` is True. When absent
+                the historical behavior is kept (interventions only) but
+                `rate_reliable` stays False, so no over/under-blocking alert
+                is raised off a rate that has no denominator.
+        """
         by_gate: Dict[str, List[InterventionRecord]] = {}
         for r in records:
             by_gate.setdefault(r.gate, []).append(r)
 
+        gate_names = set(by_gate) | set(evals or {})
         metrics: Dict[str, GateMetrics] = {}
-        for gate_name, gate_records in by_gate.items():
-            total = len(gate_records)
-            passed = sum(1 for r in gate_records if r.passed)
-            blocked = total - passed
-            block_rate = blocked / total if total > 0 else 0.0
+
+        for gate_name in sorted(gate_names):
+            gate_records = by_gate.get(gate_name, [])
+            counts = (evals or {}).get(gate_name)
 
             top_blocks: Counter[str] = collections.Counter()
             top_hints: Counter[str] = collections.Counter()
@@ -343,6 +576,21 @@ class ForgeAnalyzer:
                 if r.user_intent:
                     top_intents[r.user_intent] += 1
 
+            if counts is not None and counts.has_denominator:
+                total = counts.checked
+                passed = counts.passed
+                blocked = counts.failed
+                block_rate = counts.block_rate
+                checked = counts.checked
+                reliable = True
+            else:
+                total = len(gate_records)
+                passed = sum(1 for r in gate_records if r.passed)
+                blocked = total - passed
+                block_rate = blocked / total if total > 0 else 0.0
+                checked = 0
+                reliable = False
+
             metrics[gate_name] = GateMetrics(
                 gate_name=gate_name,
                 total=total,
@@ -353,6 +601,8 @@ class ForgeAnalyzer:
                 top_recovery_hints=top_hints,
                 top_models=top_models,
                 top_intents=top_intents,
+                checked=checked,
+                rate_reliable=reliable,
             )
 
         return metrics
@@ -360,26 +610,44 @@ class ForgeAnalyzer:
     def detect_patterns(
         self, records: List[InterventionRecord],
         metrics: Dict[str, GateMetrics],
+        model_evals: Optional[Dict[str, EvalCounts]] = None,
     ) -> List[str]:
-        """Detect patterns and anomalies in the intervention data."""
+        """Detect patterns and anomalies in the intervention data.
+
+        Args:
+            model_evals: Per-model eval counts from `load_model_counts`.
+                Without them no per-model rate is claimed — intervention
+                records are all failures, so the ratio would read 100%.
+        """
         patterns: List[str] = []
 
         if not records:
             return patterns
 
         # ── 1. Over-blocking gates ────────────────────────────────────
+        # A rate needs a denominator. Without eval records the only known
+        # outcomes are failures, so any ratio reads 100% by construction —
+        # say that instead of raising a bogus over-blocking alert.
         for gate_name, gm in metrics.items():
+            if not gm.rate_reliable:
+                if gm.total:
+                    patterns.append(
+                        f"ℹ️ {gate_name}: {gm.total} intervention(s) logged, "
+                        "0 evaluations recorded — block rate unavailable "
+                        "until eval records exist."
+                    )
+                continue
             if gm.is_over_blocking:
                 patterns.append(
-                    f"⚠️ {gate_name} is over-blocking ({gm.block_rate:.0%} block rate "
-                    f"on {gm.total} calls). Consider relaxing thresholds."
+                    f"⚠️ {gate_name} is over-blocking ({gm.block_rate:.0%} of "
+                    f"{gm.checked} checks). Consider relaxing thresholds."
                 )
             elif gm.is_under_blocking:
                 patterns.append(
                     f"ℹ️ {gate_name} is under-blocking ({gm.block_rate:.0%} — "
-                    f"only {gm.blocked} blocks in {gm.total} calls). Consider tightening."
+                    f"only {gm.blocked} blocks in {gm.checked} checks). "
+                    "Consider tightening."
                 )
-
         # ── 2. Repeated same-path blocks ──────────────────────────────
         path_blocks: Counter[str] = collections.Counter()
         for r in records:
@@ -496,14 +764,16 @@ class ForgeAnalyzer:
             if not r.passed:
                 model_blocks[r.model] += 1
 
-        for model, count in model_blocks.most_common(3):
-            total_for_model = sum(1 for r in records if r.model == model)
-            rate = count / total_for_model if total_for_model > 0 else 0
-            if rate > 0.5 and total_for_model >= 5:
+        for model, _count in model_blocks.most_common(3):
+            counts = (model_evals or {}).get(model)
+            if counts is None or not counts.has_denominator:
+                continue
+            if counts.block_rate > 0.5 and counts.checked >= 5:
                 patterns.append(
-                    f"📊 Model '{model}' has {rate:.0%} block rate "
-                    f"({count}/{total_for_model}). This model may need "
-                    f"adjusted gate thresholds or better instructions."
+                    f"📊 Model '{model}' has {counts.block_rate:.0%} block "
+                    f"rate ({counts.failed}/{counts.checked} checks). This "
+                    "model may need adjusted gate thresholds or better "
+                    "instructions."
                 )
 
         # ── 5. Missing intent keywords ────────────────────────────────
@@ -532,10 +802,19 @@ class ForgeAnalyzer:
         return patterns
 
     def suggest_adjustments(
-        self, records: List[InterventionRecord],
+        self,
+        records: List[InterventionRecord],
         patterns: List[str],
+        model_evals: Optional[Dict[str, EvalCounts]] = None,
     ) -> List[ForgeAdjustment]:
-        """Propose specific adjustments based on detected patterns."""
+        """Propose specific adjustments based on detected patterns.
+
+        Args:
+            model_evals: Per-model eval counts. A `model_thresholds` change
+                is only proposed when a real per-model rate exists —
+                intervention records alone always read 100%, which staged a
+                pointless threshold change for the placeholder "unknown".
+        """
         adjustments: List[ForgeAdjustment] = []
 
         if len(records) < MIN_INTERVENTIONS_FOR_ADJUSTMENT:
@@ -574,23 +853,27 @@ class ForgeAnalyzer:
         except Exception as e:
             logger.debug("ForgeAnalyzer: recurring-pattern scan failed: %s", e)
 
-        # Check for model-specific issues
+        # Check for model-specific issues. Needs a denominator: intervention
+        # records are all failures, so `fails / total` over them read 100%
+        # for any model with 10+ hits — which staged a threshold change for
+        # the placeholder model "unknown".
         model_counter: Counter[str] = collections.Counter()
-        model_fails: Dict[str, int] = {}
         for r in records:
             model_counter[r.model] += 1
-            if not r.passed:
-                model_fails[r.model] = model_fails.get(r.model, 0) + 1
 
-        for model, total in model_counter.most_common(5):
-            fails = model_fails.get(model, 0)
-            fails = model_fails.get(model, 0)
-            if total >= 10 and fails / total > 0.5:
+        for model, _total in model_counter.most_common(5):
+            counts = (model_evals or {}).get(model)
+            if counts is None or not counts.has_denominator:
+                continue
+            if counts.checked >= 10 and counts.block_rate > 0.5:
                 adjustments.append(ForgeAdjustment(
                     target="model_thresholds",
                     action="modify",
                     item=model,
-                    reason=f"{fails}/{total} interventions blocked ({fails/total:.0%})",
+                    reason=(
+                        f"{counts.failed}/{counts.checked} checks blocked "
+                        f"({counts.block_rate:.0%})"
+                    ),
                     confidence=0.6,
                 ))
 
@@ -607,13 +890,25 @@ class ForgeAnalyzer:
             god: If set, only analyze data for this god.
         """
         records = self.load_records(days=days, god=god)
-        metrics = self.compute_metrics(records)
-        patterns = self.detect_patterns(records, metrics)
+        evals_path = os.path.join(self.log_dir, "evals.jsonl")
+        evals = load_eval_counts(evals_path, days=days)
+        model_evals = load_model_counts(evals_path, days=days)
+        metrics = self.compute_metrics(records, evals)
+        patterns = self.detect_patterns(records, metrics, model_evals)
 
-        # Compute overall stats
+        # Compute overall stats. Prefer the eval-backed denominator; fall
+        # back to interventions-only (flagged unreliable) when no gate has
+        # recorded an evaluation yet.
         total = len(records)
         blocked = sum(1 for r in records if not r.passed)
-        overall_block_rate = blocked / total if total > 0 else 0.0
+        reliable = [m for m in metrics.values() if m.rate_reliable]
+        checks_total = sum(m.checked for m in reliable)
+        if checks_total:
+            overall_block_rate = sum(m.blocked for m in reliable) / checks_total
+            rate_reliable = True
+        else:
+            overall_block_rate = blocked / total if total > 0 else 0.0
+            rate_reliable = False
 
         models_seen = sorted(set(r.model for r in records))
         gates_seen = sorted(set(r.gate for r in records))
@@ -626,7 +921,7 @@ class ForgeAnalyzer:
         else:
             timespan_days = 0.0
 
-        adjustments = self.suggest_adjustments(records, patterns)
+        adjustments = self.suggest_adjustments(records, patterns, model_evals)
 
         return ForgeFindings(
             analyzed_at=time.time(),
@@ -636,6 +931,8 @@ class ForgeAnalyzer:
             gates_seen=gates_seen,
             per_gate=metrics,
             overall_block_rate=overall_block_rate,
+            checks_total=checks_total,
+            rate_reliable=rate_reliable,
             detected_patterns=patterns,
             suggested_adjustments=[
                 f"{adj.action} {adj.item} to {adj.target} ({adj.reason})"
@@ -989,8 +1286,17 @@ class ForgeReport:
             f"Interventions: {findings.total_interventions}"
         )
         lines.append(
-            f"Overall block rate: {findings.overall_block_rate:.1%}"
+            f"Checks (denominator): {findings.checks_total}"
         )
+        if findings.rate_reliable:
+            lines.append(
+                f"Overall block rate: {findings.overall_block_rate:.1%}"
+            )
+        else:
+            lines.append(
+                "Overall block rate: n/a — no gate evaluations recorded "
+                "yet, so there is no denominator (failures only)"
+            )
         if findings.models_seen:
             lines.append(
                 f"Models: {', '.join(findings.models_seen)}"
@@ -1006,14 +1312,19 @@ class ForgeReport:
             lines.append("**Per-Gate Metrics:**")
             for gate_name in sorted(findings.per_gate.keys()):
                 gm = findings.per_gate[gate_name]
-                bar = "█" * int(gm.block_rate * 20) + "░" * (
-                    20 - int(gm.block_rate * 20)
-                )
-                lines.append(
-                    f"  • {gate_name}: {gm.total} calls, "
-                    f"{gm.blocked} blocked ({gm.block_rate:.0%}) "
-                    f"{bar}"
-                )
+                if gm.rate_reliable:
+                    filled = int(gm.block_rate * 20)
+                    bar = "█" * filled + "░" * (20 - filled)
+                    lines.append(
+                        f"  • {gate_name}: {gm.checked} checks, "
+                        f"{gm.blocked} blocked ({gm.block_rate:.0%}) "
+                        f"{bar}"
+                    )
+                else:
+                    lines.append(
+                        f"  • {gate_name}: {gm.total} intervention(s), "
+                        "rate n/a (no denominator)"
+                    )
                 if detailed and gm.top_block_messages:
                     lines.append("    Top blocks:")
                     for msg, count in gm.top_block_messages.most_common(3):
@@ -1058,10 +1369,15 @@ class ForgeReport:
         patterns = len(findings.detected_patterns)
         adjustments = len(findings.suggested_adjustments)
 
+        if findings.rate_reliable:
+            rate = f"{findings.overall_block_rate:.0%} block rate"
+        else:
+            rate = "rate n/a (no denominator)"
+
         return (
             f"🔨 Forge: {findings.total_interventions} interventions "
             f"across {gates_active} gates | "
-            f"{findings.overall_block_rate:.0%} block rate | "
+            f"{rate} | "
             f"{patterns} patterns | "
             f"{adjustments} adjustments suggested"
         )
@@ -1139,6 +1455,10 @@ def main() -> None:
 
     # ── Analyze ────────────────────────────────────────────────────────
     if args.analyze:
+        pruned = prune_evals()
+        if pruned:
+            print(f"Pruned {pruned} eval record(s) older than "
+                  f"{EVAL_RETENTION_DAYS} days.")
         findings = analyzer.analyze(days=args.days, god=args.god)
 
         if args.json:

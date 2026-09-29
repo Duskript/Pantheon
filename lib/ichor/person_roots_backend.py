@@ -161,7 +161,7 @@ class PersonRootsBackend:
         else:
             snippet = f"Person Roots ACL decision: {access}. {decision.get('reason', '')}"
             source_ids = [f"person:{person_id}"] if person_id else []
-            score = 0.12 if access == "needs_owner_approval" else 0.05
+            score = 0.12 if access == "needs_konan_approval" else 0.05
             result_type = "person_root_acl"
             title = f"{display_name} — access {access}"
 

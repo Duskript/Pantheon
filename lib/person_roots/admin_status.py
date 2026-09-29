@@ -193,7 +193,7 @@ def _next_actions(blockers: list[str], pending_accounts: list[AccountLink]) -> l
 def _validate_root(root: Path) -> dict[str, Any]:
     import importlib.util
 
-    validator_path = Path('<repo-root>/scripts/validate-person-roots.py')
+    validator_path = Path('/home/konan/pantheon/scripts/validate-person-roots.py')
     spec = importlib.util.spec_from_file_location('validate_person_roots_runtime', validator_path)
     if spec is None or spec.loader is None:
         return {'passed': False, 'warnings': [], 'errors': [f'Cannot load validator: {validator_path}']}

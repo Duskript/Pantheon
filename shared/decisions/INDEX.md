@@ -31,6 +31,9 @@ The index is **append-only**. Old decisions are never edited. Reversed decisions
 
 | Date | Title | One-line summary | File |
 |---|---|---|---|
+| 2026-09-23 | Phone Gateway — NO-VISION ban reversed; device identity corrected | Tiered XML-first/vision-fallback replaces the NO-VISION prohibition; gateway is Pixel 9 `tokay` @ Tailscale `100.124.86.15:5555`; hardcoded LAN IPs banned (address drifted .18 → .19 → .11 in one month). | [2026-09-23-phone-gateway-no-vision-ban-reversed.md](2026-09-23-phone-gateway-no-vision-ban-reversed.md) |
+| 2026-08-13 | AgentOS-Hermes Spinoff, Not OpenClaw Adoption | If AgentOS is used, it becomes a Hermes Agent/Pantheon-native fork/spinoff; OpenClaw is explicitly out of scope. | [2026-08-13-agentos-hermes-spinoff-not-openclaw.md](2026-08-13-agentos-hermes-spinoff-not-openclaw.md) |
+| 2026-08-12 | Pantheon-native Ad Image Generation — OpenAI Primary | Native ad visual generation uses ChatGPT/OpenAI as the primary image engine; Pantheon owns brief, QA, exports, and performance loop. | [2026-08-12-pantheon-native-ad-image-generation-openai-primary.md](2026-08-12-pantheon-native-ad-image-generation-openai-primary.md) |
 | 2026-07-20 | Content Ops Destination Registry | Content Operations targets are data-driven destinations with cross-post joins, not a fixed `surface` enum. | [2026-07-20-content-ops-destination-registry.md](2026-07-20-content-ops-destination-registry.md) |
 | 2026-07-20 | Content Ops React Mobile UI Pivot | Content Operations UI moved from the rejected Appsmith experiment to a custom React/Vite mobile app served by Flask. | [2026-07-20-content-ops-react-mobile-ui-pivot.md](2026-07-20-content-ops-react-mobile-ui-pivot.md) |
 | 2026-06-20 | Conductor UI Phase D closure — docs + SDK policy + Phase 4.5 gap | Phase D closed: feature flag verified, 3 docs written, decisions locked; Phase 4.5 (Credentials Store) is NOT actually shipped in the tree. | [2026-06-20-conductor-ui-phase-d-docs.md](2026-06-20-conductor-ui-phase-d-docs.md) |
@@ -63,6 +66,8 @@ The index is **append-only**. Old decisions are never edited. Reversed decisions
 
 ### Architecture
 
+- 2026-08-13: [AgentOS-Hermes Spinoff, Not OpenClaw Adoption](2026-08-13-agentos-hermes-spinoff-not-openclaw.md) — AgentOS ideas/code may feed a Hermes-native operator layer; OpenClaw is not adopted.
+- 2026-08-12: [Pantheon-native Ad Image Generation — OpenAI Primary](2026-08-12-pantheon-native-ad-image-generation-openai-primary.md) — native ad visuals use ChatGPT/OpenAI as primary image engine with Pantheon-owned brief, QA, exports, and performance loop
 - 2026-07-20: [Content Ops Destination Registry](2026-07-20-content-ops-destination-registry.md) — destination registry + cross-post join table replaces fixed surface enum for target routing
 - 2026-06-16: [Hephaestus Rework — God of Building and Architecture](hephaestus-rework-workflow-god.md)
 - 2026-06-16: [Hephaestus Rework Execution Complete](2026-06-16-hephaestus-rework-complete.md) — all 7 steps executed
@@ -91,6 +96,7 @@ The index is **append-only**. Old decisions are never edited. Reversed decisions
 
 ### Operations
 
+- 2026-09-23: [Phone Gateway — NO-VISION ban reversed; device identity corrected](2026-09-23-phone-gateway-no-vision-ban-reversed.md) — HARD CONSTRAINT skill for every god; replaces the NO-VISION prohibition with a tiered XML-first rule and bans hardcoded LAN addresses (the address drifted .18 → .19 → .11 in one month).
 - 2026-06-16: [Pitfall #26 — sovereignty guardrail](2026-06-16-pitfall-26.md)
 - 2026-06-11: [D2 cron teardown](2026-06-11-d2-cron-teardown.md)
 

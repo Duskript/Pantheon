@@ -51,6 +51,28 @@ from pathlib import Path
 PANTHEON_DIR = os.environ.get("PANTHEON_DIR", os.path.expanduser("~/pantheon"))
 ATHENAEUM_DIR = os.environ.get("ATHENAEUM_DIR", os.path.expanduser("~/athenaeum"))
 HERMES_HOME = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+
+
+def _shared_hermes_home() -> str:
+    """Root Hermes home holding the SHARED Ichor event + entity graph DBs.
+
+    Cron runs this script as a god profile, so $HOME / $HERMES_HOME resolve to
+    ``~/.hermes/profiles/<god>``. The shared stores live one level above that,
+    so strip the ``/profiles/<god>`` segment rather than trusting
+    ``expanduser("~")`` (which the cron sandbox rewrites under the profile).
+    """
+    override = os.environ.get("PANTHEON_HERMES_HOME")
+    if override:
+        return override
+    home = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+    marker = os.sep + "profiles" + os.sep
+    return home.split(marker, 1)[0] if marker in home else home
+
+
+SHARED_HERMES_HOME = _shared_hermes_home()
+# PRAGMA quick_check is a full scan; above this size it costs >100s and hangs
+# the briefing cron, so large DBs report "skipped" rather than being checked.
+INTEGRITY_CHECK_MAX_MB = int(os.environ.get("BRIEFING_INTEGRITY_MAX_MB", "512"))
 PROJECT_IDEAS = os.environ.get(
     "PROJECT_IDEAS_FILE",
     os.path.join(PANTHEON_DIR, "project-ideas.md"),
@@ -265,8 +287,8 @@ def collect_memory_pipeline_health() -> str:
         import sqlite3
 
         checks = [
-            ("Ichor events DB", Path(HERMES_HOME) / "ichor.db"),
-            ("Entity graph DB", Path(HERMES_HOME) / "pantheon" / "graph.db"),
+            ("Ichor events DB", Path(SHARED_HERMES_HOME) / "ichor.db"),
+            ("Entity graph DB", Path(SHARED_HERMES_HOME) / "pantheon" / "graph.db"),
         ]
         lines: list[str] = []
         for label, db_path in checks:
@@ -275,7 +297,10 @@ def collect_memory_pipeline_health() -> str:
                 continue
             size_mb = db_path.stat().st_size / (1024 * 1024)
             with sqlite3.connect(str(db_path)) as conn:
-                integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+                if size_mb <= INTEGRITY_CHECK_MAX_MB:
+                    integrity = conn.execute("PRAGMA quick_check").fetchone()[0]
+                else:
+                    integrity = f"skipped (db >{INTEGRITY_CHECK_MAX_MB}MB)"
                 table_rows = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
                 ).fetchall()
@@ -306,7 +331,8 @@ def collect_memory_pipeline_health() -> str:
                             recency = f"; latest {table}={latest}"
                             break
 
-            status = "✅" if integrity == "ok" and tables else "⚠️"
+            integrity_ok = integrity == "ok" or integrity.startswith("skipped")
+            status = "✅" if integrity_ok and tables else "⚠️"
             detail = ", ".join(counts) if counts else f"{len(tables)} tables"
             lines.append(
                 f"- {status} {label}: `{db_path}` — {size_mb:.1f}MB, "
@@ -336,29 +362,32 @@ def collect_overnight_inbox() -> str:
     try:
         import sqlite3
 
-        events_db = Path(HERMES_HOME) / "ichor.db"
+        events_db = Path(SHARED_HERMES_HOME) / "ichor.db"
         if not events_db.exists():
             events_db = Path(ATHENAEUM_DIR) / "ichor.db"
         if not events_db.exists():
             return "[Ichor events DB not found — skipping overnight inbox]"
-        # 14h lookback as an ISO8601 string
-        cutoff = (
-            datetime.now(timezone.utc) - timedelta(hours=14)
-        ).strftime("%Y-%m-%dT%H:%M:%S")
+        # 14h lookback, with BOTH sides normalised.
+        #
+        # `created_at` holds four shapes -- space (SQLite DEFAULT), ISO-Z,
+        # aware ISO, naive ISO -- and comparing the raw column to a
+        # differently-shaped literal is only correct down to the DAY. This
+        # query used a naive-'T' cutoff, so every space-shaped row written
+        # after the boundary on the boundary day was silently dropped from
+        # the overnight inbox. See lib/ichor_temporal.CREATED_AT_SHAPES.
         with sqlite3.connect(str(events_db)) as conn:
             rows = conn.execute(
                 """
                 SELECT god_name, event_type, subject, created_at
                 FROM ichor_events
-                WHERE created_at >= ?
+                WHERE datetime(created_at) >= datetime('now', '-14 hour')
                   AND event_type IN (
                       'blocker', 'commitment', 'decision',
                       'digest_entry'
                   )
                 ORDER BY created_at DESC
                 LIMIT 25
-                """,
-                (cutoff,),
+                """
             ).fetchall()
         if not rows:
             return "[No overnight inbox messages — quiet night]"

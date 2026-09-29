@@ -16,8 +16,8 @@ Cron-safe output rules:
 
 Example:
     python3 scripts/person-roots-background-ingest.py \\
-        --incoming ~/.pantheon/person-roots/relationships/_incoming \\
-        --root ~/.pantheon/person-roots/relationships
+        --incoming /home/konan/athenaeum/Codex-User/relationships/_incoming \\
+        --root /home/konan/athenaeum/Codex-User/relationships
 """
 
 from __future__ import annotations

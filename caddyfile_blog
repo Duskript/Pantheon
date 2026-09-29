@@ -79,6 +79,17 @@ theoforgesolutions.com:80 {
 		reverse_proxy 127.0.0.1:4322
 	}
 
+	# TheoForge v9 relay service: public health + browser API only.
+	# Keep internal lead listing/departure and bridge outreach routes off the public edge.
+	handle /healthz {
+		reverse_proxy 127.0.0.1:4321
+	}
+
+	@theoforge_public_api path /api/leads /api/chat /api/prospects /api/prospects/followup /api/mercer/message /api/mercer/reset /api/mercer/health
+	handle @theoforge_public_api {
+		reverse_proxy 127.0.0.1:4321
+	}
+
 	# Root: new front page (static file_server).
 	handle {
 		root * /var/www/theoforge

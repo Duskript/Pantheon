@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-PANTHEON_ROOT = Path(__file__).resolve().parents[1]
+PANTHEON_ROOT = Path('/home/konan/pantheon')
 if str(PANTHEON_ROOT) not in sys.path:
     sys.path.insert(0, str(PANTHEON_ROOT))
 

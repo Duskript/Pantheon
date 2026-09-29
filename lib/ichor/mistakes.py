@@ -482,10 +482,21 @@ def _cmd_record(args: argparse.Namespace) -> int:
 
 
 def _cmd_resolve(args: argparse.Namespace) -> int:
+    """Append a state transition for a recorded mistake.
+
+    Regression guard (fixed 2026-09-25): this handler must forward
+    ``args.mechanism`` into ``resolve_mistake``. It previously dropped it, so
+    ``resolve_mistake`` saw ``mechanism=""`` and rejected every
+    ``--state learned`` call with "state='learned' requires --mechanism" even
+    when the caller passed ``--mechanism read|write|design``. The effect was a
+    permanently uncloseable ledger: no record could reach ``learned`` through
+    the CLI, and ``mistakes stats`` reported ``n_with_mechanism: 0`` forever.
+    """
     try:
         resolve_mistake(args.mistake_id, args.state,
                         prevention=args.prevention or "",
-                        prevention_skill=args.prevention_skill or "")
+                        prevention_skill=args.prevention_skill or "",
+                        mechanism=getattr(args, "mechanism", "") or "")
     except ValueError as exc:
         print(f"REJECTED: {exc}", file=sys.stderr)
         return 2

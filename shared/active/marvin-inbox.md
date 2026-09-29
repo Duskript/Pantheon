@@ -8,3 +8,6 @@
 [2026-06-09T22:29:51.556Z] [warn] [corrupt_lead_file] /home/konan/athenaeum/Codex-God-Mercer/leads/smoketest.json: Expected property name or '}' in JSON at position 1 (line 1 column 2)
 [2026-06-14T01:51:14.260Z] [error] [mercer_failed] session=3a910da5-bdf5-4892-840f-748c4c24f2ce code=-1 stderr=
 [killed: timeout]
+[2026-08-31T18:42:21.072Z] [error] [resend_env_missing] env path=/tmp/no-resend-env -- email pipeline cannot send
+[2026-08-31T18:44:13.150Z] [error] [resend_env_missing] env path=/tmp/no-resend-env -- email pipeline cannot send
+[2026-08-31T18:47:39.396Z] [error] [resend_env_missing] env path=/tmp/no-resend-env -- email pipeline cannot send

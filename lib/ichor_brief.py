@@ -51,6 +51,7 @@ TYPE_PRIORITY: Dict[str, float] = {
     "fact": 0.50,
     "preference": 0.45,
     "reference": 0.40,
+    "user_md_update": 0.55,
 }
 
 # Display labels and icons
@@ -64,6 +65,7 @@ TYPE_META: Dict[str, Dict[str, str]] = {
     "fact": {"icon": "📌", "label": "Fact"},
     "preference": {"icon": "❤️", "label": "Preference"},
     "reference": {"icon": "📎", "label": "Reference"},
+    "user_md_update": {"icon": "👤", "label": "User Profile Update"},
 }
 
 # Scoring weights
@@ -167,27 +169,34 @@ def query_all_events(
     """
     db = _get_db()
     conn = db._conn
+    # `_get_db()` has already put the pantheon root on sys.path.
+    # Normalised both sides: `created_at` holds four shapes and the raw
+    # column compared to a same-shaped literal is only correct to the DAY
+    # (see lib/ichor_temporal.CREATED_AT_SHAPES). The brief must not
+    # silently drop or invent a day of events.
+    from lib.ichor_temporal import newer_than_sql
+    window = newer_than_sql("created_at", hours=int(since_hours))
 
     if god_name:
         cursor = conn.execute(
-            """
+            f"""
             SELECT * FROM ichor_events
             WHERE god_name = ?
-              AND created_at >= datetime('now', ?)
+              AND {window}
             ORDER BY created_at DESC
             LIMIT ?
             """,
-            (god_name, f"-{int(since_hours)} hours", limit),
+            (god_name, limit),
         )
     else:
         cursor = conn.execute(
-            """
+            f"""
             SELECT * FROM ichor_events
-            WHERE created_at >= datetime('now', ?)
+            WHERE {window}
             ORDER BY created_at DESC
             LIMIT ?
             """,
-            (f"-{int(since_hours)} hours", limit),
+            (limit,),
         )
 
     results = [dict(row) for row in cursor.fetchall()]

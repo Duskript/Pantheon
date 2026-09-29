@@ -15,7 +15,7 @@ Writer behavior:
 - Append one interaction-log row per applied fact.
 - Supported field routes:
   - ``profile.*``                  -> ``## Known context`` in ``PROFILE.md``
-  - ``relationship_to_owner.*``    -> ``## What Owner has said`` in ``RELATIONSHIP_TO_OWNER.md``
+  - ``relationship_to_konan.*``    -> ``## What Konan has said`` in ``RELATIONSHIP_TO_KONAN.md``
   - ``notes.*`` or ``notes``       -> ``## Auto-applied facts`` in ``NOTES.md``
 - Unknown routes are never written; they produce error entries.
 - Exact duplicate bullets (same value + provenance line) are skipped.
@@ -34,7 +34,7 @@ from lib.person_roots.ingest import build_ingest_plan
 from lib.person_roots.resolver import DEFAULT_ROOT, PersonRootsRepository
 
 _PROFILE_SECTION = '## Known context'
-_RELATIONSHIP_SECTION = '## Owner notes'
+_RELATIONSHIP_SECTION = '## What Konan has said'
 _NOTES_SECTION = '## Auto-applied facts'
 
 _LOG_HEADINGS = ('# Interaction Log', '## Interaction Log')
@@ -183,8 +183,8 @@ def _route_for(field: str) -> tuple[str, str] | None:
         return ('NOTES.md', _NOTES_SECTION)
     if field.startswith('profile.'):
         return ('PROFILE.md', _PROFILE_SECTION)
-    if field.startswith('relationship_to_owner.'):
-        return ('RELATIONSHIP_TO_OWNER.md', _RELATIONSHIP_SECTION)
+    if field.startswith('relationship_to_konan.'):
+        return ('RELATIONSHIP_TO_KONAN.md', _RELATIONSHIP_SECTION)
     return None
 
 

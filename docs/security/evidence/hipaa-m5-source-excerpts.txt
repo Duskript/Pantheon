@@ -1,0 +1,57 @@
+# HIPAA and BOSGAME M5 Source Evidence
+
+**Purpose:** Verbatim excerpts supporting the HIPAA and hardware claims in `PANTHEON-SELF-HOSTED-SECURITY-WHITEPAPER.md`.
+**Accessed:** 2026-08-26
+**Important:** These excerpts support architecture and compliance planning. They do not certify Pantheon, the BOSGAME M5, or any model as HIPAA compliant.
+
+## [15] HHS Summary of the HIPAA Security Rule
+
+**URL:** https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations
+
+> The Security Rule establishes a national set of security standards to protect certain health information that is maintained or transmitted in electronic form.
+
+> The Security Rule sets forth the administrative, physical, and technical safeguards that covered entities and business associates must put in place to secure individuals’ electronic protected health information.
+
+> The Security Rule is designed to be flexible, scalable, and technology neutral, enabling a regulated entity to implement policies, procedures, and technologies that are appropriate for the entity’s particular size, organizational structure, and risks to ePHI.
+
+## [16] HHS Guidance on Risk Analysis
+
+**URL:** https://www.hhs.gov/hipaa/for-professionals/security/guidance/guidance-risk-analysis
+
+> Conducting a risk analysis is the first step in identifying and implementing safeguards that comply with and carry out the standards and implementation specifications in the Security Rule.
+
+> All e-PHI created, received, maintained or transmitted by an organization is subject to the Security Rule.
+
+> The scope of risk analysis that the Security Rule encompasses includes the potential risks and vulnerabilities to the confidentiality, availability and integrity of all e-PHI that an organization creates, receives, maintains, or transmits.
+
+## [17] HHS Summary of the HIPAA Privacy Rule
+
+**URL:** https://www.hhs.gov/hipaa/for-professionals/privacy/laws-regulations/index.html
+
+> When a covered entity uses a contractor or other non-workforce member to perform business associate services or activities, the Rule requires that the covered entity include certain protections for the information in a business associate agreement.
+
+## [18] AMD Ryzen AI Max+ 395
+
+**URL:** https://www.amd.com/en/developer/resources/technical-articles/2025/amd-ryzen-ai-max-395--a-leap-forward-in-generative-ai-performanc.html
+
+> AMD Ryzen™ AI MAX+395 with 128GB unified memory (up to 112 GB allocatable by the GPU) space provides unique capability of running generative AI workloads on a laptop form factor
+
+> Powerful RDNA™ 3.5 based GPU technology with up to 40 compute units
+
+> On device 70 billion parameter LLM models on AMD Ryzen AI MAX+395 with unified memory architecture
+
+## [19] BOSGAME M5 product page
+
+**URL:** https://www.bosgame.com/products/bosgame-m5-ai-mini-desktop-ryzen-ai-max-395-96gb-128gb-2tb
+
+> Blazing-Fast Memory & Storage: 96GB/128GB 8000MHz LPDDR5X RAM (GPU memory sharing) and dual M.2 PCIe Gen 4 slots for fast speeds and expandability, handling 3D rendering easily.
+
+> Versatile Connectivity: 2× USB4 Type-C, 3× USB 3.2 Gen2, 2× USB 2.0, SD 4.0 reader & 2.5Gbps LAN, supporting fast transfer, multi-displays and low-latency networking.
+
+## [20] AMD ROCm Strix Halo system optimization
+
+**URL:** https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo.html
+
+> AMD Ryzen APUs with RDNA3.5 architecture (gfx1150, gfx1151, and gfx1152 LLVM targets) handle memory access through GPU Virtual Memory (GPUVM), which provides per-process GPU virtual address spaces (VMIDs) rather than a separate, discrete VRAM pool.
+
+> Support Ryzen APUs require specific kernel fixes that update internal limits in the AMD KFD driver to ensure correct queue creation and memory availability checks.

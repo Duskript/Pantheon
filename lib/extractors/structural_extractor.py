@@ -88,6 +88,43 @@ def _session_id_from_text(text: str, fallback: str) -> str:
     return fallback
 
 
+def _extract_messages_from_json(parsed: dict) -> str:
+    """Extract message text from known session JSON schemas.
+
+    Tries (in order):
+    1. Top-level ``messages`` list.
+    2. ``request.body.messages`` (Hermes request-dump format).
+    3. ``request.messages``.
+    4. ``response.body.messages``.
+    5. Falls back the raw JSON as text.
+    """
+    paths = ["messages", "request.body.messages", "request.messages", "response.body.messages"]
+
+    for dotted_path in paths:
+        parts = dotted_path.split(".")
+        obj: Any = parsed
+        for part in parts:
+            if isinstance(obj, dict):
+                obj = obj.get(part)
+            else:
+                obj = None
+                break
+        if isinstance(obj, list) and obj:
+            chunks: list[str] = []
+            for message in obj:
+                if not isinstance(message, dict):
+                    continue
+                role = str(message.get("role") or "message").strip()
+                content = _flatten_content(message.get("content"))
+                if content.strip():
+                    chunks.append(f"[{role}] {content.strip()}")
+            if chunks:
+                return "\n".join(chunks)
+
+    # Nothing found in any known path — fall back to raw text
+    return json.dumps(parsed, indent=2)
+
+
 def load_source_bundle(path: Path) -> SourceBundle:
     raw = path.read_text(encoding="utf-8", errors="replace")
     if path.suffix.lower() == ".json":
@@ -97,19 +134,8 @@ def load_source_bundle(path: Path) -> SourceBundle:
             parsed = None
         if isinstance(parsed, dict):
             session_id = str(parsed.get("session_id") or parsed.get("id") or path.stem)
-            messages = parsed.get("messages", [])
-            chunks: list[str] = []
-            if isinstance(messages, list):
-                for message in messages:
-                    if not isinstance(message, dict):
-                        continue
-                    role = str(message.get("role") or "message").strip()
-                    content = _flatten_content(message.get("content"))
-                    if content.strip():
-                        chunks.append(f"[{role}] {content.strip()}")
-            elif raw.strip():
-                chunks.append(raw.strip())
-            return SourceBundle(session_id, "\n".join(chunks), path)
+            text = _extract_messages_from_json(parsed)
+            return SourceBundle(session_id, text, path)
     session_id = _session_id_from_text(raw, path.stem)
     return SourceBundle(session_id, raw, path)
 

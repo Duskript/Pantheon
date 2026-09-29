@@ -18,7 +18,7 @@ purpose, and context domain.
 from lib.person_roots.schema import (
     ALLOW,
     DENY,
-    NEEDS_OWNER_APPROVAL,
+    NEEDS_KONAN_APPROVAL,
     AccessDecision,
     AccessRequest,
     PersonRecord,
@@ -49,7 +49,7 @@ from lib.person_roots.runtime import active_ingest_step, unattended_ingest_files
 __all__ = [
     "ALLOW",
     "DENY",
-    "NEEDS_OWNER_APPROVAL",
+    "NEEDS_KONAN_APPROVAL",
     "AccessDecision",
     "AccessRequest",
     "PersonRecord",

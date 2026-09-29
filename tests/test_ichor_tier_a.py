@@ -5,6 +5,7 @@ storage, and real conversation extraction.
 """
 
 import os
+import sqlite3
 import tempfile
 import pytest
 
@@ -533,3 +534,76 @@ class TestRealConversation:
         apollo_results = extractor.db.query_fts("lyrics")
         assert len(hep_results) >= 0
         assert len(apollo_results) >= 0
+
+
+# ── Upstream content-dedupe guard (2026-09-21) ──────────────────────────
+# Before this guard, 88% of surviving ichor memory was byte-identical
+# duplication (one prompt fragment stored 19,108 times): the extractor runs on
+# every turn and stored the same text again each time. These tests pin the
+# write path refusing the duplicate, so the cleanup pass never has to run again.
+
+
+class TestContentDedupeGuard:
+    TEXT = ("Decision: ichor moves to a tiered retention model with a seven day "
+            "gate for short term memory.")
+
+    def _events(self, raw_text):
+        return [{
+            "event_type": "decision",
+            "subject": "tiered retention",
+            "predicate": "decided",
+            "object": "7-day gate",
+            "confidence": 0.9,
+            "raw_text": raw_text,
+        }]
+
+    def test_identical_content_stored_once(self, extractor, db_path):
+        first = extractor._store_events(self._events(self.TEXT), "sess_a", "hermes")
+        assert first == 1, "the first store must write the event"
+        second = extractor._store_events(self._events(self.TEXT), "sess_b", "hermes")
+        assert second == 0, "identical content must not be stored a second time"
+        con = sqlite3.connect(db_path)
+        rows = con.execute("SELECT count(*) FROM ichor_events").fetchone()[0]
+        con.close()
+        assert rows == 1, f"expected one canonical row, found {rows}"
+
+    def test_duplicate_skipped_but_score_bumped(self, extractor, db_path):
+        # The scoring columns are added by the scoring subsystem, not by the
+        # extractor's base schema; the guard fails open without them (see
+        # _find_duplicate_id), so add them here to exercise the bump path.
+        con = sqlite3.connect(db_path)
+        con.execute("ALTER TABLE ichor_events ADD COLUMN importance REAL DEFAULT 50.0")
+        con.execute("ALTER TABLE ichor_events ADD COLUMN last_access TEXT")
+        con.commit()
+        con.close()
+        extractor._store_events(self._events(self.TEXT), "sess_a", "hermes")
+        con = sqlite3.connect(db_path)
+        before = con.execute("SELECT importance FROM ichor_events").fetchone()[0]
+        con.close()
+        extractor._store_events(self._events(self.TEXT), "sess_b", "hermes")
+        con = sqlite3.connect(db_path)
+        after = con.execute("SELECT importance FROM ichor_events").fetchone()[0]
+        con.close()
+        assert after > before, "a duplicate should nudge the canonical row's score"
+
+    def test_different_content_still_stored(self, extractor, db_path):
+        a = extractor._store_events(self._events(self.TEXT), "sess_a", "hermes")
+        b = extractor._store_events(
+            self._events(self.TEXT + " A genuinely different trailing clause."),
+            "sess_b", "hermes")
+        assert a == 1 and b == 1, "distinct content must never be collapsed"
+
+    def test_content_hash_is_populated_on_insert(self, extractor, db_path):
+        extractor._store_events(self._events(self.TEXT), "sess_a", "hermes")
+        con = sqlite3.connect(db_path)
+        n = con.execute("SELECT count(*) FROM ichor_events "
+                        "WHERE content_hash IS NOT NULL").fetchone()[0]
+        con.close()
+        assert n == 1, "insert_event must populate content_hash"
+
+    def test_hash_matches_shared_helper(self):
+        from lib.ichor_db import content_hash
+        from lib.ichor_tier_a import _content_hash
+        assert _content_hash(self.TEXT) == content_hash(self.TEXT)
+        assert content_hash("  padded  ") == content_hash("padded")
+        assert content_hash(None) == content_hash("")

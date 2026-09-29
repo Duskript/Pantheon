@@ -8,7 +8,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Generator
+from typing import Any, Dict, Generator, List
 
 import pytest
 
@@ -253,6 +253,59 @@ except:
         )
         assert result is not None
         assert "FIXME" in result.recovery_hint
+
+    # ── Eval instrumentation (the forge's denominator) ────────────────────
+    # `all.jsonl` is written only when a gate fails, so the forge's
+    # block_rate had no denominator and read 100% by construction. The gate
+    # now reports every completed check, passes included.
+
+    def test_eval_sink_records_pass_and_failure(self) -> None:
+        seen: List[Dict[str, Any]] = []
+        gate = LogicGate(eval_sink=seen.append)
+
+        # Clean file: a check runs, nothing is flagged, and post_call still
+        # returns None — the contract existing consumers rely on.
+        assert gate.post_call(
+            "write_file", {"path": "ok.py", "content": "x = 1\n"}, None, {},
+        ) is None
+
+        # Leftover print() in a file with defs: flagged.
+        result = gate.post_call(
+            "write_file",
+            {"path": "bad.py",
+             "content": "def f():\n    return 1\nprint(1)\n"},
+            None, {},
+        )
+        assert result is not None
+        assert result.passed is False
+
+        assert [entry["failed"] for entry in seen] == [False, True]
+        assert all(entry["gate"] == "logic_gate" for entry in seen)
+        assert gate.stats() == {"checks": 2, "failures": 1, "interventions": 1}
+
+    def test_eval_sink_errors_never_break_the_gate(self) -> None:
+        def boom(_entry: Dict[str, Any]) -> None:
+            raise RuntimeError("sink exploded")
+
+        gate = LogicGate(eval_sink=boom)
+        assert gate.post_call(
+            "write_file", {"path": "ok.py", "content": "x = 1\n"}, None, {},
+        ) is None
+        assert gate.stats()["checks"] == 1
+
+    def test_unchecked_files_do_not_inflate_the_denominator(self) -> None:
+        seen: List[Dict[str, Any]] = []
+        gate = LogicGate(eval_sink=seen.append)
+
+        # Unsupported language: no check performed.
+        gate.post_call(
+            "write_file", {"path": "notes.txt", "content": "hi"}, None, {},
+        )
+        # Someone else's tool: not this gate's business.
+        gate.post_call("read_file", {"path": "ok.py"}, None, {})
+
+        assert seen == []
+        assert gate.stats()["checks"] == 0
 
     def test_valid_json_passes(self, logic_gate: LogicGate) -> None:
         content = '{"name": "test", "value": 42}'

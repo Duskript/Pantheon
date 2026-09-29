@@ -545,14 +545,23 @@ class TestEndToEnd(unittest.TestCase):
             )
             self.assertIsInstance(r["rank_reasons"], list)
 
-    def test_phase4_weights_are_correct(self) -> None:
-        """Sanity: Phase 4 weights are loaded (not the old P5c values)."""
+    def test_weights_are_loaded_and_match_the_shipped_baseline(self) -> None:
+        """Sanity: WEIGHTS is the live tuned dict, not a stale literal.
+
+        This test used to hardcode the Phase 4 hand-rebalance values
+        (fts5 0.40 / vector 0.20 / graph 0.15 / events 0.15), so the first
+        labeled-set tuning run left it failing while the drift gate passed —
+        a duplicate of the gate that nobody owned. Assert against the shipped
+        baseline instead (single source of truth: lib.ichor_benchmarks), plus
+        the distribution invariant the fusion maths relies on.
+        """
         from lib.ichor_hybrid import WEIGHTS
-        self.assertEqual(WEIGHTS["fts5"], 0.40)
-        self.assertEqual(WEIGHTS["vector"], 0.20)
-        self.assertEqual(WEIGHTS["graph"], 0.15)
-        self.assertEqual(WEIGHTS["events"], 0.15)
-        self.assertEqual(WEIGHTS["reference"], 0.10)
+        from lib.ichor_benchmarks import BASELINE_WEIGHTS
+
+        self.assertEqual(set(WEIGHTS.keys()), set(BASELINE_WEIGHTS.keys()))
+        for lane, value in BASELINE_WEIGHTS.items():
+            self.assertAlmostEqual(WEIGHTS[lane], value, places=4,
+                                   msg=f"{lane} differs from the shipped baseline")
         # Weights must still sum to 1.0
         self.assertAlmostEqual(sum(WEIGHTS.values()), 1.0, places=4)
 
