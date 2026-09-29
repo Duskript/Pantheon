@@ -406,3 +406,7 @@ notion-briefing-archive/
 cron/post-*-[0-9][0-9][0-9][0-9].py
 cron/verify-*
 shared/*.png
+
+# Runtime sync/scan logs appended by cron — state, not source.
+connectors/state/sync.log
+cron/pantheon-sync/scan.log
