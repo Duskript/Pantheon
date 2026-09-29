@@ -7,18 +7,45 @@ Usage:  python3 ghost-publish.py <title> <file.md>
         python3 ghost-publish.py --status
 """
 
-import sys, json, time, hmac, hashlib, base64, urllib.request, urllib.error, argparse, mimetypes
+import sys, os, json, time, hmac, hashlib, base64, urllib.request, urllib.error, argparse, mimetypes
 from pathlib import Path
 
-GHOST_URL = "https://blog.theoforgesolutions.com"
-API_KEY = "b2c3d4e5f6a7b8c9d0e1f2a3:edaa37b8708fa472d6c6ed4f65e8240b971a4b7fbc6fc81c79405c162918bf9c"
+GHOST_URL = os.environ.get("GHOST_ADMIN_URL", "https://blog.theoforgesolutions.com").rstrip("/")
+
+# Admin API key resolution — NEVER hardcode a key in this file.
+# Order: 1) $GHOST_ADMIN_API_KEY  2) ~/.hermes/ghost-admin-key (0600)  3) /etc/pantheon/ghost-admin-key
+_KEY_FILES = (
+    Path.home() / ".hermes" / "ghost-admin-key",
+    Path("/etc/pantheon/ghost-admin-key"),
+)
+
+
+def _resolve_api_key():
+    """Return the Ghost Admin API key as '<id>:<secret>' or exit with instructions."""
+    key = (os.environ.get("GHOST_ADMIN_API_KEY") or "").strip()
+    if not key:
+        for candidate in _KEY_FILES:
+            try:
+                if candidate.is_file():
+                    key = candidate.read_text().strip()
+                    if key:
+                        break
+            except OSError:
+                continue
+    if not key or ":" not in key:
+        raise SystemExit(
+            "Ghost Admin API key not found. Set GHOST_ADMIN_API_KEY (id:secret) or write it "
+            "to ~/.hermes/ghost-admin-key — see the relay7-ghost-blog-posting skill."
+        )
+    return key
+
 
 def b64encode(data):
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 def make_jwt():
     """Generate a Ghost Admin API JWT"""
-    kid, secret = API_KEY.split(":", 1)
+    kid, secret = _resolve_api_key().split(":", 1)
     iat = int(time.time())
     exp = iat + 300  # 5 minutes
     header = b64encode(json.dumps({"alg": "HS256", "kid": kid, "typ": "JWT"}, separators=(",", ":")).encode())
@@ -28,6 +55,28 @@ def make_jwt():
     # produces INVALID_JWT even when the key is correct.
     sig = b64encode(hmac.new(bytes.fromhex(secret), msg.encode(), hashlib.sha256).digest())
     return f"{header}.{payload}.{sig}"
+
+def _read_json_response(resp):
+    """Decode a Ghost Admin API response body into JSON.
+
+    Ghost answers successful ``DELETE`` (and some ``PUT``) requests with
+    ``204 No Content`` — an empty body, not JSON. Calling ``json.loads("")``
+    raises ``Expecting value: line 1 column 1 (char 0)`` and the caller reports
+    a failed call even though the server already applied the change. An empty
+    body therefore maps to a success envelope carrying the HTTP status.
+
+    Args:
+        resp: An open ``http.client.HTTPResponse`` from ``urlopen``.
+
+    Returns:
+        The decoded JSON object, or ``{"ok": True, "status": <int>}`` when the
+        body is empty/whitespace.
+    """
+    raw = resp.read().decode()
+    if not raw.strip():
+        return {"ok": True, "status": getattr(resp, "status", None)}
+    return json.loads(raw)
+
 
 def api(method, path, data=None):
     """Make an Admin API call"""
@@ -44,7 +93,7 @@ def api(method, path, data=None):
         req.data = json.dumps(data).encode()
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode())
+            return _read_json_response(resp)
     except urllib.error.HTTPError as e:
         body = e.read().decode()[:300]
         return {"error": f"HTTP {e.code}: {body}"}

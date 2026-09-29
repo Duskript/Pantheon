@@ -410,3 +410,9 @@ shared/*.png
 # Runtime sync/scan logs appended by cron — state, not source.
 connectors/state/sync.log
 cron/pantheon-sync/scan.log
+
+# Local Ghost DB snapshots contain production secrets + member data — never commit.
+ghost.db
+ghost-live.db
+ghost.db.bak*
+ghost-api-key.json
