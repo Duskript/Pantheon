@@ -102,7 +102,7 @@ def write_config(conf_path, conf_text, new_auth_text):
 
 
 def backup_config(conf_path):
-    ts = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     bak = conf_path.with_suffix(conf_path.suffix + ".bak-pre-clawforge-rotate-" + ts)
     shutil.copy2(conf_path, bak)
     return bak
@@ -163,12 +163,12 @@ def test_connection(instance_id, token, timeout=5.0):
 def write_tokens_file(instance_id, token, dest_dir=None):
     if dest_dir is None:
         dest_dir = Path("/tmp")
-    ts = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     fname = "clawforge-tokens-" + instance_id + "-" + ts + ".env"
     out = dest_dir / fname
     body = (
         "# Clawforge client tokens for instance '" + instance_id + "'\n"
-        "# Issued: " + dt.datetime.utcnow().isoformat() + "Z\n"
+        "# Issued: " + dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z") + "\n"
         "# Host:   " + socket.gethostname() + "\n"
         "# DO NOT COMMIT. Mode 0600. Deliver over a secure channel.\n"
         + cfg.env_var + "=" + token + "\n"
