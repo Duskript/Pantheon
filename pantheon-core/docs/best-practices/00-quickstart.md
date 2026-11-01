@@ -1,12 +1,12 @@
 ---
 title: "Quickstart — 5 commands to get started"
-last_verified: 2026-09-01
+last_verified: 2026-11-01
 audience: new operators
 ---
 
 # Quickstart — 5 commands to get started
 
-This page covers the five operator actions needed to start using Pantheon. The examples below match the current repository layout and MCP server implementation, verified 2026-09-01.
+This page covers the five operator actions needed to start using Pantheon. The examples below match the current repository layout and MCP server implementation, verified 2026-11-01.
 
 ## 1. Start Pantheon
 

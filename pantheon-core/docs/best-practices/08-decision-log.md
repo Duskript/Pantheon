@@ -1,11 +1,11 @@
 ---
 title: "Decision Log — how Pantheon records operator-locked decisions"
-last_verified: 2026-09-01
+last_verified: 2026-11-01
 ---
 
 # Decision Log — how Pantheon records operator-locked decisions
 
-Decisions preserve why Pantheon is the way it is. This page describes the current human-readable audit trail in `~/pantheon/shared/decisions/` and its optional Ichor-memory companion, verified 2026-09-01.
+Decisions preserve why Pantheon is the way it is. This page describes the current human-readable audit trail in `~/pantheon/shared/decisions/` and its optional Ichor-memory companion, verified 2026-11-01.
 
 ## What an operator-locked decision is
 

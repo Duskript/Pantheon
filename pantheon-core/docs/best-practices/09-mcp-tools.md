@@ -1,11 +1,11 @@
 ---
 title: "MCP Tools — the operator-facing tool surface"
-last_verified: 2026-09-01
+last_verified: 2026-11-01
 ---
 
 # MCP Tools — the operator-facing tool surface
 
-As of 2026-09-01, `pantheon-core/mcp_server.py` registers **35 MCP tools** with FastMCP. This page is a human-maintained guide to that current source inventory; tool names and counts can change between releases, so verify the live manifest when upgrading.
+As of 2026-11-01, `pantheon-core/mcp_server.py` registers **35 MCP tools** with FastMCP. This page is a human-maintained guide to that current source inventory; tool names and counts can change between releases, so verify the live manifest when upgrading.
 
 ## Categories
 

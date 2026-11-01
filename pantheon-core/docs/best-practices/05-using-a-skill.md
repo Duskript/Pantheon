@@ -1,11 +1,11 @@
 ---
 title: "Using a Skill — frontmatter best practices"
-last_verified: 2026-09-01
+last_verified: 2026-11-01
 ---
 
 # Using a Skill — frontmatter best practices
 
-This page covers the frontmatter fields used by the current Hermes skill scanner and loader, verified 2026-09-01. Frontmatter is indexed before the full body is loaded, so it controls discoverability, filtering, and metadata—not an automatic semantic execution trigger.
+This page covers the frontmatter fields used by the current Hermes skill scanner and loader, verified 2026-11-01. Frontmatter is indexed before the full body is loaded, so it controls discoverability, filtering, and metadata—not an automatic semantic execution trigger.
 
 ## Required frontmatter
 
@@ -84,9 +84,17 @@ Useful optional fields include:
 - `metadata.tags` — organization and catalog labels
 - `platforms` — OS compatibility, for example `[linux, macos]`
 - `environments` — relevance filters such as `[kanban]` or `[docker]`
+- `requires_apps` — named apps the host must declare (through its platform declaration registry) before the skill is offered; an unknown name hides the skill, so the gate fails closed
 - `metadata.hermes` — Hermes-specific conditions and configuration declarations when needed
 
-Platform and environment fields affect offer/index surfaces. Explicit `skill_view` and `--skills` loads are intentionally not blocked by environment relevance filters; command-level compatibility still remains the skill author's responsibility.
+`metadata.hermes` carries the activation conditions and config declarations the loader reads:
+
+- `requires_tools` / `requires_toolsets` — hide the skill when the named tool or toolset is unavailable
+- `fallback_for_tools` / `fallback_for_toolsets` — hide the skill when the primary tool or toolset *is* available (this is a fallback skill)
+- `session_platforms` — gateway-channel gate, for example `[telegram, discord]`; unknown channel fails open
+- `config` — declared settings (`key`, `description`, optional `default` and `prompt`) that Hermes can surface for the skill
+
+All of these are **offer-time filters**: they shape the skills index, autocomplete, and slash-command surfaces. An explicit `skill_view` or `--skills` load is not blocked by environment relevance filters; command-level compatibility (does the referenced tool actually exist?) remains the skill author's responsibility.
 
 ## Optional skill subdirectories
 

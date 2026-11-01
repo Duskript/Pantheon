@@ -1,11 +1,11 @@
 ---
 title: "Skills — what they are and how to invoke them"
-last_verified: 2026-09-01
+last_verified: 2026-11-01
 ---
 
 # Skills — what they are and how to invoke them
 
-A **skill** in Hermes/Pantheon is a Markdown file named `SKILL.md` that gives an agent specialized knowledge or a repeatable procedure. Skills are loadable instructions; they are not Python packages or MCP tools. The behavior described here was checked against the current Hermes skill scanner and prompt builder on 2026-09-01.
+A **skill** in Hermes/Pantheon is a Markdown file named `SKILL.md` that gives an agent specialized knowledge or a repeatable procedure. Skills are loadable instructions; they are not Python packages or MCP tools. The behavior described here was checked against the current Hermes skill scanner and prompt builder on 2026-11-01.
 
 ## What a skill is
 
@@ -45,7 +45,7 @@ For the default profile, `$HERMES_HOME/skills/` is normally `~/.hermes/skills/`.
 
 ## How skills are exposed and loaded
 
-At session startup, Hermes builds a compact skills index containing eligible skill names and descriptions. Platform/environment filters can remove a skill from offer surfaces; an explicit load still works for a compatible or intentionally force-loaded skill.
+At session startup, Hermes builds a compact skills index containing eligible skill names and descriptions. Offer-time filters — `platforms:` (host OS), `environments:` (runtime relevance such as `kanban` or `docker`), and `requires_apps:` (declared apps the host must satisfy) — can remove a skill from offer surfaces; an explicit load still works for a compatible or intentionally force-loaded skill.
 
 The full body is **not automatically loaded merely because a description contains a matching phrase**. The description is a selection hint shown to the model. The model must explicitly load the skill through one of these paths:
 

@@ -1,6 +1,6 @@
 ---
 title: "Pantheon Best Practices"
-last_verified: 2026-09-01
+last_verified: 2026-11-01
 audience: OSS users of pantheon-core
 status: living document
 ---
