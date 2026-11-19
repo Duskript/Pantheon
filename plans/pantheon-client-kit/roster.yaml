@@ -1,0 +1,131 @@
+# Pantheon Client Kit — shipped roster
+# Locked by Konan 2026-11-15: option B minus {apollo, marvin, mercer, hephaestus}.
+# Every `default_*` value below was READ from the live profile on 2026-11-15 — none invented.
+# `needs_fix` marks what must be corrected before this roster is client-ready.
+
+version: 0.1.0
+generated: "2026-11-15"
+roster_decision: "B minus apollo, marvin, mercer, hephaestus"
+conductor: hermes   # the one bot the client sets up by hand; it builds the rest
+
+dropped_from_roster:
+  apollo:    {reason: client-determined, note: "creative songcraft — kept local to Konan"}
+  marvin:    {reason: client-determined, note: "master coder"}
+  mercer:    {reason: client-determined, note: "enterprise sales / landing-page identity deception"}
+  hephaestus: {reason: client-determined, note: "builder — hephaestus-qa goes with it"}
+never_in_roster:   # infra/support, not product gods
+  hephaestus-qa: verification instance
+  theoforge-ve:  workflow editor
+  mercury:       attached memory node
+
+gods:
+
+  hermes:
+    ships: true
+    role: "Messenger & Operations Manager"
+    default_display_name: Hermes
+    default_color: "#22D3EE"
+    default_icon: "/api/gods/hermes/icon"          # server-served asset, not inline
+    default_domain: "Messenger · Gateway · Operations"
+    core_responsibilities: [chat, message_relay, system_interface, cron_management]
+    routes_to: {}                                   # the conductor routes; it is not routed to
+    notes: "Also the conductor: after setup it owns channel creation and per-god wiring."
+
+  rheta:
+    ships: true
+    role: "God of Copywriting, Rhetoric, and Persuasion"
+    default_display_name: Rheta
+    default_color: "#B91C1C"
+    default_icon: "<inline image data-url, 447,678 chars>"   # needs_fix: bloat + baked-in Konan asset
+    default_domain: "Copywriting rhetoric And persuasion"     # needs_fix: inconsistent casing
+    core_responsibilities: [copywriting, copy_editing, niche_research, compliance_review, content_humanization]
+    routes_to: {research: thoth, visual_assets: iris}
+    needs_fix:
+      - "icon is a 447 KB inline base64 data-url — strip for client kits; replace with the client's upload"
+      - "domain string has inconsistent capitalization; normalise to 'Copywriting · Rhetoric · Persuasion'"
+
+  iris:
+    ships: true
+    role: "God of UI/UX Design"
+    default_display_name: Iris
+    default_color: "#A78BFA"
+    default_icon: "<inline image data-url, 2,691,894 chars>"  # needs_fix: 2.7 MB in a JSON file
+    default_domain: "God of UI/UX Design"
+    core_responsibilities: [design_system, ui_prototyping, accessibility_audit, visual_qa, figma_operations, token_spec_authoring]
+    routes_to: {research: thoth, copy: rheta}
+    needs_fix:
+      - "icon is a 2.7 MB inline base64 data-url — single largest bloat item in the whole roster"
+
+  thoth:
+    ships: true
+    role: "God of Research, Synthesis, and Intel"
+    default_display_name: Thoth
+    default_color: "#845EF7"
+    default_icon: "/api/gods/thoth/icon"
+    default_domain: "God of Knowledge"
+    core_responsibilities: [deep_research, multi_source_synthesis, competitive_intel, daily_digest,
+                            dawn_patrol, athenaeum_distillation, knowledge_synthesis, cross_codex_query, long_form_thinking]
+    routes_to: {}                                   # thoth is the research terminus
+    notes: "Also the pipeline source: dawn-patrol + daily digest crons. Wire the schedule from interview T4."
+
+  kairos:
+    ships: true
+    role: "Social Media & Marketing God"
+    default_display_name: Kairos
+    default_color: null                              # needs_fix
+    default_icon: null                               # needs_fix
+    default_domain: null                             # needs_fix
+    core_responsibilities: [social_media_strategy, content_repurposing, platform_specific_copy_qa, posting_timing,
+                            marketing_skill_adaptation, content_calendar_planning, free_tier_growth_research,
+                            brand_voice_governance]
+    routes_to: {research: thoth, copy: rheta, visuals: iris}   # REMAPPED — see roster_cut_consequences
+    needs_fix:
+      - "NO god.json EXISTS — kairos has no visual identity at all. The kit must generate or request one (interview G1)."
+
+  caduceus:
+    ships: true
+    role: "God of Medicine, Healer, and Medical Research"
+    default_display_name: Caduceus
+    default_color: "#69DB7C"
+    default_icon: "/api/gods/caduceus/icon"
+    default_domain: "Medical assistant"
+    core_responsibilities: [medical_research, clinical_reference, evidence_review, medical_writing]
+    routes_to: {research: thoth, copy: rheta}
+    needs_fix:
+      - "domain 'Medical assistant' understates the role and drops the safety framing; normalise, keep no-diagnosis/no-prescription guardrails"
+    safety:
+      hard_boundaries: [no_diagnosis, no_prescription, no_dosage_guessing]
+
+roster_cut_consequences:
+  - id: kairos_routing_dangling
+    severity: high
+    detail: >
+      kairos's live routing map (from gods.yaml) sends work to Hephaestus for implementation/scheduling and
+      pulls customer language from Mercer. NEITHER SHIPS. Left as-is, Kairos tries to hand off to a god that
+      does not exist in the client install.
+    fix: "Remap to {research: thoth, copy: rheta, visuals: iris}; implementation/scheduling goes to the conductor or the client's own tooling. Encoded above."
+
+  - id: no_builder_in_roster
+    severity: medium
+    detail: >
+      Hephaestus (build/tooling) and Marvin (implementation) are both out, so no shipped god can write code or
+      build tooling for the client. Any "build me a thing" request lands on Hermes or dies.
+    fix: "State this as a known limit in the client's README; the kit ships content/knowledge/ops gods, not engineering."
+
+  - id: no_sales_god
+    severity: low
+    detail: "Mercer is out — no lead qualification/pipeline. Sales-adjacent asks have no owner."
+    fix: "Documented limit. Re-add per client if they buy that scope."
+
+artifact_hygiene:
+  inline_icon_bytes: 3139572
+  affected: [rheta, iris]
+  rule: >
+    Client kits MUST NOT ship inline base64 icons. Extract to files, or drop and let the interview
+    collect the client's own image (fork C = client uploads).
+  missing_god_json: [kairos]
+
+validation:
+  checked: "2026-11-15"
+  method: "read each god.json + gods.yaml entry; no writes; icon bytes measured from field length"
+  parse_check_required: true

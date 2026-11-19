@@ -4567,6 +4567,22 @@ a:hover{{text-decoration:underline}}
         except Exception as e:
             return bad(handler, str(e))
 
+    # ── Client Kit seed interview (GET) — interview.yaml-driven onboarding ──
+    if parsed.path == "/api/client-kit/interview":
+        from api.interview_engine import check_spec, session
+        try:
+            eng = session()
+            return j(handler, {
+                "ok": True,
+                "state": eng.state(),
+                "spec_version": eng.spec.version,
+                "spec_problems": check_spec(eng.spec),
+                "conductor": eng.roster.conductor,
+                "roster": [g.public() for g in eng.roster.gods],
+            })
+        except Exception as e:
+            return bad(handler, str(e))
+
     # ── Pantheon-Summons list (GET) — Server-side proxy for the summon drawer ──
     if parsed.path == "/api/gods/summon/list":
         import json as _json, urllib.request as _urllib
@@ -6476,6 +6492,43 @@ def handle_post(handler, parsed) -> bool:
                 return bad(handler, f"Unknown forge action: {action}")
 
         return bad(handler, "Invalid forge path", 400)
+
+    # ── Client Kit seed interview (POST) — answer / reset / render ──
+    if parsed.path.startswith("/api/client-kit/interview"):
+        import time as _time
+        from pathlib import Path as _Path
+        from api.interview_engine import (
+            SpecError, render_artifacts, session, verify_render, write_artifacts,
+        )
+        action = parsed.path.split("/api/client-kit/interview", 1)[-1].strip("/") or "state"
+        try:
+            eng = session()
+            if action == "answer":
+                key = str(body.get("key", "")).strip()
+                if not key:
+                    return bad(handler, "key field is required")
+                return j(handler, {"ok": True, "state": eng.answer(key, body.get("value"))})
+            if action == "reset":
+                return j(handler, {"ok": True, "state": session(reset=True).state()})
+            if action == "render":
+                install_name = str(body.get("install_name") or "pantheon-client")
+                artifacts = render_artifacts(eng, install_name=install_name)
+                missing = verify_render(artifacts, eng.spec)
+                staging = (_Path.home() / ".hermes" / "cache" / "scratch" / "client-kit"
+                           / _time.strftime("%Y%m%d-%H%M%S"))
+                written = write_artifacts(staging, artifacts)
+                return j(handler, {
+                    "ok": True,
+                    "staging": str(staging),
+                    "files": written,
+                    "manifest": json.loads(artifacts["MANIFEST.json"]),
+                    "missing_from_seed_write": missing,
+                })
+            return bad(handler, f"Unknown client-kit action: {action}", 404)
+        except SpecError as e:
+            return bad(handler, str(e))
+        except Exception as e:
+            return bad(handler, str(e))
 
     # ── God Summon (POST) — Install a god from Pantheon-Summons repo ──
     if parsed.path == "/api/gods/summon":

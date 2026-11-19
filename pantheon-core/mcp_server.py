@@ -2966,7 +2966,104 @@ def main():
         # without Accept: text/event-stream.  The Hermes MCP client probes
         # with a bare GET during transport negotiation, so we intercept
         # that here and return a friendly info response instead.
+        # ── Remote access control + Host normalisation ───────────────────
+        # Loopback callers (cron, gods, local scripts) stay trusted and need
+        # nothing. Anything arriving with a non-loopback peer address OR a
+        # non-localhost Host header -- i.e. every tailnet client, including the
+        # ones proxied by `tailscale serve` (which makes the peer look like
+        # 127.0.0.1) -- must present PANTHEON_MCP_TOKEN. If the token is unset,
+        # remote access is refused outright rather than silently opened.
+        _REMOTE_MCP_TOKEN = os.environ.get("PANTHEON_MCP_TOKEN", "").strip()
+
+        async def _mcp_send_json(send, status, payload, extra_headers=()):
+            body = json.dumps(payload).encode()
+            headers = [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ]
+            headers.extend(extra_headers)
+            await send({
+                "type": "http.response.start",
+                "status": status,
+                "headers": headers,
+            })
+            await send({"type": "http.response.body", "body": body})
+
+        def _mcp_request_gate(scope):
+            """Return None when the request may proceed, else an (status, payload)."""
+            peer_ip = (scope.get("client") or ("", 0))[0]
+            raw = scope.get("headers", [])
+            host_hdr = ""
+            supplied = ""
+            for key, value in raw:
+                lk = key.lower()
+                if lk == b"host" and not host_hdr:
+                    host_hdr = value.decode("latin-1").strip().lower()
+                elif lk == b"authorization" and not supplied:
+                    supplied = value.decode("latin-1").strip()
+            host_is_local = (
+                host_hdr in ("", "127.0.0.1", "localhost")
+                or host_hdr.startswith(("127.0.0.1:", "localhost:", "[::1]"))
+            )
+            peer_is_local = peer_ip in ("127.0.0.1", "::1")
+            if peer_is_local and host_is_local:
+                return None
+            if not _REMOTE_MCP_TOKEN:
+                return (403, {"error": "remote MCP access is disabled (PANTHEON_MCP_TOKEN unset)"})
+            if supplied not in ("Bearer " + _REMOTE_MCP_TOKEN, _REMOTE_MCP_TOKEN):
+                return (401, {"error": "unauthorized"})
+            return None
+
+        def _mcp_normalise_headers(scope):
+            """Rewrite Host/Origin to localhost values before the SDK sees them.
+
+            Why this exists
+            ---------------
+            FastMCP's streamable-HTTP transport runs DNS-rebinding protection:
+            it only trusts Host/Origin values that resolve to localhost, and
+            answers anything else with `421 Misdirected Request` /
+            "Invalid Host header". A tailnet client necessarily sends
+            `Host: pantheon-laptop.tail164759.ts.net`, so without this rewrite
+            every remote call dies at the guard -- before a single tool runs.
+
+            What it does
+            ------------
+            Replaces the incoming Host header with `127.0.0.1:<bind port>` and
+            drops any Origin header, producing a fresh scope dict (the original
+            scope is never mutated). Authorisation is NOT this function's job:
+            `_mcp_request_gate()` has already accepted or refused the request by
+            the time this runs, so rewriting the header here cannot widen access.
+            """
+            bind_port = (scope.get("server") or ("", 8010))[1]
+            local_host = ("127.0.0.1:%s" % bind_port).encode()
+            normalised = []
+            for key, value in scope.get("headers", []):
+                lk = key.lower()
+                if lk == b"host":
+                    normalised.append((key, local_host))
+                elif lk == b"origin":
+                    continue
+                else:
+                    normalised.append((key, value))
+            rewritten = dict(scope)
+            rewritten["headers"] = normalised
+            return rewritten
+
         async def graceful_mcp_app(scope, receive, send):
+            if scope["type"] == "http":
+                denial = _mcp_request_gate(scope)
+                if denial is not None:
+                    status, payload = denial
+                    extra = [(b"www-authenticate", b'Bearer realm="pantheon-mcp"')] if status == 401 else []
+                    logger.warning(
+                        "MCP remote request refused (%s) from %s host=%s",
+                        status,
+                        (scope.get("client") or ("?", 0))[0],
+                        b"".join(v for k, v in scope.get("headers", []) if k.lower() == b"host").decode("latin-1") or "-",
+                    )
+                    await _mcp_send_json(send, status, payload, extra_headers=extra)
+                    return
+                scope = _mcp_normalise_headers(scope)
             if scope["type"] == "http" and scope["method"] == "GET":
                 path = scope.get("path", "")
                 # Normalise trailing-slash

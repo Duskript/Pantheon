@@ -1,0 +1,26 @@
+composio-bridge — third-party attribution
+=========================================
+
+This component adapts the Composio connection pattern pioneered by OpenMausBot:
+
+    OpenMausBot — https://github.com/milind-soni/OpenMausBot
+    Copyright the OpenMausBot contributors
+    Licensed under the Apache License, Version 2.0
+
+Specifically, the following designs and API-call sequences in
+`composio.ts` and `state.ts` are adapted from OpenMausBot's
+`server/composio-session.ts` and `server/composio-project.ts`:
+
+  * using a Composio *project* API key (ak_…) with the `x-api-key` header
+    against https://backend.composio.dev/api/v3.1 (no SDK);
+  * one reusable Tool Router Session per stable user id, with
+    multi-account mode and explicit account selection;
+  * per-toolkit discovery of the project's own auth configs, and turning
+    on Tool Router for them via PATCH /auth_configs/{id};
+  * `revoke_on_delete=true` on disconnect.
+
+The code here is rewritten for Pantheon's Node sidecar and is not a verbatim
+copy; the behaviour is intentionally kept compatible.
+
+A copy of the Apache License, Version 2.0 is available at
+https://www.apache.org/licenses/LICENSE-2.0

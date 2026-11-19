@@ -1,0 +1,140 @@
+# Pantheon Client Kit — shipped roster manifest
+#
+# This file is the pack's source of truth. It is self-contained on purpose: the
+# installer must work on a client box where `plans/pantheon-client-kit/` does not
+# exist. `roster_install.py --check` validates it, and refuses to install a pack
+# that would ship operator artwork, a dead routing entry, or a missing identity.
+#
+# Roster locked by Konan 2026-11-15: option B minus {apollo, marvin, mercer,
+# hephaestus}. Domains are normalised to one house style (`Thing · Thing · Thing`)
+# because the live profiles carried four different styles.
+#
+# Rules encoded here (see install/README.md for the why):
+#   * every `icon` is a served path or a client upload — never a data-url
+#   * every `routes_to` destination must be a shipped god, or it is a dead handoff
+#   * every god needs display_name + color + domain (kairos had none of the three)
+
+version: 0.1.0
+generated: "2026-11-18"
+kit: pantheon-client-kit
+conductor: hermes            # the one bot the client sets up by hand; it builds the rest
+
+# ── Where the installer puts things, relative to the client's $HOME ──────────
+layout:
+  profile_dir: ".hermes/profiles/{god}"
+  codex_dir: "athenaeum/Codex-God-{display_name}"
+  tenant_file: "athenaeum/tenant.json"
+  person_roots_dir: "athenaeum/Codex-User/relationships"
+  shared_skills: "pantheon/god-packages/shared-skills"
+
+# ── Operationally required, never shipped with a value ──────────────────────
+template:
+  model_default: null        # the onboarding wizard probes the machine; never inherit
+  model_provider: null
+  plugins: [pantheon-background-ops]
+  toolsets: [hermes-cli, web, terminal, session_search, memory, skills]
+  max_turns: 90
+
+# ── Capabilities the roster cut removes. Stated as limits, not silent gaps. ──
+known_limits:
+  - id: no_builder
+    label: "No builder"
+    detail: >
+      Hephaestus and Marvin are not shipped, so no god in this install writes code
+      or builds tooling. Engineering asks have no owner.
+  - id: no_sales_god
+    label: "No sales god"
+    detail: >
+      Mercer is not shipped, so lead qualification and pipeline work have no owner.
+      Re-add per client if that scope is bought.
+  - id: discord_bot_creation
+    label: "Discord bots are created in a browser"
+    detail: >
+      Applications cannot be created through the Discord API. The kit drives the
+      Developer Portal in a browser from one logged-in profile; the manual portal
+      path stays documented as the fallback when the portal redesigns.
+
+gods:
+
+  hermes:
+    display_name: Hermes
+    role: "Messenger & Operations Manager"
+    domain: "Messenger · Gateway · Operations"
+    color: "#22D3EE"
+    icon: "/api/gods/hermes/icon"
+    responsibilities: [chat, message_relay, system_interface, cron_management]
+    routes_to: {}
+    notes: >
+      Also the conductor: after setup it owns channel creation and per-god wiring.
+
+  rheta:
+    display_name: Rheta
+    role: "God of Copywriting, Rhetoric, and Persuasion"
+    domain: "Copywriting · Rhetoric · Persuasion"
+    color: "#B91C1C"
+    icon: "/api/gods/rheta/icon"
+    responsibilities: [copywriting, copy_editing, niche_research, compliance_review, content_humanization]
+    routes_to: {research: thoth, visual_assets: iris}
+    fixed_from:
+      - "domain was 'Copywriting rhetoric And persuasion' — mis-cased, now normalised"
+      - "icon was a 447,678-char inline base64 data-url — extracted to icon.png, god.json now references it"
+
+  iris:
+    display_name: Iris
+    role: "God of UI/UX Design"
+    domain: "UI/UX Design"
+    color: "#A78BFA"
+    icon: "/api/gods/iris/icon"
+    responsibilities: [design_system, ui_prototyping, accessibility_audit, visual_qa, figma_operations, token_spec_authoring]
+    routes_to: {research: thoth, copy: rheta}
+    fixed_from:
+      - "domain was 'God of UI/UX Design' — redundant prefix, now normalised"
+      - "icon was a 2,691,894-char inline base64 data-url (largest bloat item) — extracted to icon.png"
+
+  thoth:
+    display_name: Thoth
+    role: "God of Research, Synthesis, and Intel"
+    domain: "Research · Synthesis · Intel"
+    color: "#845EF7"
+    icon: "/api/gods/thoth/icon"
+    responsibilities: [deep_research, multi_source_synthesis, competitive_intel, daily_digest,
+                       knowledge_synthesis, cross_codex_query, long_form_thinking]
+    routes_to: {}
+    notes: >
+      Research terminus — nothing routes out. Wire the digest schedule from the
+      interview's tenant timezone (T4), never from a default.
+    fixed_from:
+      - "domain was 'God of Knowledge' — normalised to the house style"
+
+  kairos:
+    display_name: Kairos
+    role: "Social Media & Marketing God"
+    domain: "Social Media · Marketing"
+    color: "#F59F00"
+    icon: "/api/gods/kairos/icon"
+    responsibilities: [social_media_strategy, content_repurposing, platform_specific_copy_qa,
+                       posting_timing, content_calendar_planning, brand_voice_governance]
+    routes_to: {research: thoth, copy: rheta, visuals: iris}
+    fixed_from:
+      - "NO god.json existed at all — no display name, icon or colour anywhere in the UI"
+      - "live routing sent implementation to Hephaestus and language to Mercer; both are unshipped, so it is remapped to thoth/rheta/iris"
+
+  caduceus:
+    display_name: Caduceus
+    role: "God of Medicine, Healer, and Medical Research"
+    domain: "Medicine · Health · Clinical Research"
+    color: "#69DB7C"
+    icon: "/api/gods/caduceus/icon"
+    responsibilities: [medical_research, clinical_reference, evidence_review, medical_writing]
+    routes_to: {research: thoth, copy: rheta}
+    safety:
+      hard_boundaries: [no_diagnosis, no_prescription, no_dosage_guessing]
+    fixed_from:
+      - "domain was 'Medical assistant' — understated the role and dropped the safety framing"
+
+# ── Post-install verification the kit runs on itself ────────────────────────
+verify:
+  no_inline_images: true
+  routed_destinations_must_ship: true
+  every_god_has: [display_name, color, domain, icon, role]
+  no_secret_values: true

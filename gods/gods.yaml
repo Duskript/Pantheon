@@ -132,3 +132,36 @@ gods:
     - free_tier_growth_research
     - brand_voice_governance
     status: active
+  apollo:
+    display_name: Apollo
+    role: God of Creative Songcraft
+    description: God of creative songcraft — songwriting, lyric writing, Suno prompt construction, and music production.
+      Owns the lyric-smith and suno-formatter toolchain. Registered on disk since 2026 (profile, god.json, CLI wrapper).
+    capabilities:
+    - songwriting
+    - lyric_writing
+    - suno_prompt_construction
+    - music_production
+    status: active
+  caduceus:
+    display_name: Caduceus
+    role: God of Medicine, Healer, and Medical Research
+    description: Medical assistant — clinical and medical research, evidence review, and health-domain writing. Registered
+      on disk since 2026 (profile, god.json, CLI wrapper).
+    capabilities:
+    - medical_research
+    - clinical_reference
+    - evidence_review
+    - medical_writing
+    status: active
+  mercury:
+    display_name: Mercury
+    role: Attached Node — fleet memory over MCP
+    description: Runs on the omarchy desktop as an attached Pantheon node sharing the fleet Ichor memory and Athenaeum over MCP, with no forked local store. Owns its own Discord identity and uses the ichor-remote memory provider so recall and session extraction behave like a fleet god while every byte still lands in the single fleet DB.
+    capabilities:
+    - fleet_memory_read_write
+    - god_messaging
+    - athenaeum_access
+    - local_desktop_operations
+    - remote_recall_provider
+    status: active

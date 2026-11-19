@@ -21,7 +21,17 @@
 #   --enterprise              skip the interactive Composio/n8n prompts
 #   --skip-composio-prompt    skip Composio prompt only (n8n still skipped always)
 #   --non-interactive         fail rather than prompt (for CI/automation)
-#   --phase N                 run only phase N (1-16); for debugging
+#   --phase N                 run only phase N (1-16, or 8b); for debugging
+#   --client                  install the shipped CLIENT roster (6 gods) instead of
+#                             the operator's god set, and scrub the result
+#   --client-root PATH        the client's $HOME to install into (default: $HOME)
+#   --client-answers PATH     interview answers JSON (see client-kit/README.md)
+#   --client-dry-run          render + report, write nothing (safe rehearsal)
+#   --conductor-platform P    plan the platform onboarding (discord | telegram)
+#   --conductor-guild ID      the client's Discord guild id (discord only)
+#   --conductor-chat ID       the client's Telegram supergroup id (telegram only)
+#   --conductor-token-file F  file holding the conductor's bot token (needed to --apply)
+#   --conductor-apply         actually call the platform API (default: plan only)
 
 set -euo pipefail
 
@@ -45,6 +55,22 @@ SKIP_COMPOSIO_PROMPT=false
 NON_INTERACTIVE=false
 ONLY_PHASE=""
 
+# Client kit mode (SPEC-CONTRACT Phase 2). Default root is deliberately $HOME so a
+# real install needs no flag, and --client-dry-run makes a rehearsal safe.
+CLIENT_MODE=false
+CLIENT_ROOT="${CLIENT_ROOT:-$HOME}"
+CLIENT_ANSWERS=""
+CLIENT_DRY_RUN=false
+CLIENT_KIT_NAME="pantheon-client-kit"
+
+# Conductor onboarding (SPEC-CONTRACT Phase 3). Plan-first: nothing is called
+# until --conductor-apply is passed AND a token file is supplied.
+CONDUCTOR_PLATFORM=""
+CONDUCTOR_GUILD=""
+CONDUCTOR_CHAT=""
+CONDUCTOR_TOKEN_FILE=""
+CONDUCTOR_APPLY=false
+
 # ─── Argument parsing ────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -52,6 +78,15 @@ while [[ $# -gt 0 ]]; do
         --skip-composio-prompt)    SKIP_COMPOSIO_PROMPT=true; shift ;;
         --non-interactive)         NON_INTERACTIVE=true; shift ;;
         --phase)                   ONLY_PHASE="$2"; shift 2 ;;
+        --client)                  CLIENT_MODE=true; shift ;;
+        --client-root)             CLIENT_ROOT="$2"; shift 2 ;;
+        --client-answers)          CLIENT_ANSWERS="$2"; shift 2 ;;
+        --client-dry-run)          CLIENT_DRY_RUN=true; shift ;;
+        --conductor-platform)      CONDUCTOR_PLATFORM="$2"; shift 2 ;;
+        --conductor-guild)         CONDUCTOR_GUILD="$2"; shift 2 ;;
+        --conductor-chat)          CONDUCTOR_CHAT="$2"; shift 2 ;;
+        --conductor-token-file)    CONDUCTOR_TOKEN_FILE="$2"; shift 2 ;;
+        --conductor-apply)         CONDUCTOR_APPLY=true; shift ;;
         -h|--help)
             grep '^#' "$0" | sed 's/^# \?//'
             exit 0
@@ -206,39 +241,44 @@ phase_4_composio() {
         log "  created $HERMES_HOME/.env (you'll need to fill in keys)"
     fi
 
-    # Get Composio credentials
-    local consumer_key="" auth_token=""
-    if [[ -n "${COMPOSIO_CONSUMER_KEY:-}" && -n "${COMPOSIO_AUTH_TOKEN:-}" ]]; then
-        consumer_key="$COMPOSIO_CONSUMER_KEY"
-        auth_token="$COMPOSIO_AUTH_TOKEN"
-        log "  using COMPOSIO_* from environment"
-    elif grep -q '^COMPOSIO_CONSUMER_KEY=.\+$' "$HERMES_HOME/.env" 2>/dev/null \
-      && grep -q '^COMPOSIO_AUTH_TOKEN=.\+$' "$HERMES_HOME/.env" 2>/dev/null; then
-        consumer_key=$(grep '^COMPOSIO_CONSUMER_KEY=' "$HERMES_HOME/.env" | cut -d= -f2-)
-        auth_token=$(grep '^COMPOSIO_AUTH_TOKEN=' "$HERMES_HOME/.env" | cut -d= -f2-)
-        log "  using COMPOSIO_* from $HERMES_HOME/.env"
+    # Get the Composio project key (ak_…). See docs/COMPOSIO_SETUP.md.
+    # composio-bridge/.env is the authoritative location for COMPOSIO_* (gitignored, 0600).
+    local bridge_env="$PANTHEON_HOME/composio-bridge/.env"
+    local project_key=""
+
+    if [[ -n "${COMPOSIO_API_KEY:-}" ]]; then
+        project_key="$COMPOSIO_API_KEY"
+        log "  using COMPOSIO_API_KEY from environment"
+    elif [[ -f "$bridge_env" ]] && grep -q '^COMPOSIO_API_KEY=ak_.\+$' "$bridge_env" 2>/dev/null; then
+        project_key=$(grep '^COMPOSIO_API_KEY=' "$bridge_env" | cut -d= -f2-)
+        log "  using COMPOSIO_API_KEY from composio-bridge/.env"
     elif [[ "$ENTERPRISE_MODE" == true || "$SKIP_COMPOSIO_PROMPT" == true || "$NON_INTERACTIVE" == true ]]; then
-        warn "no COMPOSIO_* keys present; bridge will start but report composio:false"
-        warn "see docs/COMPOSIO_SETUP.md to add them later"
+        warn "no Composio project key present; bridge will start but report composio:false"
+        warn "see docs/COMPOSIO_SETUP.md to add it later"
     else
         echo
         echo "Composio integration setup"
         echo "=========================="
-        echo "The wizard Step 4 needs Composio credentials to enable OAuth flows."
-        echo "Sign up free at https://composio.dev if you don't have an account."
+        echo "The wizard's Connect Integrations step needs a Composio PROJECT API key (ak_…)."
+        echo "Sign up free at https://composio.dev, then copy the key from your project's"
+        echo "  Settings -> API Keys  page."
+        echo "The ck_ key on the personal 'Sessions & API Key' page is a different"
+        echo "credential and will NOT work."
         echo
-        read -r -p "COMPOSIO_CONSUMER_KEY (or Enter to skip): " consumer_key
-        if [[ -n "$consumer_key" ]]; then
-            read -r -s -p "COMPOSIO_AUTH_TOKEN: " auth_token
-            echo
-            # Update .env in place
-            sed -i "s|^COMPOSIO_CONSUMER_KEY=.*|COMPOSIO_CONSUMER_KEY=$consumer_key|" "$HERMES_HOME/.env"
-            sed -i "s|^COMPOSIO_AUTH_TOKEN=.*|COMPOSIO_AUTH_TOKEN=$auth_token|" "$HERMES_HOME/.env"
-            chmod 600 "$HERMES_HOME/.env"
-            ok "Composio credentials written to $HERMES_HOME/.env"
-        else
-            warn "no Composio credentials; bridge will start but report composio:false"
+        read -r -s -p "COMPOSIO_API_KEY / ak_ project key (or Enter to skip): " project_key
+        echo
+    fi
+
+    if [[ -n "$project_key" ]]; then
+        if [[ "$project_key" != ak_* ]]; then
+            warn "that key does not start with ak_; the bridge will reject it (see docs/COMPOSIO_SETUP.md)"
         fi
+        umask 077
+        printf 'COMPOSIO_API_KEY=%s\n' "$project_key" > "$bridge_env"
+        chmod 600 "$bridge_env"
+        ok "Composio project key written to composio-bridge/.env"
+    elif [[ "$ENTERPRISE_MODE" != true && "$SKIP_COMPOSIO_PROMPT" != true && "$NON_INTERACTIVE" != true ]]; then
+        warn "no Composio project key; bridge will start but report composio:false"
     fi
 
     # Install the systemd service
@@ -348,6 +388,14 @@ phase_8_god_profiles() {
         log "  $hermes_named/god.json exists; keeping"
     fi
 
+    # Hephaestus is NOT in the shipped client roster: he builds code, and the cut
+    # removed both builders (see client-kit/manifest.yaml -> known_limits).
+    if [[ "$CLIENT_MODE" == true ]]; then
+        log "  client mode: skipping the Hephaestus profile (not in the shipped roster)"
+        phase_done 8
+        return 0
+    fi
+
     # Hephaestus profile
     local heph_home="$HERMES_HOME/profiles/hephaestus"
     mkdir -p "$heph_home"
@@ -375,6 +423,12 @@ phase_8_god_profiles() {
 
 # ─── Phase 9: install Hephaestus core skills ─────────────────────────────
 phase_9_hephaestus_skills() {
+    if [[ "$CLIENT_MODE" == true ]]; then
+        log "Phase 9: skipped (client mode) — the skill manifest belongs to Hephaestus,"
+        log "          who is not in the shipped roster"
+        phase_done 9
+        return 0
+    fi
     log "Phase 9: install Hephaestus core skills (9 curated)"
 
     local heph_skills="$HERMES_HOME/profiles/hephaestus/skills"
@@ -415,6 +469,89 @@ phase_9_hephaestus_skills() {
     phase_done 9
 }
 
+# ─── Phase 8b: client roster (--client only) ──────────────────────────────
+phase_8b_client_roster() {
+    if [[ "$CLIENT_MODE" != true ]]; then
+        return 0
+    fi
+    log "Phase 8b: install the shipped client roster"
+
+    local installer="$PANTHEON_HOME/client-kit/roster_install.py"
+    [[ -f "$installer" ]] || die "client roster installer missing: $installer"
+
+    # The pack gates itself before it touches anything.
+    if ! python3 "$installer" --check; then
+        die "client kit failed its own artifact-hygiene check; nothing was installed"
+    fi
+
+    local -a args=(--root "$CLIENT_ROOT")
+    [[ -n "$CLIENT_ANSWERS" ]] && args+=(--answers "$CLIENT_ANSWERS")
+    [[ "$CLIENT_DRY_RUN" == true ]] && args+=(--dry-run)
+
+    python3 "$installer" "${args[@]}" || die "client roster install failed"
+
+    # Cross-check the result rather than trusting the exit code.
+    local kit_json="$CLIENT_ROOT/.hermes/client-kit/MANIFEST.json"
+    if [[ "$CLIENT_DRY_RUN" != true ]]; then
+        [[ -f "$kit_json" ]] || die "client kit wrote no MANIFEST.json at $kit_json"
+        local shipped
+        shipped=$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))['gods']))" "$kit_json")
+        [[ "$shipped" == "6" ]] || die "expected 6 shipped gods, MANIFEST.json says $shipped"
+        ok "client roster installed: $shipped gods under $CLIENT_ROOT"
+    fi
+    phase_done 8b
+}
+
+# ─── Phase 8c: conductor onboarding (plan-first) ──────────────────────────
+phase_8c_conductor() {
+    local tool="$PANTHEON_HOME/client-kit/conductor_onboard.py"
+    [[ -f "$tool" ]] || { warn "conductor tool missing: $tool"; return 0; }
+
+    log "Phase 8c: conductor onboarding"
+
+    # The pack's own gates first: the manifest, and the permission split that
+    # otherwise fails live at "create the category".
+    if ! python3 "$tool" --check; then
+        if [[ "$CLIENT_MODE" == true ]]; then
+            die "conductor check failed; fix the pack before onboarding a client"
+        fi
+        warn "conductor check failed (operator run; continuing)"
+    fi
+
+    if [[ -z "$CONDUCTOR_PLATFORM" ]]; then
+        log "  no --conductor-platform given: skipping the platform plan"
+        log "  next step is the wizard's interview, then:"
+        log "    python3 $tool --platform discord --guild-id <id>"
+        phase_done 8c
+        return 0
+    fi
+
+    local -a args=(--platform "$CONDUCTOR_PLATFORM")
+    case "$CONDUCTOR_PLATFORM" in
+        discord)  [[ -n "$CONDUCTOR_GUILD" ]] && args+=(--guild-id "$CONDUCTOR_GUILD") ;;
+        telegram) [[ -n "$CONDUCTOR_CHAT" ]]  && args+=(--chat-id "$CONDUCTOR_CHAT") ;;
+        *) die "unknown --conductor-platform '$CONDUCTOR_PLATFORM' (discord | telegram)" ;;
+    esac
+
+    # Live verification signals come first: what MUST be observed before this is done.
+    python3 "$tool" --platform "$CONDUCTOR_PLATFORM" --verify
+
+    if [[ "$CONDUCTOR_APPLY" != true ]]; then
+        python3 "$tool" "${args[@]}"
+        warn "  plan only — nothing was called. Pass --conductor-apply with"
+        warn "  --conductor-token-file to execute it."
+        phase_done 8c
+        return 0
+    fi
+
+    [[ -n "$CONDUCTOR_TOKEN_FILE" ]] || die "--conductor-apply needs --conductor-token-file"
+    [[ -f "$CONDUCTOR_TOKEN_FILE" ]] || die "token file not found: $CONDUCTOR_TOKEN_FILE"
+    python3 "$tool" "${args[@]}" --conductor-token-file "$CONDUCTOR_TOKEN_FILE" --apply \
+        || die "conductor apply failed (see the call log above)"
+    ok "conductor onboarding applied for $CONDUCTOR_PLATFORM"
+    phase_done 8c
+}
+
 # ─── Phase 10: install systemd services ───────────────────────────────────
 phase_10_services() {
     log "Phase 10: install + start Pantheon systemd services"
@@ -453,6 +590,13 @@ phase_10_services() {
 
 # ─── Phase 11: install cron jobs ─────────────────────────────────────────
 phase_11_cron() {
+    if [[ "$CLIENT_MODE" == true ]]; then
+        log "Phase 11: skipped (client mode) — these are the operator's fleet jobs"
+        warn "  (dawn patrol, digests, tech-debt scans). A client's own schedule comes"
+        warn "  from the interview: T4 sets the timezone, G9 sets recurring work."
+        phase_done 11
+        return 0
+    fi
     log "Phase 11: install cron jobs"
     if [[ -x "$PANTHEON_HOME/scripts/setup-pantheon-cron.sh" ]]; then
         bash "$PANTHEON_HOME/scripts/setup-pantheon-cron.sh"
@@ -524,6 +668,36 @@ phase_15_intake() {
 # ─── Phase 16: final summary ─────────────────────────────────────────────
 phase_16_summary() {
     log "Phase 16: final summary"
+
+    if [[ "$CLIENT_MODE" == true ]]; then
+        cat <<EOF
+
+╔══════════════════════════════════════════════════════════════╗
+║  Pantheon CLIENT install complete                             ║
+╚══════════════════════════════════════════════════════════════╝
+
+  Wizard:      http://localhost:$PANTHEON_WEBUI_PORT/onboarding/welcome
+  Client kit:  $CLIENT_ROOT/.hermes/client-kit/
+  Profiles:    $CLIENT_ROOT/.hermes/profiles/<god>/
+
+  Shipped:     hermes (conductor), rheta, iris, thoth, kairos, caduceus
+  Not shipped: hephaestus, marvin (no builder), mercer (no sales god)
+
+Next steps:
+  1. Open the wizard and answer the interview — tenant layer once, then per god
+  2. Fill each profiles/<god>/.env (tokens are blank on purpose)
+  3. Plan the platform onboarding (invites, channel mesh, lanes, phonebook):
+       python3 $PANTHEON_HOME/client-kit/conductor_onboard.py --platform discord \
+         --guild-id <guild id>
+  4. Verify the pack any time:
+       python3 $PANTHEON_HOME/client-kit/roster_install.py --check
+       python3 $PANTHEON_HOME/client-kit/conductor_onboard.py --check
+
+EOF
+        phase_done 16
+        return 0
+    fi
+
     cat <<EOF
 
 ╔══════════════════════════════════════════════════════════════╗
@@ -551,6 +725,13 @@ EOF
 main() {
     log "Pantheon install starting (log: $LOG_FILE)"
     [[ "$ENTERPRISE_MODE" == true ]] && log "  mode: enterprise"
+    if [[ "$CLIENT_MODE" == true ]]; then
+        log "  mode: client kit (roster: $PANTHEON_HOME/client-kit/manifest.yaml)"
+        log "  target root: $CLIENT_ROOT"
+        [[ "$CLIENT_DRY_RUN" == true ]] && log "  rehearsal: --client-dry-run (writes nothing)"
+        [[ -n "$CONDUCTOR_PLATFORM" ]] && log "  conductor: $CONDUCTOR_PLATFORM \
+(apply=$CONDUCTOR_APPLY) — see Phase 8c"
+    fi
     [[ -n "$ONLY_PHASE" ]] && log "  running only phase $ONLY_PHASE"
 
     phase_0_preflight
@@ -564,6 +745,8 @@ main() {
     should_run_phase 6 && phase_6_whisper
     should_run_phase 7 && phase_7_pantheon_env
     should_run_phase 8 && phase_8_god_profiles
+    should_run_phase 8b && phase_8b_client_roster
+    should_run_phase 8c && phase_8c_conductor
     should_run_phase 9 && phase_9_hephaestus_skills
     should_run_phase 10 && phase_10_services
     should_run_phase 11 && phase_11_cron

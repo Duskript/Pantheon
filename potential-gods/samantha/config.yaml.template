@@ -1,0 +1,91 @@
+# ── Samantha Profile Config Template ───────────────────────────────
+# Client: "[CLIENT_BUSINESS]" ("[CLIENT_NAME]")
+# Hosted: Hostinger VPS, 24/7
+# provision-samantha.sh fills every bracketed placeholder.
+#
+# Deliberately absent (do NOT add for a client install):
+#   - pantheon MCP pointed at Konan's :8010
+#   - conductor / NATS handoff plumbing
+#   - shared digest context dirs
+#   - fleet god watchers
+
+model:
+  default: "[MODEL_DEFAULT]"
+  provider: "[PROVIDER_NAME]"
+  api_mode: chat_completions
+
+providers:
+  "[PROVIDER_NAME]":
+    default_model: "[MODEL_DEFAULT]"
+    models:
+      - "[MODEL_DEFAULT]"
+    name: "[PROVIDER_LABEL]"
+    # api_key comes from the systemd EnvironmentFile, never inline here.
+
+toolsets:
+  - hermes-cli
+  - web
+  - terminal
+  - file
+  - memory
+  - skills
+  - session_search
+
+agent:
+  max_turns: 90
+  reasoning_effort: medium
+  quiet_mode: true
+  gateway_timeout: 1800
+  restart_drain_timeout: 60
+  api_max_retries: 3
+  tool_use_enforcement: auto
+
+plugins:
+  enabled: []
+
+# ── MCP: Google Workspace (Gmail + Calendar) ───────────────────────
+# Auth via OAuth desktop flow, run once on the VPS after provisioning.
+# Scopes:
+#   gmail.readonly, gmail.modify, gmail.compose   (compose = drafts, NOT send)
+#   calendar, calendar.events
+# Add gmail.send only with written client approval.
+mcp_servers:
+  google-workspace:
+    transport: stdio
+    command: "[GOOGLE_MCP_BIN]"
+    args: []
+    timeout: 120
+    env:
+      GOOGLE_ACCOUNTS_FILE: "/home/[DEPLOY_USER]/.config/google-workspace-mcp/accounts.json"
+
+  # ── MCP: Fora advisor platform (Phase 2) ─────────────────────────
+  # BLOCKED: endpoint + auth method pending from the client's Fora portal.
+  # Fora shipped an MCP connection for advisor tooling; access is advisor-side.
+  # Enable only after a verified live handshake.
+  # fora:
+  #   url: "[FORA_MCP_URL]"
+  #   timeout: 120
+  #   headers:
+  #     Authorization: "Bearer ${FORA_MCP_TOKEN}"
+
+# ── Notification routing ───────────────────────────────────────────
+# Tier 1 pushes, Tier 2 morning brief, Tier 3 weekly.
+notifications:
+  channel: "[BRIEF_CHANNEL]"
+  quiet_hours:
+    start: "[QUIET_START]"
+    end: "[QUIET_END]"
+    timezone: "[CLIENT_TZ]"
+    emergency_override: true   # same-day in-destination disruption only
+
+# ── Cron jobs ──────────────────────────────────────────────────────
+# Installed by provision script via `hermes cron create`. Times in [CLIENT_TZ].
+# morning-brief:      [BRIEF_CRON]
+# deadline-watch:     0 9 * * *
+# weekly-review:      [WEEKLY_CRON]
+
+# ── Data residency ─────────────────────────────────────────────────
+data:
+  traveler_records: "/home/[DEPLOY_USER]/athenaeum/Codex-Samantha/travelers"
+  pii_in_memory: false          # reference, never store passport/card/full DOB
+  external_pii_transmission: false

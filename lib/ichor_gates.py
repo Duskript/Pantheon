@@ -266,11 +266,23 @@ class ReadCache:
         return abs_path in self._read_files
 
     def exists_on_disk(self, path: str) -> bool:
-        """Check if file exists (with result caching per session)."""
+        """Check if file exists, memoising only the positive answer.
+
+        A cached ``True`` is reused: a file that existed still does, and if it was
+        removed the conservative direction is to keep enforcing read-before-write.
+
+        A cached ``False`` is only a hint and is re-stated. The plugin pre-warms this
+        cache for every write target, so a path first observed *before* it existed
+        would otherwise stay classified as a new file for the whole session — letting
+        the agent overwrite a file it created without ever reading it, which is the
+        case the State Gate exists to block.
+        """
         abs_path = os.path.abspath(os.path.expanduser(path))
-        if abs_path not in self._exists_cache:
-            self._exists_cache[abs_path] = os.path.exists(abs_path)
-        return self._exists_cache[abs_path]
+        if self._exists_cache.get(abs_path) is True:
+            return True
+        current = os.path.exists(abs_path)
+        self._exists_cache[abs_path] = current
+        return current
 
     def reset(self) -> None:
         """Clear all cached state."""

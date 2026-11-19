@@ -1,13 +1,13 @@
 {
   "schema_version": "1.0",
   "description": "Pantheon messenger phonebook \u2014 directory of gods, their Discord home channels, roles, and the shared free-response channels. Any god may read this file to route a handoff reply back to the sender's channel. Kept in ~/pantheon/shared/ so it is readable by every god profile.",
-  "updated": "2026-09-17",
+  "updated": "2026-11-19",
   "gods": {
     "hermes": {
       "role": "Operations Manager / messenger of the gods (main agent, this session)",
-      "home_channel": null,
+      "home_channel": "1499868497180889158",
       "discord_bot": true,
-      "note": "Main gateway; currently locked to allowed_channels:0 until re-invited. Free-response scope to be set on re-invite."
+      "note": "Main gateway (multiplexed; also serves apollo/others). allowed_channels + free_response_channels = omicron, pantheon_general, notifications, hermes-voice. 2026-11-19: bots_require_inline_mention=false -> unmentioned peer-bot posts are answered."
     },
     "thoth": {
       "role": "Deep research / synthesis",
@@ -56,6 +56,15 @@
       "home_channel": null,
       "discord_bot": true,
       "note": "Discord allowed_channels locked to 0 (deny-all) until scoped."
+    },
+    "mercury": {
+      "role": "Attached Node \u2014 fleet memory over MCP",
+      "home_channel": "1563662084925825235",
+      "discord_bot": true,
+      "provider": "opencode-go",
+      "node": "omarchy",
+      "transport": "mcp-attached",
+      "note": "Attached node: shares the fleet Ichor/Athenaeum over MCP; no local Ichor fork."
     }
   },
   "shared_channels": {

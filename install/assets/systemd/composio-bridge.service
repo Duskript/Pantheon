@@ -1,15 +1,20 @@
 [Unit]
-Description=Composio OAuth Bridge
+Description=Composio Connection Bridge (Pantheon)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/npm start
 WorkingDirectory=%h/pantheon/composio-bridge
+# Node and npm live outside /usr/bin on the supported hosts; keep the runtime on
+# PATH so `npm` resolves inside the shell below.
+Environment=PATH=%h/.local/bin:%h/.hermes/node/bin:/usr/local/bin:/usr/bin:/bin
+# Source the Composio project key. Sourcing through the shell (rather than
+# systemd EnvironmentFile) tolerates `export KEY=value` lines and missing files.
+# The bridge starts regardless and reports composio:false until a key is valid.
+ExecStart=/bin/sh -c 'set -a; [ -f %h/pantheon/.env ] && . %h/pantheon/.env; [ -f %h/.hermes/.env ] && . %h/.hermes/.env; exec npm start'
 Restart=always
 RestartSec=10
-Environment="PATH=/usr/bin:/home/konan/.nvm/versions/node/v22.12.0/bin"
 StandardOutput=journal
 StandardError=journal
 

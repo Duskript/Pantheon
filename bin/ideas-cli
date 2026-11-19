@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""ideas-cli — read and edit the Pantheon project-ideas document in place.
+
+Runs on the machine that owns the file. Every write is a lock-guarded,
+backup-first, atomic replace, and every call returns the full current
+document so a caller (the desktop widget) never has to guess at state.
+
+    ideas-cli stat                 -> {sha, mtime, size}
+    ideas-cli show                 -> {text, sha, mtime, size}
+    ideas-cli batch '[...]'        -> apply a list of operations, return text
+    ideas-cli batch -              -> operations as a JSON array on stdin
+
+Output is a single JSON line (ASCII-escaped) on stdout. Errors set a
+non-zero exit code and still print JSON: {"ok": false, "error": ..., "code": ...}
+"""
+
+import fcntl
+import json
+import os
+import shutil
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import ideas_core as core
+
+DEFAULT_FILE = Path(os.environ.get("IDEAS_FILE") or (Path.home() / "pantheon" / "project-ideas.md"))
+STATE_DIR = Path(os.environ.get("IDEAS_STATE_DIR") or (Path.home() / ".local" / "state" / "pantheon-ideas"))
+BACKUP_KEEP = 40
+
+
+def emit(payload, code=0):
+    sys.stdout.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    sys.stdout.flush()
+    return code
+
+
+def fail(message, error_code="error", exit_code=1):
+    return emit({"ok": False, "error": str(message), "code": error_code}, exit_code)
+
+
+def document_path():
+    override = os.environ.get("IDEAS_FILE")
+    return Path(override) if override else DEFAULT_FILE
+
+
+def read_text(path):
+    return path.read_text(encoding="utf-8")
+
+
+def file_stat(path):
+    info = path.stat()
+    return {
+        "size": info.st_size,
+        "mtime": int(info.st_mtime),
+        "mtime_iso": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(info.st_mtime)),
+    }
+
+
+def rotate_backups(path, text):
+    directory = STATE_DIR / "backups"
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    target = directory / ("%s-%s.md" % (stamp, core.content_sha(text)[:8]))
+    if not target.exists():
+        shutil.copy2(path, target)
+    stale = sorted(directory.glob("*.md"), key=lambda item: item.name, reverse=True)
+    for old in stale[BACKUP_KEEP:]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+
+def write_atomic(path, text):
+    info = path.stat()
+    tmp = path.with_name("%s.tmp-%d" % (path.name, os.getpid()))
+    with open(tmp, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(tmp, info.st_mode & 0o7777)
+    os.replace(tmp, path)
+
+
+class Lock:
+    """Serialises writers so two callers cannot interleave a read and a write."""
+
+    def __init__(self):
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        self.path = STATE_DIR / "ideas.lock"
+        self.handle = None
+
+    def __enter__(self):
+        self.handle = open(self.path, "w")
+        fcntl.flock(self.handle, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc_info):
+        if self.handle:
+            fcntl.flock(self.handle, fcntl.LOCK_UN)
+            self.handle.close()
+            self.handle = None
+        return False
+
+
+def current_document(path):
+    text = read_text(path)
+    info = file_stat(path)
+    return {
+        "ok": True,
+        "text": text,
+        "sha": core.content_sha(text),
+        "size": info["size"],
+        "mtime": info["mtime"],
+        "mtime_iso": info["mtime_iso"],
+    }
+
+
+def cmd_stat(path):
+    info = file_stat(path)
+    return emit({
+        "ok": True,
+        "sha": core.content_sha(read_text(path)),
+        "size": info["size"],
+        "mtime": info["mtime"],
+        "mtime_iso": info["mtime_iso"],
+    })
+
+
+def cmd_show(path):
+    return emit(current_document(path))
+
+
+def cmd_batch(path, raw_ops):
+    """Apply each operation in order, stopping at the first real failure."""
+    try:
+        ops = json.loads(raw_ops)
+    except ValueError as exc:
+        return fail("operations are not valid JSON: %s" % exc, "bad_request")
+
+    if isinstance(ops, dict):
+        ops = [ops]
+    if not isinstance(ops, list):
+        return fail("operations must be a JSON array", "bad_request")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with Lock():
+        if not path.exists():
+            return fail("no such file: %s" % path, "missing_file")
+
+        original = read_text(path)
+        text = original
+        applied = []
+        failed = []
+
+        for index, op in enumerate(ops):
+            if not isinstance(op, dict) or "op" not in op:
+                failed.append({"index": index, "op": op, "error": "malformed operation",
+                               "code": "bad_request"})
+                break
+            try:
+                text, result = core.apply_op(text, op)
+                applied.append({"index": index, "op": op, "result": result})
+            except KeyError as exc:
+                failed.append({"index": index, "op": op, "error": str(exc),
+                               "code": "not_found"})
+                break
+            except ValueError as exc:
+                failed.append({"index": index, "op": op, "error": str(exc),
+                               "code": "rejected"})
+                break
+
+        if text != original and applied:
+            # Prove the result still parses before it is allowed near the file.
+            try:
+                check = core.payload(text)
+            except Exception as exc:  # noqa: BLE001 - refuse to write a broken doc
+                return fail("refusing to write: result does not parse (%s)" % exc,
+                            "verify_failed")
+            if check["counts"]["entries"] == 0:
+                return fail("refusing to write: result has no entries", "verify_failed")
+
+            rotate_backups(path, original)
+            write_atomic(path, text)
+
+            written = read_text(path)
+            if written != text:
+                return fail("write verification failed: file does not match", "verify_failed")
+
+        payload = current_document(path)
+        payload["applied"] = applied
+        payload["failed"] = failed
+        payload["changed"] = text != original
+        if failed:
+            payload["ok"] = False
+            payload["error"] = failed[0]["error"]
+            payload["code"] = failed[0]["code"]
+            return emit(payload, 1)
+        return emit(payload)
+
+
+def main(argv):
+    if len(argv) < 2:
+        return fail("usage: ideas-cli stat|show|batch [...]", "usage")
+
+    path = document_path()
+    command = argv[1]
+
+    try:
+        if command == "stat":
+            if not path.exists():
+                return fail("no such file: %s" % path, "missing_file")
+            return cmd_stat(path)
+        if command == "show":
+            if not path.exists():
+                return fail("no such file: %s" % path, "missing_file")
+            return cmd_show(path)
+        if command == "batch":
+            if len(argv) < 3:
+                return fail("batch needs an operations argument or -", "usage")
+            raw = sys.stdin.read() if argv[2] == "-" else argv[2]
+            return cmd_batch(path, raw)
+        return fail("unknown command: %s" % command, "usage")
+    except OSError as exc:
+        return fail("io error: %s" % exc, "io")
+    except Exception as exc:  # noqa: BLE001 - always answer in JSON
+        return fail("%s: %s" % (type(exc).__name__, exc), "unexpected")
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -197,7 +197,12 @@ def check_trees() -> Result:
         version = None
         for line in init.read_text(errors="replace").splitlines():
             if line.startswith("__version__"):
-                version = line.split("=", 1)[1].strip().strip('"').strip("'")
+                # Guard: a bare `__version__` line (annotation or re-export with
+                # no `=`) would otherwise raise IndexError on split("=", 1)[1].
+                # Seen live 2026-10-08 after a `hermes_cli/__init__.py` shape
+                # change — this crashed `check_trees` on every run since 10-05.
+                if "=" in line:
+                    version = line.split("=", 1)[1].strip().strip('"').strip("'")
                 break
         found.append({"label": label, "path": str(path), "version": version})
         if path == LIVE_TREE:

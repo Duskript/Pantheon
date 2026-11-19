@@ -1,17 +1,15 @@
 {
   "name": "composio-bridge",
-  "version": "1.0.0",
-  "description": "",
+  "version": "2.0.0",
+  "description": "Pantheon Composio connection bridge - project-key + Tool Router Session REST client (no SDK). Adapted from OpenMausBot (Apache-2.0); see NOTICE.",
   "main": "server.ts",
   "scripts": {
     "start": "tsx server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
-    "@composio/core": "^0.10.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"

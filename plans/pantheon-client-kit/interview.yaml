@@ -1,0 +1,186 @@
+# Pantheon Client Kit — machine-readable seed interview
+# Phase-1 input for the refactored soul_forge engine (CLI + WebUI share THIS file).
+# Design rationale and prose form: seed-interview.md. Question -> artifact map is enforced here:
+# `writes_to` absent  =>  the question does not ship.
+#
+# Convention: artifact paths use DOTTED notation (god.SOUL.md), never colons — a colon inside a
+# YAML flow sequence (`[god:SOUL.md]`) parses as a mapping and silently corrupts the file.
+#
+# Behaviour keys:
+#   layer:    tenant (once per install) | god (once per shipped god)
+#   skip_if:  condition that removes the question from the run
+#   optional: true => client may skip; unanswered is recorded as "open", never invented
+
+version: 0.1.0
+generated: "2026-11-15"
+
+defaults:
+  keep_identity_trio: false
+  mimic_default_answer: "keep"
+
+layers:
+
+  tenant:
+    runs_once: true
+    questions:
+
+      - id: T1
+        ask: "What's the business called, and what does it actually do — two or three sentences, like you'd say it out loud?"
+        type: text
+        required: true
+        writes_to: [tenant.json, god.SharedContext]
+
+      - id: T2
+        ask: "Who talks to the gods? Names, roles, contact. And who approves anything that leaves the building?"
+        type: list
+        required: true
+        fields: [name, role, contact]
+        writes_to: [person_roots, god.EscalationTarget]
+
+      - id: T3
+        ask: "For each person — their Discord user ID or Telegram user ID. Without an ID they can't reach a god."
+        type: list
+        required: true
+        note: "Ask per person from T2. Verify each ID live before persisting — a wrong snowflake fails silently."
+        writes_to: [allowlists, person_roots.PERMISSIONS.md]
+
+      - id: T4
+        ask: "Timezone, and the hours work actually happens in?"
+        type: pair
+        required: true
+        writes_to: [cron_schedules]
+
+      - id: T5
+        ask: "How should the Pantheon sound when it writes for you? Three adjectives — and what must it never sound like?"
+        type: text
+        required: true
+        writes_to: [rheta.persona.md, kairos.persona.md, brand_voice_governance]
+
+      - id: T6
+        ask: "The 3–5 real recurring jobs you'd want solved on day one — not a wishlist."
+        type: list
+        required: true
+        max: 5
+        writes_to: [god_depth_allocation, first_cron_jobs]
+
+      - id: T7
+        ask: "What must they never do? Legal, compliance, brand — 'never email a client without asking me'."
+        type: text
+        required: true
+        writes_to: [god.Guardrails, god.ReviewFirst]
+
+      - id: T8
+        ask: "Where do you want to talk to them — Telegram, Discord, or both?"
+        type: choice
+        choices: [telegram, discord, both]
+        required: true
+        present_tradeoff: true
+        tradeoff_from: "SPEC-CONTRACT.md section 6B"
+        writes_to: [platform_adoption, gateway_config]
+
+      - id: T9
+        ask: "Anything they should already know how to do on day one? Existing docs, processes, brand guides, a folder."
+        type: paths
+        optional: true
+        writes_to: [codex_seeding, ingest_queue]
+
+  god:
+    runs_once: false
+    foreach: shipped_roster
+    order: identity_first
+    questions:
+
+      - id: G1
+        ask: "Keep the default name, or give it your own? Emoji and accent colour — ours or yours?"
+        type: text
+        group: identity
+        prompt_with: "Personalising makes the system yours; keeping the defaults is completely fine."
+        default_from: roster.yaml
+        required: true
+        writes_to: [god.json.display_name, god.json.icon, god.json.color, platform.bot_display_name]
+        on_keep: "skip to G4 — the rest of the identity trio is skipped when defaults are kept"
+
+      - id: G2
+        ask: "Describe how this one should come across — two or three sentences in your own words."
+        type: text
+        group: identity
+        required: true
+        dont_menu: true
+        if_stuck: "offer three voices drafted from whatever they did say; let them pick or edit one"
+        writes_to: [god.persona.md]
+
+      - id: G3
+        ask: "The 3–5 things this god owns — and what should it hand off instead of attempting?"
+        type: text
+        group: identity
+        required: true
+        must_capture: [owns, routes_elsewhere]
+        writes_to: [god.SOUL.md.Domain, god.routing_map, PHONEBOOK.json]
+
+      - id: G4
+        ask: "Which channel or topic does it live in, and should it answer freely there or only when named?"
+        type: choice
+        choices: [own_lane_free_response, own_lane_mention_only]
+        default: own_lane_free_response
+        writes_to: [discord.allowed_channels, discord.free_response_channels,
+                    telegram.allowed_topics, telegram.free_response_topics]
+
+      - id: G5
+        ask: "Who may it send work to, and who may send work to it? Default is the whole mesh."
+        type: multiselect
+        options_from: shipped_roster
+        default: all
+        writes_to: [PHONEBOOK.json, handoff_routing]
+        note: "Drop any destination not in the shipped roster — a routing entry pointing at a god that isn't installed is a dead handoff."
+
+      - id: G6
+        ask: "Does it need to reach the outside world — email, calendar, social, a CRM?"
+        type: multiselect
+        optional: true
+        writes_to: [mcp_servers, credentials]
+        gate: "ASK BEFORE WIRING. Never enable an external automation the client hasn't confirmed."
+
+      - id: G7
+        ask: "Want an avatar for its bot? Upload an image, or keep the default totem."
+        type: file_upload
+        group: avatar
+        required: false
+        uuid_flag: true
+        writes_to: [platform.bot_avatar, god.json.icon]
+        on_media: "uuid-flagged so the interviewer can spot a pasted chat-app UUID and re-ask for the file"
+        note: "fork C — the client uploads. Generation is NOT assumed available; browser-driving Gemini is parked. Strip any inherited inline base64 icon (rheta 447 KB, iris 2.7 MB) rather than shipping Konan's artwork."
+
+      - id: G8
+        ask: "What 3–5 facts should this god already know on day one?"
+        type: list
+        required: true
+        writes_to: [god.MEMORY.md]
+
+      - id: G9
+        ask: "Any recurring job you want it to run without being asked? Daily digest, weekly check, Monday brief."
+        type: text
+        optional: true
+        schedule_from: T4
+        writes_to: [cron_jobs]
+
+      - id: G10
+        ask: "What needs a human's approval before it leaves the building?"
+        type: text
+        required: true
+        default: "anything external — always ask"
+        writes_to: [god.ReviewFirst]
+
+seed_write:
+  per_install: [tenant.json, person_roots]
+  per_god: [SOUL.md, persona.md, god.json, MEMORY.md, Codex-INDEX.md, .env, config.yaml]
+  unknowns_policy: "record as 'open' with an owner — never invent an answer to make the spec look complete"
+
+not_asked:
+  - what: hardware, model providers, existing API keys
+    why: onboarding.py already probes these
+  - what: a god's core capability set
+    why: fixed by the roster, not by the client
+  - what: thread archive duration, notification cadence
+    why: defaultable and changeable later
+  - what: anything guessable from T1 or the roster
+    why: asking twice is how an interview loses the client at question 12
