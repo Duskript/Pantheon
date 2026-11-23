@@ -1,6 +1,6 @@
 # Doc Discipline — Drift Report
 
-**Generated:** 2026-11-22 03:00:51 MST
+**Generated:** 2026-11-23 03:00:55 MST
 **Severity counts:** 0 drift, 2 warn, 2 info
 
 **Skill:** `doc-discipline` (`~/pantheon/god-packages/shared-skills/doc-discipline/`)
@@ -13,13 +13,13 @@
 
 ### doc-stale::OLYMPUS_UI_STATE.md
 - **Claim:** OLYMPUS_UI_STATE.md last verified within 7 days
-- **Actual:** last verified 2026-06-11 (164 days ago)
+- **Actual:** last verified 2026-06-11 (165 days ago)
 - **Where:** `/home/konan/athenaeum/Codex-Olympus/OLYMPUS_UI_STATE.md`
 - **Fix:** Re-verify claims in the doc against current state, update the date
 
 ### doc-stale::OLYMPUS_UI_ROADMAP.md
 - **Claim:** OLYMPUS_UI_ROADMAP.md last verified within 7 days
-- **Actual:** last verified 2026-06-02 (173 days ago)
+- **Actual:** last verified 2026-06-02 (174 days ago)
 - **Where:** `/home/konan/athenaeum/Codex-Olympus/OLYMPUS_UI_ROADMAP.md`
 - **Fix:** Re-verify claims in the doc against current state, update the date
 
@@ -33,7 +33,7 @@
 
 ### bundles-stale
 - **Claim:** Compiled bundles in webui/static/assets/ are recent (within 48h)
-- **Actual:** newest bundle is 2554.3h old
+- **Actual:** newest bundle is 2578.3h old
 - **Where:** `/home/konan/pantheon/webui/static/assets`
 - **Fix:** If Olympus-UI source has uncommitted changes, build and deploy via deploy-olympus.sh
 
