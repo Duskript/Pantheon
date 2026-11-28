@@ -225,7 +225,14 @@ def _load_auth() -> Dict[str, Any]:
 # silently produced zero entities while the units reported "running".
 _L2_MODEL_BY_PROVIDER = {
     "nous": "deepseek/deepseek-v4-flash",
-    "opencode-go": "deepseek-v4-flash",
+    # opencode-go retired `deepseek-v4-flash` from its serving catalog on
+    # 2026-11-28: the id is still listed in the provider block's `models` array
+    # but every call returns HTTP 400, which silently DEGRADED the tick's
+    # `extract` step and stopped l2-drainer on its first batch. The fleet
+    # default `deepseek-v4.1-flash` answers on the same endpoint (verified by a
+    # live call, not by the model list). Keep the tick and the drainer on the
+    # same id -- both go through this map.
+    "opencode-go": "deepseek-v4.1-flash",
     "opencode-zen": "deepseek-v4-flash",
 }
 _L2_MODEL_DEFAULT = "deepseek/deepseek-v4-flash"
